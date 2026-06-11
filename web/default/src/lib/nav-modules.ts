@@ -20,12 +20,13 @@ import { getStatus } from '@/lib/api'
 
 export type ModuleAccess = { enabled: boolean; requireAuth: boolean }
 
-export type HeaderNavModule = 'rankings' | 'pricing'
+export type HeaderNavModule = 'rank' | 'rankings' | 'pricing'
 
 export type HeaderNavModules = {
   home: boolean
   console: boolean
   pricing: ModuleAccess
+  rank: ModuleAccess
   rankings: ModuleAccess
   docs: boolean
   about: boolean
@@ -36,6 +37,7 @@ const DEFAULT_HEADER_NAV_MODULES: HeaderNavModules = {
   home: true,
   console: true,
   pricing: { enabled: true, requireAuth: false },
+  rank: { enabled: true, requireAuth: false },
   rankings: { enabled: true, requireAuth: false },
   docs: true,
   about: true,
@@ -43,6 +45,7 @@ const DEFAULT_HEADER_NAV_MODULES: HeaderNavModules = {
 
 const DEFAULTS: Record<HeaderNavModule, ModuleAccess> = {
   pricing: DEFAULT_HEADER_NAV_MODULES.pricing,
+  rank: DEFAULT_HEADER_NAV_MODULES.rank,
   rankings: DEFAULT_HEADER_NAV_MODULES.rankings,
 }
 
@@ -50,6 +53,7 @@ function cloneHeaderNavDefaults(): HeaderNavModules {
   return {
     ...DEFAULT_HEADER_NAV_MODULES,
     pricing: { ...DEFAULT_HEADER_NAV_MODULES.pricing },
+    rank: { ...DEFAULT_HEADER_NAV_MODULES.rank },
     rankings: { ...DEFAULT_HEADER_NAV_MODULES.rankings },
   }
 }
@@ -112,6 +116,10 @@ export function parseHeaderNavModules(raw: unknown): HeaderNavModules {
   Object.entries(parsed).forEach(([key, value]) => {
     if (key === 'pricing') {
       result.pricing = parseAccess(value, result.pricing)
+      return
+    }
+    if (key === 'rank') {
+      result.rank = parseAccess(value, result.rank)
       return
     }
     if (key === 'rankings') {
