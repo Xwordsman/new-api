@@ -26,8 +26,8 @@ import (
 	"strings"
 	"time"
 
-	"one-api/common"
-	"one-api/model"
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/model"
 )
 
 // validateKeyWithChannel 使用渠道配置验证 key 是否可用
@@ -41,7 +41,7 @@ func validateKeyWithChannel(key string, channel *model.Channel, config *Config) 
 	}
 
 	reqBody, _ := common.Marshal(testReq)
-	req, err := http.NewRequest("POST", channel.BaseURL+"/v1/chat/completions", bytes.NewReader(reqBody))
+	req, err := http.NewRequest("POST", channel.GetBaseURL()+"/v1/chat/completions", bytes.NewReader(reqBody))
 	if err != nil {
 		common.SysLog(fmt.Sprintf("[KeyMonitor] Failed to create validation request: %v", err))
 		return false
@@ -103,7 +103,7 @@ func checkChannelHealth(config *Config) (bool, error) {
 	}
 
 	reqBody, _ := common.Marshal(testReq)
-	req, err := http.NewRequest("POST", channel.BaseURL+"/v1/chat/completions", bytes.NewReader(reqBody))
+	req, err := http.NewRequest("POST", channel.GetBaseURL()+"/v1/chat/completions", bytes.NewReader(reqBody))
 	if err != nil {
 		return false, err
 	}

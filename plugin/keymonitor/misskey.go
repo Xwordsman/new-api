@@ -25,7 +25,7 @@ import (
 	"net/http"
 	"time"
 
-	"one-api/common"
+	"github.com/QuantumNous/new-api/common"
 )
 
 type MisskeyClient struct {

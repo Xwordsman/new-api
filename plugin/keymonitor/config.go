@@ -19,8 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 package keymonitor
 
 import (
-	"one-api/common"
-	"one-api/model"
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/model"
 )
 
 // Config 密钥监控配置
@@ -61,8 +61,8 @@ const configKey = "plugin.key_monitor.config"
 
 // GetConfig 获取配置
 func GetConfig() *Config {
-	configStr := model.GetOptionValue(configKey)
-	if configStr == "" {
+	configStr, exists := common.OptionMap[configKey]
+	if !exists || configStr == "" {
 		return &DefaultConfig
 	}
 

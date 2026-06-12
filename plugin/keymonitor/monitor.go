@@ -23,8 +23,8 @@ import (
 	"strings"
 	"time"
 
-	"one-api/common"
-	"one-api/model"
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/model"
 )
 
 var monitorTicker *time.Ticker
