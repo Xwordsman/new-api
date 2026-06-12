@@ -17,11 +17,6 @@ func SetApiRouter(router *gin.Engine) {
 	apiRouter.Use(gzip.Gzip(gzip.DefaultCompression))
 	apiRouter.Use(middleware.BodyStorageCleanup()) // 清理请求体存储
 	apiRouter.Use(middleware.GlobalAPIRateLimit())
-
-	// 密钥监控插件
-	apiRouter.GET("/plugin/key-monitor", middleware.AdminAuth(), controller.GetKeyMonitorConfig)
-	apiRouter.PUT("/plugin/key-monitor", middleware.AdminAuth(), controller.UpdateKeyMonitorConfig)
-
 	anonymousRequestBodyLimit := middleware.AnonymousRequestBodyLimit()
 	{
 		apiRouter.GET("/setup", controller.GetSetup)
