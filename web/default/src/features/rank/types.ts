@@ -25,8 +25,6 @@ export type RankSummary = {
 
 export type RankRow = {
   rank: number
-  name: string
-  token_suffix: string
   username: string
   request_count: number
   prompt_tokens: number

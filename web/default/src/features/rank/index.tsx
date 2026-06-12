@@ -41,7 +41,13 @@ import type { RankRow, RankSummary } from './types'
 
 const formatNumber = (value: number) => new Intl.NumberFormat().format(value)
 
-const formatTokenSuffix = (suffix: string) => (suffix ? `••••${suffix}` : '—')
+const maskUsername = (username: string) => {
+  if (!username) return '—'
+  if (username.length <= 2) return username
+  return `${username[0]}${'＊'.repeat(Math.min(username.length - 2, 6))}${
+    username[username.length - 1]
+  }`
+}
 
 export function Rank() {
   const { t } = useTranslation()
@@ -144,8 +150,6 @@ function RankTable(props: { rows: RankRow[] }) {
             <TableHeader>
               <TableRow>
                 <TableHead>{t('Rank')}</TableHead>
-                <TableHead>{t('Name')}</TableHead>
-                <TableHead>{t('Token suffix')}</TableHead>
                 <TableHead>{t('Username')}</TableHead>
                 <TableHead className='text-right'>{t('Requests')}</TableHead>
                 <TableHead className='text-right'>{t('Prompt tokens')}</TableHead>
@@ -157,13 +161,11 @@ function RankTable(props: { rows: RankRow[] }) {
             </TableHeader>
             <TableBody>
               {props.rows.map((row) => (
-                <TableRow key={`${row.rank}-${row.username}-${row.name}`}>
+                <TableRow key={`${row.rank}-${row.username}`}>
                   <TableCell className='font-medium'>#{row.rank}</TableCell>
-                  <TableCell>{row.name || '—'}</TableCell>
-                  <TableCell className='font-mono'>
-                    {formatTokenSuffix(row.token_suffix)}
+                  <TableCell className='text-primary font-semibold'>
+                    {maskUsername(row.username)}
                   </TableCell>
-                  <TableCell>{row.username || '—'}</TableCell>
                   <TableCell className='text-right'>
                     {formatNumber(row.request_count)}
                   </TableCell>
