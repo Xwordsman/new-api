@@ -54,6 +54,7 @@ const quotaSchema = z.object({
   PreConsumedQuota: z.coerce.number().min(0),
   QuotaForInviter: z.coerce.number().min(0),
   QuotaForInvitee: z.coerce.number().min(0),
+  QuotaInputMode: z.enum(['dollar', 'points']).optional().default('points'),
   TopUpLink: z.string(),
   general_setting: z.object({
     docs_link: z.string(),
@@ -76,7 +77,42 @@ export function QuotaSettingsSection({
 }: QuotaSettingsSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
-  const [useDollarInput, setUseDollarInput] = useState(false)
+
+  const { form, handleSubmit, isDirty, isSubmitting } =
+    useSettingsForm<QuotaFormValues>({
+      resolver: zodResolver(quotaSchema) as Resolver<
+        QuotaFormValues,
+        unknown,
+        QuotaFormValues
+      >,
+      defaultValues,
+      onSubmit: async (_data, changedFields) => {
+        for (const [key, value] of Object.entries(changedFields)) {
+          // Skip QuotaInputMode as it's saved immediately on toggle
+          if (key === 'QuotaInputMode') continue
+
+          await updateOption.mutateAsync({
+            key,
+            value: value as string | number | boolean,
+          })
+        }
+      },
+    })
+
+  // Get useDollarInput from form state
+  const useDollarInput = form.watch('QuotaInputMode') === 'dollar'
+
+  // Handler to toggle input mode and save to database
+  const handleInputModeChange = (checked: boolean) => {
+    const newMode = checked ? 'dollar' : 'points'
+    // Update form value without marking as dirty (since we save immediately)
+    form.setValue('QuotaInputMode', newMode, { shouldDirty: false })
+    // Immediately save to database
+    updateOption.mutate({
+      key: 'QuotaInputMode',
+      value: newMode,
+    })
+  }
 
   const handleNumberChange =
     (onChange: (value: number | string) => void) =>
@@ -125,24 +161,6 @@ export function QuotaSettingsSection({
     return quotaValue
   }
 
-  const { form, handleSubmit, isDirty, isSubmitting } =
-    useSettingsForm<QuotaFormValues>({
-      resolver: zodResolver(quotaSchema) as Resolver<
-        QuotaFormValues,
-        unknown,
-        QuotaFormValues
-      >,
-      defaultValues,
-      onSubmit: async (_data, changedFields) => {
-        for (const [key, value] of Object.entries(changedFields)) {
-          await updateOption.mutateAsync({
-            key,
-            value: value as string | number | boolean,
-          })
-        }
-      },
-    })
-
   return (
     <SettingsSection title={t('Quota Settings')}>
       <FormNavigationGuard when={isDirty} />
@@ -177,7 +195,7 @@ export function QuotaSettingsSection({
           </div>
           <Switch
             checked={useDollarInput}
-            onCheckedChange={setUseDollarInput}
+            onCheckedChange={handleInputModeChange}
           />
         </div>
       </div>
