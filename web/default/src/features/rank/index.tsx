@@ -75,7 +75,7 @@ export function Rank() {
         ) : (
           <>
             <RankSummaryCards summary={data.summary} />
-            <RankTable rows={data.items} />
+            <RankTable rows={data.items ?? []} />
           </>
         )}
       </PageTransition>

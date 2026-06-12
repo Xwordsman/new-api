@@ -46,6 +46,9 @@ func GetTodaySiteUserUsageRank() (*SiteUserUsageRankResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+	if rows == nil {
+		rows = []SiteUserUsageRankRow{}
+	}
 
 	suffixes, err := getTokenKeySuffixesForRank(rows)
 	if err != nil {
