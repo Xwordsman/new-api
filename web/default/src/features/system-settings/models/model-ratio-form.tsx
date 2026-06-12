@@ -214,7 +214,7 @@ export const ModelRatioForm = memo(function ModelRatioForm({
             {isSaving ? t('Saving...') : t('Save model prices')}
           </Button>
         )}
-        <Button variant='outline' size='sm' onClick={toggleEditMode}>
+        <Button type='button' variant='outline' size='sm' onClick={toggleEditMode}>
           {editMode === 'visual' ? (
             <>
               <Code2 className='mr-2 h-4 w-4' />

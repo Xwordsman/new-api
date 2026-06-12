@@ -147,6 +147,7 @@ export function buildModelRatioColumns({
       cell: ({ row }) => (
         <div className='flex justify-end gap-2'>
           <Button
+            type='button'
             variant='ghost'
             size='sm'
             onClick={() => onEdit(row.original)}
@@ -154,6 +155,7 @@ export function buildModelRatioColumns({
             <Pencil />
           </Button>
           <Button
+            type='button'
             variant='ghost'
             size='sm'
             onClick={() => onDelete(row.original.name)}
