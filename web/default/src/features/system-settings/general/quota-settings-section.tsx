@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { ChangeEvent } from 'react'
+import { useState, type ChangeEvent } from 'react'
 import * as z from 'zod'
 import type { Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -47,6 +47,8 @@ import { SettingsSection } from '../components/settings-section'
 import { useSettingsForm } from '../hooks/use-settings-form'
 import { useUpdateOption } from '../hooks/use-update-option'
 
+const QUOTA_PER_UNIT = 500000 // 500,000 quota points = $1
+
 const quotaSchema = z.object({
   QuotaForNewUser: z.coerce.number().min(0),
   PreConsumedQuota: z.coerce.number().min(0),
@@ -74,6 +76,8 @@ export function QuotaSettingsSection({
 }: QuotaSettingsSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
+  const [useDollarInput, setUseDollarInput] = useState(false)
+
   const handleNumberChange =
     (onChange: (value: number | string) => void) =>
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -81,6 +85,45 @@ export function QuotaSettingsSection({
         event.target.value === '' ? '' : event.currentTarget.valueAsNumber
       )
     }
+
+  // Convert quota points to dollars
+  const quotaToDollar = (quota: number): number => {
+    return quota / QUOTA_PER_UNIT
+  }
+
+  // Convert dollars to quota points
+  const dollarToQuota = (dollar: number): number => {
+    return Math.round(dollar * QUOTA_PER_UNIT)
+  }
+
+  const handleQuotaChange =
+    (onChange: (value: number | string) => void) =>
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const inputValue = event.target.value
+      if (inputValue === '') {
+        onChange('')
+        return
+      }
+
+      const numValue = parseFloat(inputValue)
+      if (isNaN(numValue)) return
+
+      if (useDollarInput) {
+        // User input is in dollars, convert to quota points
+        onChange(dollarToQuota(numValue))
+      } else {
+        // User input is in quota points
+        onChange(numValue)
+      }
+    }
+
+  const getDisplayValue = (quotaValue: number | ''): number | '' => {
+    if (quotaValue === '') return ''
+    if (useDollarInput) {
+      return quotaToDollar(quotaValue)
+    }
+    return quotaValue
+  }
 
   const { form, handleSubmit, isDirty, isSubmitting } =
     useSettingsForm<QuotaFormValues>({
@@ -114,6 +157,31 @@ export function QuotaSettingsSection({
         </Alert>
       ) : null}
 
+      {/* Dollar input mode toggle */}
+      <div className="bg-muted/50 mb-6 rounded-lg border p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-medium">
+              {t('Use dollar input mode')}
+            </p>
+            <p className="text-muted-foreground text-sm">
+              {useDollarInput
+                ? t('Input amounts in dollars (e.g., 30 for $30)')
+                : t('Input amounts in quota points (e.g., 15000000 for $30)')}
+            </p>
+            {useDollarInput && (
+              <p className="text-muted-foreground mt-1 text-xs">
+                {t('Conversion: 500,000 quota points = $1')}
+              </p>
+            )}
+          </div>
+          <Switch
+            checked={useDollarInput}
+            onCheckedChange={setUseDollarInput}
+          />
+        </div>
+      </div>
+
       <Form {...form}>
         <SettingsForm onSubmit={handleSubmit}>
           <SettingsPageFormActions
@@ -127,19 +195,40 @@ export function QuotaSettingsSection({
               name='QuotaForNewUser'
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('New User Quota')}</FormLabel>
+                  <FormLabel>
+                    {t('New User Quota')}
+                    {useDollarInput && (
+                      <span className="text-muted-foreground ml-2 text-xs font-normal">
+                        (${getDisplayValue(field.value)})
+                      </span>
+                    )}
+                  </FormLabel>
                   <FormControl>
-                    <Input
-                      type='number'
-                      value={field.value ?? ''}
-                      onChange={handleNumberChange(field.onChange)}
-                      name={field.name}
-                      onBlur={field.onBlur}
-                      ref={field.ref}
-                    />
+                    <div className="relative">
+                      {useDollarInput && (
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                          $
+                        </span>
+                      )}
+                      <Input
+                        type='number'
+                        step={useDollarInput ? '0.01' : '1'}
+                        value={getDisplayValue(field.value)}
+                        onChange={handleQuotaChange(field.onChange)}
+                        name={field.name}
+                        onBlur={field.onBlur}
+                        ref={field.ref}
+                        className={useDollarInput ? 'pl-7' : ''}
+                      />
+                    </div>
                   </FormControl>
                   <FormDescription>
                     {t('Initial quota given to new users')}
+                    {!useDollarInput && field.value > 0 && (
+                      <span className="text-muted-foreground ml-1">
+                        (≈ ${quotaToDollar(field.value).toFixed(2)})
+                      </span>
+                    )}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -151,19 +240,40 @@ export function QuotaSettingsSection({
               name='PreConsumedQuota'
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('Pre-Consumed Quota')}</FormLabel>
+                  <FormLabel>
+                    {t('Pre-Consumed Quota')}
+                    {useDollarInput && (
+                      <span className="text-muted-foreground ml-2 text-xs font-normal">
+                        (${getDisplayValue(field.value)})
+                      </span>
+                    )}
+                  </FormLabel>
                   <FormControl>
-                    <Input
-                      type='number'
-                      value={field.value ?? ''}
-                      onChange={handleNumberChange(field.onChange)}
-                      name={field.name}
-                      onBlur={field.onBlur}
-                      ref={field.ref}
-                    />
+                    <div className="relative">
+                      {useDollarInput && (
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                          $
+                        </span>
+                      )}
+                      <Input
+                        type='number'
+                        step={useDollarInput ? '0.01' : '1'}
+                        value={getDisplayValue(field.value)}
+                        onChange={handleQuotaChange(field.onChange)}
+                        name={field.name}
+                        onBlur={field.onBlur}
+                        ref={field.ref}
+                        className={useDollarInput ? 'pl-7' : ''}
+                      />
+                    </div>
                   </FormControl>
                   <FormDescription>
                     {t('Quota consumed before charging users')}
+                    {!useDollarInput && field.value > 0 && (
+                      <span className="text-muted-foreground ml-1">
+                        (≈ ${quotaToDollar(field.value).toFixed(2)})
+                      </span>
+                    )}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -175,19 +285,40 @@ export function QuotaSettingsSection({
               name='QuotaForInviter'
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('Inviter Reward')}</FormLabel>
+                  <FormLabel>
+                    {t('Inviter Reward')}
+                    {useDollarInput && (
+                      <span className="text-muted-foreground ml-2 text-xs font-normal">
+                        (${getDisplayValue(field.value)})
+                      </span>
+                    )}
+                  </FormLabel>
                   <FormControl>
-                    <Input
-                      type='number'
-                      value={field.value ?? ''}
-                      onChange={handleNumberChange(field.onChange)}
-                      name={field.name}
-                      onBlur={field.onBlur}
-                      ref={field.ref}
-                    />
+                    <div className="relative">
+                      {useDollarInput && (
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                          $
+                        </span>
+                      )}
+                      <Input
+                        type='number'
+                        step={useDollarInput ? '0.01' : '1'}
+                        value={getDisplayValue(field.value)}
+                        onChange={handleQuotaChange(field.onChange)}
+                        name={field.name}
+                        onBlur={field.onBlur}
+                        ref={field.ref}
+                        className={useDollarInput ? 'pl-7' : ''}
+                      />
+                    </div>
                   </FormControl>
                   <FormDescription>
                     {t('Quota given to users who invite others')}
+                    {!useDollarInput && field.value > 0 && (
+                      <span className="text-muted-foreground ml-1">
+                        (≈ ${quotaToDollar(field.value).toFixed(2)})
+                      </span>
+                    )}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -199,19 +330,40 @@ export function QuotaSettingsSection({
               name='QuotaForInvitee'
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('Invitee Reward')}</FormLabel>
+                  <FormLabel>
+                    {t('Invitee Reward')}
+                    {useDollarInput && (
+                      <span className="text-muted-foreground ml-2 text-xs font-normal">
+                        (${getDisplayValue(field.value)})
+                      </span>
+                    )}
+                  </FormLabel>
                   <FormControl>
-                    <Input
-                      type='number'
-                      value={field.value ?? ''}
-                      onChange={handleNumberChange(field.onChange)}
-                      name={field.name}
-                      onBlur={field.onBlur}
-                      ref={field.ref}
-                    />
+                    <div className="relative">
+                      {useDollarInput && (
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                          $
+                        </span>
+                      )}
+                      <Input
+                        type='number'
+                        step={useDollarInput ? '0.01' : '1'}
+                        value={getDisplayValue(field.value)}
+                        onChange={handleQuotaChange(field.onChange)}
+                        name={field.name}
+                        onBlur={field.onBlur}
+                        ref={field.ref}
+                        className={useDollarInput ? 'pl-7' : ''}
+                      />
+                    </div>
                   </FormControl>
                   <FormDescription>
                     {t('Quota given to invited users')}
+                    {!useDollarInput && field.value > 0 && (
+                      <span className="text-muted-foreground ml-1">
+                        (≈ ${quotaToDollar(field.value).toFixed(2)})
+                      </span>
+                    )}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
