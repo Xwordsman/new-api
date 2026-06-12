@@ -134,6 +134,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = useState('')
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
+  const [deletedModelMap, setDeletedModelMap] = useState<Record<string, true>>({})
   const editorPanelRef = useRef<ModelPricingEditorPanelHandle>(null)
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
@@ -178,6 +179,38 @@ const ModelRatioVisualEditorComponent = forwardRef<
     localStorage.setItem(STORAGE_KEY, JSON.stringify(columnVisibility))
   }, [columnVisibility])
 
+  const deletedModelNames = useMemo(() => {
+    const draftRows = buildModelSnapshots({
+      modelPrice,
+      modelRatio,
+      cacheRatio,
+      createCacheRatio,
+      completionRatio,
+      imageRatio,
+      audioRatio,
+      audioCompletionRatio,
+      billingMode,
+      billingExpr,
+    })
+    return new Set(
+      Object.keys(deletedModelMap).filter(
+        (name) => !draftRows.some((row) => row.name === name)
+      )
+    )
+  }, [
+    deletedModelMap,
+    modelPrice,
+    modelRatio,
+    cacheRatio,
+    createCacheRatio,
+    completionRatio,
+    imageRatio,
+    audioRatio,
+    audioCompletionRatio,
+    billingMode,
+    billingExpr,
+  ])
+
   const models = useMemo(() => {
     const savedRows = buildModelSnapshots({
       modelPrice: savedModelPrice,
@@ -212,7 +245,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
       .map((name) => {
         const saved = savedByName.get(name)
         const draft = draftByName.get(name)
-        if (saved && !draft) return null
+        if (deletedModelNames.has(name)) return null
         const displayed = draft ?? saved
         const savedSignature = getSnapshotSignature(saved)
         const draftSignature = getSnapshotSignature(draft)
@@ -249,6 +282,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
     audioCompletionRatio,
     billingMode,
     billingExpr,
+    deletedModelNames,
   ])
 
   const modeCounts = useMemo(
@@ -275,6 +309,12 @@ const ModelRatioVisualEditorComponent = forwardRef<
   const handleEdit = useCallback(
     (model: ModelRow) => {
       const editableModel = model.draft ?? model.saved ?? model
+      setDeletedModelMap((previous) => {
+        if (!previous[editableModel.name]) return previous
+        const next = { ...previous }
+        delete next[editableModel.name]
+        return next
+      })
       setEditData({
         name: editableModel.name,
         price: editableModel.price,
@@ -375,6 +415,13 @@ const ModelRatioVisualEditorComponent = forwardRef<
       delete billingModeMap[name]
       delete billingExprMap[name]
 
+      setDeletedModelMap((previous) => ({ ...previous, [name]: true }))
+      if (editData?.name === name) {
+        setEditData(null)
+        setEditorOpen(false)
+        setSheetOpen(false)
+      }
+
       onChange('ModelPrice', JSON.stringify(priceMap, null, 2))
       onChange('ModelRatio', JSON.stringify(ratioMap, null, 2))
       onChange('CacheRatio', JSON.stringify(cacheMap, null, 2))
@@ -406,6 +453,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
       audioCompletionRatio,
       billingMode,
       billingExpr,
+      editData,
       onChange,
     ]
   )
