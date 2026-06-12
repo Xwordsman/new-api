@@ -21,7 +21,7 @@ package controller
 import (
 	"net/http"
 
-	"one-api/plugin/keymonitor"
+	"github.com/QuantumNous/new-api/plugin/keymonitor"
 
 	"github.com/gin-gonic/gin"
 )
