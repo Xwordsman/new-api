@@ -162,32 +162,39 @@ function RankTable(props: { rows: RankRow[]; currentUsername?: string }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {props.rows.map((row) => {
-                const isCurrentUser = props.currentUsername && row.username === props.currentUsername
-                return (
-                  <TableRow
-                    key={`${row.rank}-${row.username}`}
-                    className={isCurrentUser ? ‘bg-primary/5’ : ‘’}
+              {props.rows.map((row) => (
+                <TableRow
+                  key={`${row.rank}-${row.username}`}
+                  className={
+                    props.currentUsername && row.username === props.currentUsername
+                      ? ‘bg-primary/5’
+                      : ‘’
+                  }
+                >
+                  <TableCell className=’font-medium’>#{row.rank}</TableCell>
+                  <TableCell
+                    className={
+                      props.currentUsername && row.username === props.currentUsername
+                        ? ‘text-primary font-bold’
+                        : ‘text-primary font-semibold’
+                    }
                   >
-                    <TableCell className=’font-medium’>#{row.rank}</TableCell>
-                    <TableCell className={isCurrentUser ? ‘text-primary font-bold’ : ‘text-primary font-semibold’}>
-                      {maskUsername(row.username)}
-                    </TableCell>
-                    <TableCell className=’text-right’>
-                      {formatNumber(row.request_count)}
-                    </TableCell>
-                    <TableCell className=’text-right’>
-                      {formatNumber(row.prompt_tokens)}
-                    </TableCell>
-                    <TableCell className=’text-right’>
-                      {formatNumber(row.completion_tokens)}
-                    </TableCell>
-                    <TableCell className=’text-right font-medium’>
-                      {formatNumber(row.total_tokens)}
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
+                    {maskUsername(row.username)}
+                  </TableCell>
+                  <TableCell className=’text-right’>
+                    {formatNumber(row.request_count)}
+                  </TableCell>
+                  <TableCell className=’text-right’>
+                    {formatNumber(row.prompt_tokens)}
+                  </TableCell>
+                  <TableCell className=’text-right’>
+                    {formatNumber(row.completion_tokens)}
+                  </TableCell>
+                  <TableCell className=’text-right font-medium’>
+                    {formatNumber(row.total_tokens)}
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         )}
