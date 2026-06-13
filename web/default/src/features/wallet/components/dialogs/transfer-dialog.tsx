@@ -47,9 +47,9 @@ export function TransferDialog({
   useEffect(() => {
     if (open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setAmount(QUOTA_PER_DOLLAR)
+      setAmount(availableQuota)
     }
-  }, [open])
+  }, [open, availableQuota])
 
   const handleConfirm = async () => {
     const success = await onConfirm(amount)
