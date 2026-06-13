@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
-import { BarChart3, Hash, ListChecks } from 'lucide-react'
+import { BarChart3, Hash, ListChecks, Trophy } from 'lucide-react'
 import { PublicLayout } from '@/components/layout'
 import { PageTransition } from '@/components/page-transition'
 import {
@@ -80,7 +80,7 @@ export function Rank() {
           />
         ) : (
           <>
-            <RankSummaryCards summary={data.summary} />
+            <RankSummaryCards summary={data.summary} currentUser={data.current_user} />
             <RankTable rows={data.items ?? []} />
           </>
         )}
@@ -89,29 +89,42 @@ export function Rank() {
   )
 }
 
-function RankSummaryCards(props: { summary: RankSummary }) {
+function RankSummaryCards(props: { summary: RankSummary; currentUser?: RankRow }) {
   const { t } = useTranslation()
-  const cards = [
+
+  const allCards = [
     {
       title: t('Prompt tokens'),
       value: props.summary.prompt_tokens,
       icon: Hash,
+      format: 'number' as const,
     },
     {
       title: t('Completion tokens'),
       value: props.summary.completion_tokens,
       icon: ListChecks,
+      format: 'number' as const,
     },
     {
       title: t('Total tokens'),
       value: props.summary.total_tokens,
       icon: BarChart3,
+      format: 'number' as const,
     },
   ]
 
+  if (props.currentUser) {
+    allCards.unshift({
+      title: t('Your rank'),
+      value: props.currentUser.rank,
+      icon: Trophy,
+      format: 'rank' as const,
+    })
+  }
+
   return (
-    <div className='grid gap-3 md:grid-cols-3'>
-      {cards.map((card) => {
+    <div className='grid gap-3 md:grid-cols-3 lg:grid-cols-4'>
+      {allCards.map((card) => {
         const Icon = card.icon
         return (
           <Card key={card.title}>
@@ -123,7 +136,7 @@ function RankSummaryCards(props: { summary: RankSummary }) {
             </CardHeader>
             <CardContent>
               <div className='text-2xl font-semibold tracking-tight'>
-                {formatNumber(card.value)}
+                {card.format === 'rank' ? `#${card.value}` : formatNumber(card.value)}
               </div>
             </CardContent>
           </Card>
@@ -193,7 +206,8 @@ function RankTable(props: { rows: RankRow[] }) {
 function RankLoading() {
   return (
     <div className='space-y-6'>
-      <div className='grid gap-3 md:grid-cols-3'>
+      <div className='grid gap-3 md:grid-cols-3 lg:grid-cols-4'>
+        <Skeleton className='h-32 rounded-xl' />
         <Skeleton className='h-32 rounded-xl' />
         <Skeleton className='h-32 rounded-xl' />
         <Skeleton className='h-32 rounded-xl' />
