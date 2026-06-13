@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
-import { BarChart3, Hash, ListChecks } from 'lucide-react'
+import { BarChart3, Hash, ListChecks, Trophy } from 'lucide-react'
 import { PublicLayout } from '@/components/layout'
 import { PageTransition } from '@/components/page-transition'
 import {
@@ -80,8 +80,8 @@ export function Rank() {
           />
         ) : (
           <>
-            <RankSummaryCards summary={data.summary} />
-            <RankTable rows={data.items ?? []} />
+            <RankSummaryCards summary={data.summary} currentUser={data.current_user} />
+            <RankTable rows={data.items ?? []} currentUsername={data.current_user?.username} />
           </>
         )}
       </PageTransition>
@@ -89,7 +89,7 @@ export function Rank() {
   )
 }
 
-function RankSummaryCards(props: { summary: RankSummary }) {
+function RankSummaryCards(props: { summary: RankSummary; currentUser?: RankRow }) {
   const { t } = useTranslation()
   const cards = [
     {
@@ -109,19 +109,29 @@ function RankSummaryCards(props: { summary: RankSummary }) {
     },
   ]
 
+  if (props.currentUser) {
+    cards.unshift({
+      title: t('Your rank'),
+      value: props.currentUser.rank,
+      icon: Trophy,
+    })
+  }
+
   return (
-    <div className='grid gap-3 md:grid-cols-3'>
+    <div className='grid gap-3 md:grid-cols-3 lg:grid-cols-4'>
       {cards.map((card) => {
         const Icon = card.icon
         return (
           <Card key={card.title}>
-            <CardHeader className='flex-row items-center justify-between space-y-0'>
-              <CardTitle>{card.title}</CardTitle>
-              <Icon className='text-muted-foreground size-5' />
+            <CardHeader className='space-y-0 pb-2'>
+              <div className='flex items-center gap-2'>
+                <Icon className='text-muted-foreground size-4' />
+                <CardTitle className='text-sm font-medium'>{card.title}</CardTitle>
+              </div>
             </CardHeader>
             <CardContent>
               <div className='text-2xl font-semibold tracking-tight'>
-                {formatNumber(card.value)}
+                {card.title === t('Your rank') ? `#${card.value}` : formatNumber(card.value)}
               </div>
             </CardContent>
           </Card>
@@ -131,55 +141,61 @@ function RankSummaryCards(props: { summary: RankSummary }) {
   )
 }
 
-function RankTable(props: { rows: RankRow[] }) {
+function RankTable(props: { rows: RankRow[]; currentUsername?: string }) {
   const { t } = useTranslation()
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t('Rankings')}</CardTitle>
-        <CardDescription>{t('Today’s usage grouped by user and API key.')}</CardDescription>
+        <CardTitle>{t(‘Rankings’)}</CardTitle>
+        <CardDescription>{t(‘Today’s usage grouped by user and API key.’)}</CardDescription>
       </CardHeader>
       <CardContent>
         {props.rows.length === 0 ? (
-          <div className='text-muted-foreground rounded-lg border border-dashed px-4 py-10 text-center text-sm'>
-            {t('No ranking data for today')}
+          <div className=’text-muted-foreground rounded-lg border border-dashed px-4 py-10 text-center text-sm’>
+            {t(‘No ranking data for today’)}
           </div>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t('Rank')}</TableHead>
-                <TableHead>{t('Username')}</TableHead>
-                <TableHead className='text-right'>{t('Requests')}</TableHead>
-                <TableHead className='text-right'>{t('Prompt tokens')}</TableHead>
-                <TableHead className='text-right'>
-                  {t('Completion tokens')}
+                <TableHead>{t(‘Rank’)}</TableHead>
+                <TableHead>{t(‘Username’)}</TableHead>
+                <TableHead className=’text-right’>{t(‘Requests’)}</TableHead>
+                <TableHead className=’text-right’>{t(‘Prompt tokens’)}</TableHead>
+                <TableHead className=’text-right’>
+                  {t(‘Completion tokens’)}
                 </TableHead>
-                <TableHead className='text-right'>{t('Total tokens')}</TableHead>
+                <TableHead className=’text-right’>{t(‘Total tokens’)}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {props.rows.map((row) => (
-                <TableRow key={`${row.rank}-${row.username}`}>
-                  <TableCell className='font-medium'>#{row.rank}</TableCell>
-                  <TableCell className='text-primary font-semibold'>
-                    {maskUsername(row.username)}
-                  </TableCell>
-                  <TableCell className='text-right'>
-                    {formatNumber(row.request_count)}
-                  </TableCell>
-                  <TableCell className='text-right'>
-                    {formatNumber(row.prompt_tokens)}
-                  </TableCell>
-                  <TableCell className='text-right'>
-                    {formatNumber(row.completion_tokens)}
-                  </TableCell>
-                  <TableCell className='text-right font-medium'>
-                    {formatNumber(row.total_tokens)}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {props.rows.map((row) => {
+                const isCurrentUser = props.currentUsername && row.username === props.currentUsername
+                return (
+                  <TableRow
+                    key={`${row.rank}-${row.username}`}
+                    className={isCurrentUser ? ‘bg-primary/5’ : ‘’}
+                  >
+                    <TableCell className=’font-medium’>#{row.rank}</TableCell>
+                    <TableCell className={isCurrentUser ? ‘text-primary font-bold’ : ‘text-primary font-semibold’}>
+                      {maskUsername(row.username)}
+                    </TableCell>
+                    <TableCell className=’text-right’>
+                      {formatNumber(row.request_count)}
+                    </TableCell>
+                    <TableCell className=’text-right’>
+                      {formatNumber(row.prompt_tokens)}
+                    </TableCell>
+                    <TableCell className=’text-right’>
+                      {formatNumber(row.completion_tokens)}
+                    </TableCell>
+                    <TableCell className=’text-right font-medium’>
+                      {formatNumber(row.total_tokens)}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         )}
@@ -191,7 +207,8 @@ function RankTable(props: { rows: RankRow[] }) {
 function RankLoading() {
   return (
     <div className='space-y-6'>
-      <div className='grid gap-3 md:grid-cols-3'>
+      <div className='grid gap-3 md:grid-cols-3 lg:grid-cols-4'>
+        <Skeleton className='h-32 rounded-xl' />
         <Skeleton className='h-32 rounded-xl' />
         <Skeleton className='h-32 rounded-xl' />
         <Skeleton className='h-32 rounded-xl' />

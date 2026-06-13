@@ -7,7 +7,8 @@ import (
 )
 
 func GetSiteUserUsageRank(c *gin.Context) {
-	result, err := service.GetTodaySiteUserUsageRank()
+	username := c.GetString("username")
+	result, err := service.GetTodaySiteUserUsageRank(username)
 	if err != nil {
 		common.ApiError(c, err)
 		return

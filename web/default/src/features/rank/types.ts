@@ -35,4 +35,5 @@ export type RankRow = {
 export type RankResponse = {
   summary: RankSummary
   items: RankRow[]
+  current_user?: RankRow
 }

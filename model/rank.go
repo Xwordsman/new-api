@@ -20,11 +20,12 @@ type SiteUserUsageRankRow struct {
 }
 
 type SiteUserUsageRankResponse struct {
-	Summary SiteUserUsageRankSummary `json:"summary"`
-	Items   []SiteUserUsageRankRow   `json:"items"`
+	Summary     SiteUserUsageRankSummary `json:"summary"`
+	Items       []SiteUserUsageRankRow   `json:"items"`
+	CurrentUser *SiteUserUsageRankRow    `json:"current_user,omitempty"`
 }
 
-func GetTodaySiteUserUsageRank() (*SiteUserUsageRankResponse, error) {
+func GetTodaySiteUserUsageRank(currentUsername string) (*SiteUserUsageRankResponse, error) {
 	now := time.Now()
 	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Unix()
 	end := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location()).Unix()
@@ -46,9 +47,18 @@ func GetTodaySiteUserUsageRank() (*SiteUserUsageRankResponse, error) {
 		rows[i].Rank = i + 1
 	}
 
+	var currentUser *SiteUserUsageRankRow
+	if currentUsername != "" {
+		currentUser, err = getSiteUserUsageRankForUser(start, end, currentUsername, rows)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return &SiteUserUsageRankResponse{
-		Summary: summary,
-		Items:   rows,
+		Summary:     summary,
+		Items:       rows,
+		CurrentUser: currentUser,
 	}, nil
 }
 
@@ -71,8 +81,45 @@ func getSiteUserUsageRankRows(start int64, end int64) ([]SiteUserUsageRankRow, e
 		Select("username, COUNT(*) AS request_count, COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens, COALESCE(SUM(completion_tokens), 0) AS completion_tokens, COALESCE(SUM(prompt_tokens), 0) + COALESCE(SUM(completion_tokens), 0) AS total_tokens").
 		Where("type = ? AND created_at >= ? AND created_at < ?", LogTypeConsume, start, end).
 		Group("user_id, username").
-		Order("total_tokens DESC, request_count DESC").
+		Order("request_count DESC, total_tokens DESC").
 		Limit(SiteUserUsageRankLimit).
 		Scan(&rows).Error
 	return rows, err
+}
+
+func getSiteUserUsageRankForUser(start int64, end int64, username string, topRows []SiteUserUsageRankRow) (*SiteUserUsageRankRow, error) {
+	// Check if user is already in top 100
+	for i := range topRows {
+		if topRows[i].Username == username {
+			return &topRows[i], nil
+		}
+	}
+
+	// User not in top 100, query their stats and calculate rank
+	var userRow SiteUserUsageRankRow
+	err := LOG_DB.Table("logs").
+		Select("username, COUNT(*) AS request_count, COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens, COALESCE(SUM(completion_tokens), 0) AS completion_tokens, COALESCE(SUM(prompt_tokens), 0) + COALESCE(SUM(completion_tokens), 0) AS total_tokens").
+		Where("type = ? AND created_at >= ? AND created_at < ? AND username = ?", LogTypeConsume, start, end, username).
+		Group("user_id, username").
+		Scan(&userRow).Error
+
+	if err != nil || userRow.Username == "" {
+		return nil, err
+	}
+
+	// Calculate rank by counting users with more requests
+	var rank int64
+	err = LOG_DB.Table("logs").
+		Select("COUNT(DISTINCT user_id)").
+		Where("type = ? AND created_at >= ? AND created_at < ?", LogTypeConsume, start, end).
+		Group("user_id").
+		Having("COUNT(*) > ? OR (COUNT(*) = ? AND COALESCE(SUM(prompt_tokens), 0) + COALESCE(SUM(completion_tokens), 0) > ?)", userRow.RequestCount, userRow.RequestCount, userRow.TotalTokens).
+		Count(&rank).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	userRow.Rank = int(rank) + 1
+	return &userRow, nil
 }
