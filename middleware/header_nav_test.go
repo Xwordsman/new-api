@@ -122,6 +122,42 @@ func TestHeaderNavModuleAuthRejectsLegacyDisabledModule(t *testing.T) {
 	require.Equal(t, http.StatusForbidden, recorder.Code)
 }
 
+func TestHeaderNavModuleAuthSetsUsernameForOptionalLogin(t *testing.T) {
+	withHeaderNavModules(t, `{"rank":{"enabled":true,"requireAuth":false}}`)
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(sessions.Sessions("session", cookie.NewStore([]byte("header-nav-test"))))
+	router.GET("/login", func(c *gin.Context) {
+		session := sessions.Default(c)
+		session.Set("username", "tester")
+		session.Set("role", common.RoleCommonUser)
+		session.Set("id", 1)
+		session.Set("status", common.UserStatusEnabled)
+		session.Set("group", "default")
+		require.NoError(t, session.Save())
+		c.Status(http.StatusNoContent)
+	})
+	router.GET("/api/rank", HeaderNavModuleAuth("rank"), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"username": c.GetString("username")})
+	})
+
+	loginRecorder := httptest.NewRecorder()
+	loginRequest := httptest.NewRequest(http.MethodGet, "/login", nil)
+	router.ServeHTTP(loginRecorder, loginRequest)
+	require.Equal(t, http.StatusNoContent, loginRecorder.Code)
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/rank", nil)
+	for _, cookie := range loginRecorder.Result().Cookies() {
+		request.AddCookie(cookie)
+	}
+	router.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Contains(t, recorder.Body.String(), `"username":"tester"`)
+}
+
 func TestHeaderNavModulePublicOrUserAuthAllowsDefaultPublicAccess(t *testing.T) {
 	withHeaderNavModules(t, "")
 

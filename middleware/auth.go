@@ -163,6 +163,14 @@ func TryUserAuth() func(c *gin.Context) {
 		if id != nil {
 			c.Set("id", id)
 		}
+		username := session.Get("username")
+		if username != nil {
+			c.Set("username", username)
+		}
+		role := session.Get("role")
+		if role != nil {
+			c.Set("role", role)
+		}
 		c.Next()
 	}
 }
