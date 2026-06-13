@@ -519,7 +519,7 @@ func GetUserOAuthBindingsByAdmin(c *gin.Context) {
 	})
 }
 
-// UnbindCustomOAuth unbinds a custom OAuth provider from the current user
+// UnbindCustomOAuth rejects self-service unbinding of custom OAuth providers.
 func UnbindCustomOAuth(c *gin.Context) {
 	userId := c.GetInt("id")
 	if userId == 0 {
@@ -527,21 +527,9 @@ func UnbindCustomOAuth(c *gin.Context) {
 		return
 	}
 
-	providerIdStr := c.Param("provider_id")
-	providerId, err := strconv.Atoi(providerIdStr)
-	if err != nil {
-		common.ApiErrorMsg(c, "无效的提供商 ID")
-		return
-	}
-
-	if err := model.DeleteUserOAuthBinding(userId, providerId); err != nil {
-		common.ApiError(c, err)
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "解绑成功",
+	c.JSON(http.StatusForbidden, gin.H{
+		"success": false,
+		"message": "自定义 OAuth 绑定不允许用户自行解绑，请联系管理员",
 	})
 }
 

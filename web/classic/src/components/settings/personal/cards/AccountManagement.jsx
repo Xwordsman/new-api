@@ -44,7 +44,6 @@ import TelegramLoginButton from 'react-telegram-login';
 import {
   API,
   showError,
-  showSuccess,
   onGitHubOAuthClicked,
   onOIDCClicked,
   onLinuxDOOAuthClicked,
@@ -100,7 +99,6 @@ const AccountManagement = ({
   const [showTelegramBindModal, setShowTelegramBindModal] =
     React.useState(false);
   const [customOAuthBindings, setCustomOAuthBindings] = React.useState([]);
-  const [customOAuthLoading, setCustomOAuthLoading] = React.useState({});
 
   // Fetch custom OAuth bindings
   const loadCustomOAuthBindings = async () => {
@@ -114,32 +112,6 @@ const AccountManagement = ({
     } catch (error) {
       showError(error.response?.data?.message || error.message || t('获取绑定信息失败'));
     }
-  };
-
-  // Unbind custom OAuth provider
-  const handleUnbindCustomOAuth = async (providerId, providerName) => {
-    Modal.confirm({
-      title: t('确认解绑'),
-      content: t('确定要解绑 {{name}} 吗？', { name: providerName }),
-      okText: t('确认'),
-      cancelText: t('取消'),
-      onOk: async () => {
-        setCustomOAuthLoading((prev) => ({ ...prev, [providerId]: true }));
-        try {
-          const res = await API.delete(`/api/user/oauth/bindings/${providerId}`);
-          if (res.data.success) {
-            showSuccess(t('解绑成功'));
-            await loadCustomOAuthBindings();
-          } else {
-            showError(res.data.message);
-          }
-        } catch (error) {
-          showError(error.response?.data?.message || error.message || t('操作失败'));
-        } finally {
-          setCustomOAuthLoading((prev) => ({ ...prev, [providerId]: false }));
-        }
-      },
-    });
   };
 
   // Handle bind custom OAuth
@@ -548,17 +520,9 @@ const AccountManagement = ({
                         </div>
                         <div className='flex-shrink-0'>
                           {bound ? (
-                            <Button
-                              type='danger'
-                              theme='outline'
-                              size='small'
-                              loading={customOAuthLoading[provider.id]}
-                              onClick={() =>
-                                handleUnbindCustomOAuth(provider.id, provider.name)
-                              }
-                            >
-                              {t('解绑')}
-                            </Button>
+                            <Typography.Text type='tertiary' className='text-xs'>
+                              {t('如需解绑，请联系管理员')}
+                            </Typography.Text>
                           ) : (
                             <Button
                               type='primary'

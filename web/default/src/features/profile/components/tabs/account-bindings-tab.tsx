@@ -17,10 +17,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Mail, Shield, Send, Link2, Unlink } from 'lucide-react'
+import { Mail, Shield, Send, Link2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { SiGithub, SiWechat, SiLinux } from 'react-icons/si'
-import { toast } from 'sonner'
 import { IconDiscord } from '@/assets/brand-icons'
 import {
   handleGitHubOAuth,
@@ -32,14 +31,9 @@ import { useDialogs } from '@/hooks/use-dialog'
 import { useStatus } from '@/hooks/use-status'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { ConfirmDialog } from '@/components/confirm-dialog'
 import { StatusBadge } from '@/components/status-badge'
 import { OAUTH_BIND_STORAGE_KEY } from '@/features/auth/constants'
-import {
-  getSelfOAuthBindings,
-  unbindCustomOAuth,
-  type CustomOAuthBinding,
-} from '../../api'
+import { getSelfOAuthBindings, type CustomOAuthBinding } from '../../api'
 import type { UserProfile, BindingItem } from '../../types'
 import { EmailBindDialog } from '../dialogs/email-bind-dialog'
 import { TelegramBindDialog } from '../dialogs/telegram-bind-dialog'
@@ -64,10 +58,6 @@ export function AccountBindingsTab({
   const dialogs = useDialogs<DialogKey>()
   const { status, loading } = useStatus()
   const [customBindings, setCustomBindings] = useState<CustomOAuthBinding[]>([])
-  const [unbindTarget, setUnbindTarget] = useState<CustomOAuthBinding | null>(
-    null
-  )
-  const [unbinding, setUnbinding] = useState(false)
 
   const customProviders = status?.custom_oauth_providers as
     | Array<{ id: string; name: string }>
@@ -88,30 +78,6 @@ export function AccountBindingsTab({
   useEffect(() => {
     fetchCustomBindings()
   }, [fetchCustomBindings])
-
-  const handleUnbindCustom = async () => {
-    if (!unbindTarget) return
-    setUnbinding(true)
-    try {
-      const res = await unbindCustomOAuth(unbindTarget.provider_id)
-      if (res.success) {
-        toast.success(
-          t('Unbound {{provider}}', {
-            provider: unbindTarget.provider_name,
-          })
-        )
-        await fetchCustomBindings()
-        onUpdate()
-      } else {
-        toast.error(res.message || t('Unbind failed'))
-      }
-    } catch {
-      toast.error(t('Unbind failed'))
-    } finally {
-      setUnbinding(false)
-      setUnbindTarget(null)
-    }
-  }
 
   const handleBindCustomOAuth = (provider: { id: string; name: string }) => {
     const redirectUrl = `${window.location.origin}/oauth/${provider.id}?bind=true`
@@ -347,15 +313,9 @@ export function AccountBindingsTab({
                     </div>
                   </div>
                   {isBound ? (
-                    <Button
-                      variant='ghost'
-                      size='sm'
-                      className='text-destructive hover:text-destructive h-7 shrink-0 px-2.5 text-xs'
-                      onClick={() => setUnbindTarget(binding)}
-                    >
-                      <Unlink className='mr-1 h-3 w-3' />
-                      {t('Unbind')}
-                    </Button>
+                    <p className='text-muted-foreground shrink-0 text-xs'>
+                      {t('Contact admin to unbind')}
+                    </p>
                   ) : (
                     <Button
                       variant='outline'
@@ -372,23 +332,6 @@ export function AccountBindingsTab({
           </div>
         </>
       )}
-
-      {/* Custom OAuth Unbind Confirmation */}
-      <ConfirmDialog
-        open={!!unbindTarget}
-        onOpenChange={(open) => !open && setUnbindTarget(null)}
-        title={t('Confirm Unbind')}
-        desc={t(
-          'Are you sure you want to unbind {{provider}}? You will no longer be able to log in via this method.',
-          {
-            provider: unbindTarget?.provider_name || '',
-          }
-        )}
-        confirmText={t('Confirm Unbind')}
-        destructive
-        handleConfirm={handleUnbindCustom}
-        isLoading={unbinding}
-      />
 
       {/* Email Bind Dialog */}
       <EmailBindDialog
