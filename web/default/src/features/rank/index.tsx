@@ -91,37 +91,38 @@ export function Rank() {
 
 function RankSummaryCards(props: { summary: RankSummary; currentUser?: RankRow }) {
   const { t } = useTranslation()
-  const cards: Array<{
-    title: string
-    value: number
-    icon: React.ComponentType<{ className?: string }>
-    isRank?: boolean
-  }> = [
+
+  const baseCards = [
     {
       title: t('Prompt tokens'),
       value: props.summary.prompt_tokens,
       icon: Hash,
+      isRank: false,
     },
     {
       title: t('Completion tokens'),
       value: props.summary.completion_tokens,
       icon: ListChecks,
+      isRank: false,
     },
     {
       title: t('Total tokens'),
       value: props.summary.total_tokens,
       icon: BarChart3,
+      isRank: false,
     },
   ]
 
-  if (props.currentUser) {
-    cards.unshift({
-      title: t('Your rank'),
-      value: props.currentUser.rank,
-      icon: Trophy,
-      isRank: true,
-    })
-  }
+  const rankCard = props.currentUser
+    ? {
+        title: t('Your rank'),
+        value: props.currentUser.rank,
+        icon: Trophy,
+        isRank: true,
+      }
+    : null
+
+  const cards = rankCard ? [rankCard, ...baseCards] : baseCards
 
   return (
     <div className='grid gap-3 md:grid-cols-3 lg:grid-cols-4'>
