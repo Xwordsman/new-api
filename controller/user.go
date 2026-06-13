@@ -31,10 +31,6 @@ type LoginRequest struct {
 }
 
 func Login(c *gin.Context) {
-	if !common.PasswordLoginEnabled {
-		common.ApiErrorI18n(c, i18n.MsgUserPasswordLoginDisabled)
-		return
-	}
 	var loginRequest LoginRequest
 	err := json.NewDecoder(c.Request.Body).Decode(&loginRequest)
 	if err != nil {
@@ -62,6 +58,12 @@ func Login(c *gin.Context) {
 		default:
 			common.ApiErrorI18n(c, i18n.MsgUserUsernameOrPasswordError)
 		}
+		return
+	}
+
+	// Check password login enabled (admins are exempt)
+	if !common.PasswordLoginEnabled && user.Role != common.RoleRootUser && user.Role != common.RoleAdminUser {
+		common.ApiErrorI18n(c, i18n.MsgUserPasswordLoginDisabled)
 		return
 	}
 
