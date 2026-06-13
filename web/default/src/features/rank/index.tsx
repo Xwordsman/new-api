@@ -115,9 +115,11 @@ function RankSummaryCards(props: { summary: RankSummary }) {
         const Icon = card.icon
         return (
           <Card key={card.title}>
-            <CardHeader className='flex-row items-center justify-between space-y-0'>
-              <CardTitle>{card.title}</CardTitle>
-              <Icon className='text-muted-foreground size-5' />
+            <CardHeader className='space-y-0 pb-2'>
+              <div className='flex items-center gap-2'>
+                <Icon className='text-muted-foreground size-4' />
+                <CardTitle className='text-sm font-medium'>{card.title}</CardTitle>
+              </div>
             </CardHeader>
             <CardContent>
               <div className='text-2xl font-semibold tracking-tight'>
