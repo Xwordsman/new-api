@@ -81,7 +81,7 @@ export function Rank() {
         ) : (
           <>
             <RankSummaryCards summary={data.summary} />
-            <RankTable rows={data.items ?? []} />
+            <RankTable rows={data.items ?? []} currentUsername={data.current_user?.username} />
           </>
         )}
       </PageTransition>
@@ -133,55 +133,61 @@ function RankSummaryCards(props: { summary: RankSummary }) {
   )
 }
 
-function RankTable(props: { rows: RankRow[] }) {
+function RankTable(props: { rows: RankRow[]; currentUsername?: string }) {
   const { t } = useTranslation()
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t('Rankings')}</CardTitle>
-        <CardDescription>{t('Today’s usage grouped by user and API key.')}</CardDescription>
+        <CardTitle>{t(‘Rankings’)}</CardTitle>
+        <CardDescription>{t(‘Today’s usage grouped by user and API key.’)}</CardDescription>
       </CardHeader>
       <CardContent>
         {props.rows.length === 0 ? (
-          <div className='text-muted-foreground rounded-lg border border-dashed px-4 py-10 text-center text-sm'>
-            {t('No ranking data for today')}
+          <div className=’text-muted-foreground rounded-lg border border-dashed px-4 py-10 text-center text-sm’>
+            {t(‘No ranking data for today’)}
           </div>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t('Rank')}</TableHead>
-                <TableHead>{t('Username')}</TableHead>
-                <TableHead className='text-right'>{t('Requests')}</TableHead>
-                <TableHead className='text-right'>{t('Prompt tokens')}</TableHead>
-                <TableHead className='text-right'>
-                  {t('Completion tokens')}
+                <TableHead>{t(‘Rank’)}</TableHead>
+                <TableHead>{t(‘Username’)}</TableHead>
+                <TableHead className=’text-right’>{t(‘Requests’)}</TableHead>
+                <TableHead className=’text-right’>{t(‘Prompt tokens’)}</TableHead>
+                <TableHead className=’text-right’>
+                  {t(‘Completion tokens’)}
                 </TableHead>
-                <TableHead className='text-right'>{t('Total tokens')}</TableHead>
+                <TableHead className=’text-right’>{t(‘Total tokens’)}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {props.rows.map((row) => (
-                <TableRow key={`${row.rank}-${row.username}`}>
-                  <TableCell className='font-medium'>#{row.rank}</TableCell>
-                  <TableCell className='text-primary font-semibold'>
-                    {maskUsername(row.username)}
-                  </TableCell>
-                  <TableCell className='text-right'>
-                    {formatNumber(row.request_count)}
-                  </TableCell>
-                  <TableCell className='text-right'>
-                    {formatNumber(row.prompt_tokens)}
-                  </TableCell>
-                  <TableCell className='text-right'>
-                    {formatNumber(row.completion_tokens)}
-                  </TableCell>
-                  <TableCell className='text-right font-medium'>
-                    {formatNumber(row.total_tokens)}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {props.rows.map((row) => {
+                const isCurrentUser = props.currentUsername && row.username === props.currentUsername
+                return (
+                  <TableRow
+                    key={`${row.rank}-${row.username}`}
+                    className={isCurrentUser ? ‘bg-primary/5’ : ‘’}
+                  >
+                    <TableCell className=’font-medium’>#{row.rank}</TableCell>
+                    <TableCell className={isCurrentUser ? ‘text-primary font-bold’ : ‘text-primary font-semibold’}>
+                      {maskUsername(row.username)}
+                    </TableCell>
+                    <TableCell className=’text-right’>
+                      {formatNumber(row.request_count)}
+                    </TableCell>
+                    <TableCell className=’text-right’>
+                      {formatNumber(row.prompt_tokens)}
+                    </TableCell>
+                    <TableCell className=’text-right’>
+                      {formatNumber(row.completion_tokens)}
+                    </TableCell>
+                    <TableCell className=’text-right font-medium’>
+                      {formatNumber(row.total_tokens)}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         )}
