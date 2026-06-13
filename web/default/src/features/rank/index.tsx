@@ -91,7 +91,12 @@ export function Rank() {
 
 function RankSummaryCards(props: { summary: RankSummary; currentUser?: RankRow }) {
   const { t } = useTranslation()
-  const cards = [
+  const cards: Array<{
+    title: string
+    value: number
+    icon: React.ComponentType<{ className?: string }>
+    isRank?: boolean
+  }> = [
     {
       title: t('Prompt tokens'),
       value: props.summary.prompt_tokens,
@@ -114,6 +119,7 @@ function RankSummaryCards(props: { summary: RankSummary; currentUser?: RankRow }
       title: t('Your rank'),
       value: props.currentUser.rank,
       icon: Trophy,
+      isRank: true,
     })
   }
 
@@ -131,7 +137,7 @@ function RankSummaryCards(props: { summary: RankSummary; currentUser?: RankRow }
             </CardHeader>
             <CardContent>
               <div className='text-2xl font-semibold tracking-tight'>
-                {card.title === t('Your rank') ? `#${card.value}` : formatNumber(card.value)}
+                {card.isRank ? `#${card.value}` : formatNumber(card.value)}
               </div>
             </CardContent>
           </Card>
