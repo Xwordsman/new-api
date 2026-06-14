@@ -522,6 +522,32 @@ func testChannel(channel *model.Channel, testUserID int, testModel string, endpo
 	}
 }
 
+// recordChannelMonitorLog records the test result to channel_monitor_logs table
+func recordChannelMonitorLog(channelId int, modelName string, success bool, responseTime int64, errorMessage string) {
+	// Only record if monitor is enabled
+	if !operation_setting.GetMonitorSetting().ChannelMonitorEnabled {
+		return
+	}
+
+	status := 0
+	if success {
+		status = 1
+	}
+
+	log := &model.ChannelMonitorLog{
+		ChannelId:    channelId,
+		ModelName:    modelName,
+		Status:       status,
+		ResponseTime: int(responseTime),
+		ErrorMessage: errorMessage,
+		TestedAt:     common.GetTimestamp(),
+	}
+
+	if err := model.CreateChannelMonitorLog(log); err != nil {
+		common.SysError(fmt.Sprintf("failed to record channel monitor log: %v", err))
+	}
+}
+
 func attachTestBillingRequestInput(info *relaycommon.RelayInfo, request dto.Request) error {
 	if info == nil {
 		return nil
@@ -959,6 +985,25 @@ func testAllChannels(notify bool) error {
 			}
 
 			channel.UpdateResponseTime(milliseconds)
+
+			// Record monitor log
+			testModel := ""
+			if channel.TestModel != nil && *channel.TestModel != "" {
+				testModel = *channel.TestModel
+			} else {
+				models := channel.GetModels()
+				if len(models) > 0 {
+					testModel = models[0]
+				}
+			}
+			errorMsg := ""
+			if newAPIError != nil {
+				errorMsg = newAPIError.Error()
+			} else if result.localErr != nil {
+				errorMsg = result.localErr.Error()
+			}
+			recordChannelMonitorLog(channel.Id, testModel, newAPIError == nil && result.localErr == nil, milliseconds, errorMsg)
+
 			time.Sleep(common.RequestInterval)
 		}
 

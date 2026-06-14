@@ -55,6 +55,8 @@ const headerNavSchema = z.object({
   rankRequireAuth: z.boolean(),
   rankingsEnabled: z.boolean(),
   rankingsRequireAuth: z.boolean(),
+  statusEnabled: z.boolean(),
+  statusRequireAuth: z.boolean(),
   docs: z.boolean(),
   about: z.boolean(),
 })
@@ -97,6 +99,14 @@ const toFormValues = (config: HeaderNavModulesConfig): HeaderNavFormValues => ({
     config.rankings?.requireAuth === undefined
       ? HEADER_NAV_DEFAULT.rankings.requireAuth
       : Boolean(config.rankings.requireAuth),
+  statusEnabled:
+    config.status?.enabled === undefined
+      ? HEADER_NAV_DEFAULT.status.enabled
+      : Boolean(config.status.enabled),
+  statusRequireAuth:
+    config.status?.requireAuth === undefined
+      ? HEADER_NAV_DEFAULT.status.requireAuth
+      : Boolean(config.status.requireAuth),
   docs:
     config.docs === undefined ? HEADER_NAV_DEFAULT.docs : Boolean(config.docs),
   about:
@@ -143,6 +153,11 @@ export function HeaderNavigationSection({
         ...(config.rankings ?? HEADER_NAV_DEFAULT.rankings),
         enabled: values.rankingsEnabled,
         requireAuth: values.rankingsRequireAuth,
+      },
+      status: {
+        ...(config.status ?? HEADER_NAV_DEFAULT.status),
+        enabled: values.statusEnabled,
+        requireAuth: values.statusRequireAuth,
       },
     }
 
@@ -191,7 +206,7 @@ export function HeaderNavigationSection({
   const accessModules: Array<{
     enabledKey: keyof HeaderNavFormValues
     requireAuthKey: keyof HeaderNavFormValues
-    requireAuthDependsOn: 'pricingEnabled' | 'rankEnabled' | 'rankingsEnabled'
+    requireAuthDependsOn: 'pricingEnabled' | 'rankEnabled' | 'rankingsEnabled' | 'statusEnabled'
     title: string
     description: string
     requireAuthTitle: string
@@ -209,14 +224,25 @@ export function HeaderNavigationSection({
       ),
     },
     {
-      enabledKey: 'rankEnabled',
-      requireAuthKey: 'rankRequireAuth',
-      requireAuthDependsOn: 'rankEnabled',
-      title: t('Rankings'),
-      description: t('Public user usage ranking page based on today’s token usage.'),
-      requireAuthTitle: t('Require login to view rankings'),
+      enabledKey: ‘rankEnabled’,
+      requireAuthKey: ‘rankRequireAuth’,
+      requireAuthDependsOn: ‘rankEnabled’,
+      title: t(‘Rankings’),
+      description: t(‘Public user usage ranking page based on today’s token usage.’),
+      requireAuthTitle: t(‘Require login to view rankings’),
       requireAuthDescription: t(
-        'Visitors must authenticate before accessing the rankings page.'
+        ‘Visitors must authenticate before accessing the rankings page.’
+      ),
+    },
+    {
+      enabledKey: ‘statusEnabled’,
+      requireAuthKey: ‘statusRequireAuth’,
+      requireAuthDependsOn: ‘statusEnabled’,
+      title: t(‘Status Monitor’),
+      description: t(‘Service status and uptime monitoring page.’),
+      requireAuthTitle: t(‘Require login to view status’),
+      requireAuthDescription: t(
+        ‘Visitors must authenticate before accessing the status monitor page.’
       ),
     },
   ]

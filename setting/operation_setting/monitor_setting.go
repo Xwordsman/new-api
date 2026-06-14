@@ -8,14 +8,18 @@ import (
 )
 
 type MonitorSetting struct {
-	AutoTestChannelEnabled bool    `json:"auto_test_channel_enabled"`
-	AutoTestChannelMinutes float64 `json:"auto_test_channel_minutes"`
+	AutoTestChannelEnabled  bool    `json:"auto_test_channel_enabled"`
+	AutoTestChannelMinutes  float64 `json:"auto_test_channel_minutes"`
+	ChannelMonitorEnabled   bool    `json:"channel_monitor_enabled"`    // Enable channel monitor page
+	MonitorRetentionHours   int     `json:"monitor_retention_hours"`    // How long to keep monitor logs (in hours)
 }
 
 // 默认配置
 var monitorSetting = MonitorSetting{
 	AutoTestChannelEnabled: false,
 	AutoTestChannelMinutes: 10,
+	ChannelMonitorEnabled:  true,  // Enable by default
+	MonitorRetentionHours:  12,    // Keep logs for 12 hours by default
 }
 
 func init() {
