@@ -224,25 +224,25 @@ export function HeaderNavigationSection({
       ),
     },
     {
-      enabledKey: ‘rankEnabled’,
-      requireAuthKey: ‘rankRequireAuth’,
-      requireAuthDependsOn: ‘rankEnabled’,
-      title: t(‘Rankings’),
-      description: t(‘Public user usage ranking page based on today\’s token usage.’),
-      requireAuthTitle: t(‘Require login to view rankings’),
+      enabledKey: 'rankEnabled',
+      requireAuthKey: 'rankRequireAuth',
+      requireAuthDependsOn: 'rankEnabled',
+      title: t('Rankings'),
+      description: t('Public user usage ranking page based on today\'s token usage.'),
+      requireAuthTitle: t('Require login to view rankings'),
       requireAuthDescription: t(
-        ‘Visitors must authenticate before accessing the rankings page.’
+        'Visitors must authenticate before accessing the rankings page.'
       ),
     },
     {
-      enabledKey: ‘statusEnabled’,
-      requireAuthKey: ‘statusRequireAuth’,
-      requireAuthDependsOn: ‘statusEnabled’,
-      title: t(‘Status Monitor’),
-      description: t(‘Service status and uptime monitoring page.’),
-      requireAuthTitle: t(‘Require login to view status’),
+      enabledKey: 'statusEnabled',
+      requireAuthKey: 'statusRequireAuth',
+      requireAuthDependsOn: 'statusEnabled',
+      title: t('Status Monitor'),
+      description: t('Service status and uptime monitoring page.'),
+      requireAuthTitle: t('Require login to view status'),
       requireAuthDescription: t(
-        ‘Visitors must authenticate before accessing the status monitor page.’
+        'Visitors must authenticate before accessing the status monitor page.'
       ),
     },
   ]
