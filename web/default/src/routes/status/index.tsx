@@ -16,9 +16,26 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
+import { useAuthStore } from '@/stores/auth-store'
+import { getFreshModuleAccess } from '@/lib/nav-modules'
 import MonitorPage from '@/features/monitor'
 
 export const Route = createFileRoute('/status')({
+  beforeLoad: async ({ location }) => {
+    const access = await getFreshModuleAccess('status')
+    if (!access.enabled) {
+      throw redirect({ to: '/' })
+    }
+    if (access.requireAuth) {
+      const { auth } = useAuthStore.getState()
+      if (!auth.user) {
+        throw redirect({
+          to: '/sign-in',
+          search: { redirect: location.href },
+        })
+      }
+    }
+  },
   component: MonitorPage,
 })

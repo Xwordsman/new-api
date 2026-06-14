@@ -114,8 +114,16 @@ export function MonitorStatusPage() {
       </div>
 
       {data.total_logs === 0 && (
-        <div className='text-muted-foreground py-12 text-center'>
-          {t('No monitoring data available yet')}
+        <div className='bg-muted/50 flex flex-col items-center gap-4 rounded-lg border p-12 text-center'>
+          <div className='text-muted-foreground space-y-2'>
+            <p className='text-lg font-medium'>{t('No monitoring data available yet')}</p>
+            <p className='text-sm'>
+              {t('Monitoring data will appear here after the first channel test runs.')}
+            </p>
+            <p className='text-sm'>
+              {t('You can manually trigger a test in the Channel Management page, or wait for the automatic test to run.')}
+            </p>
+          </div>
         </div>
       )}
     </div>

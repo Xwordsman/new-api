@@ -16,8 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { PublicLayout } from '@/components/layout'
+import { PageTransition } from '@/components/page-transition'
 import { MonitorStatusPage } from './components/monitor-status-page'
 
 export default function MonitorPage() {
-  return <MonitorStatusPage />
+  return (
+    <PublicLayout>
+      <PageTransition>
+        <MonitorStatusPage />
+      </PageTransition>
+    </PublicLayout>
+  )
 }
