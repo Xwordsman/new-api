@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import {
   IconDiscord,
   IconGithub,
@@ -135,6 +136,15 @@ export function OAuthProviders({
 
   if (providerButtons.length === 0) return null
 
+  const handleButtonClick = (onClick: () => void, isDisabled: boolean) => {
+    if (disabled && !isDisabled) {
+      // Button is disabled due to legal consent not checked
+      toast.error(t('Please agree to the legal terms first'))
+      return
+    }
+    onClick()
+  }
+
   return (
     <div className={cn('space-y-3', className)}>
       <div className='relative'>
@@ -155,8 +165,8 @@ export function OAuthProviders({
               key={key}
               variant='outline'
               type='button'
-              disabled={disabled || isLoading || extraDisabled}
-              onClick={onClick}
+              disabled={isLoading || extraDisabled}
+              onClick={() => handleButtonClick(onClick, extraDisabled || false)}
               className='h-11 w-full justify-center gap-2 rounded-lg'
             >
               {icon}
