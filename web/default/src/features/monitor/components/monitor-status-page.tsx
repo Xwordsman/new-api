@@ -41,8 +41,8 @@ export function MonitorStatusPage() {
   const loadData = async () => {
     try {
       const response = await getMonitorStatus(12)
-      if (response.data.success) {
-        setData(response.data.data)
+      if (response.success) {
+        setData(response.data)
         setError(null)
       }
     } catch (err) {

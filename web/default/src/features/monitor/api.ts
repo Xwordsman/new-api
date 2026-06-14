@@ -16,11 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { apiClient } from '@/lib/api-client'
+import { api } from '@/lib/api'
 import type { MonitorStatusResponse } from './types'
 
-export async function getMonitorStatus(hours: number = 12) {
-  return apiClient.get<{ success: boolean; data: MonitorStatusResponse }>(
-    `/api/monitor/status?hours=${hours}`
-  )
+type ApiMonitorResponse = {
+  success: boolean
+  message?: string
+  data: MonitorStatusResponse
+}
+
+export async function getMonitorStatus(hours: number = 12): Promise<ApiMonitorResponse> {
+  const res = await api.get(`/api/monitor/status?hours=${hours}`)
+  return res.data
 }
