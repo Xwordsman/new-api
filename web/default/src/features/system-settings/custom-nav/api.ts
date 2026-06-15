@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { request } from '@/lib/request'
+import { api } from '@/lib/api'
 
 export type CustomNavItem = {
   id: number
@@ -31,59 +31,59 @@ export type CustomNavItem = {
 export type CustomNavItemInput = Omit<CustomNavItem, 'id' | 'created_time'>
 
 export async function getCustomNavItems(onlyEnabled = false) {
-  return request<{ success: boolean; data: CustomNavItem[] }>(
+  const res = await api.get<{ success: boolean; data: CustomNavItem[] }>(
     `/api/custom_nav${onlyEnabled ? '/enabled?enabled=true' : ''}`
   )
+  return res.data
 }
 
 export async function getEnabledCustomNavItems() {
-  return request<{ success: boolean; data: CustomNavItem[] }>(
+  const res = await api.get<{ success: boolean; data: CustomNavItem[] }>(
     '/api/custom_nav/enabled?enabled=true'
   )
+  return res.data
 }
 
 export async function getCustomNavItem(id: number) {
-  return request<{ success: boolean; data: CustomNavItem }>(
+  const res = await api.get<{ success: boolean; data: CustomNavItem }>(
     `/api/custom_nav/${id}`
   )
+  return res.data
 }
 
 export async function createCustomNavItem(data: CustomNavItemInput) {
-  return request<{ success: boolean; data: CustomNavItem }>(
+  const res = await api.post<{ success: boolean; data: CustomNavItem }>(
     '/api/custom_nav',
-    {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }
+    data
   )
+  return res.data
 }
 
 export async function updateCustomNavItem(data: CustomNavItem) {
-  return request<{ success: boolean; data: CustomNavItem }>(
+  const res = await api.put<{ success: boolean; data: CustomNavItem }>(
     '/api/custom_nav',
-    {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }
+    data
   )
+  return res.data
 }
 
 export async function deleteCustomNavItem(id: number) {
-  return request<{ success: boolean }>(`/api/custom_nav/${id}`, {
-    method: 'DELETE',
-  })
+  const res = await api.delete<{ success: boolean }>(`/api/custom_nav/${id}`)
+  return res.data
 }
 
 export async function toggleCustomNavItem(id: number, enabled: boolean) {
-  return request<{ success: boolean }>(`/api/custom_nav/${id}/toggle`, {
-    method: 'PUT',
-    body: JSON.stringify({ enabled }),
-  })
+  const res = await api.put<{ success: boolean }>(
+    `/api/custom_nav/${id}/toggle`,
+    { enabled }
+  )
+  return res.data
 }
 
 export async function updateCustomNavItemSort(id: number, sort: number) {
-  return request<{ success: boolean }>(`/api/custom_nav/${id}/sort`, {
-    method: 'PUT',
-    body: JSON.stringify({ sort }),
-  })
+  const res = await api.put<{ success: boolean }>(
+    `/api/custom_nav/${id}/sort`,
+    { sort }
+  )
+  return res.data
 }
