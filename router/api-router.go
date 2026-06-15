@@ -339,12 +339,13 @@ func SetApiRouter(router *gin.Engine) {
 			prefillGroupRoute.DELETE("/:id", controller.DeletePrefillGroup)
 		}
 
+		// 自定义导航 - 公开接口
+		apiRouter.GET("/custom_nav/enabled", controller.GetAllCustomNavItems)
+
+		// 自定义导航 - 管理员接口
 		customNavRoute := apiRouter.Group("/custom_nav")
+		customNavRoute.Use(middleware.AdminAuth())
 		{
-			// 公开接口 - 获取已启用的导航项
-			customNavRoute.GET("/enabled", controller.GetAllCustomNavItems)
-			// 管理员接口
-			customNavRoute.Use(middleware.AdminAuth())
 			customNavRoute.GET("/", controller.GetAllCustomNavItems)
 			customNavRoute.GET("/:id", controller.GetCustomNavItem)
 			customNavRoute.POST("/", controller.CreateCustomNavItem)
