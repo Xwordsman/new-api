@@ -26,6 +26,7 @@ import {
 import { HeaderNavigationSection } from '../maintenance/header-navigation-section'
 import { NoticeSection } from '../maintenance/notice-section'
 import { SidebarModulesSection } from '../maintenance/sidebar-modules-section'
+import { CustomNavManagement } from '../custom-nav'
 import type { SiteSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
 
@@ -89,6 +90,11 @@ const SITE_SECTIONS = [
         />
       )
     },
+  },
+  {
+    id: 'custom-navigation',
+    titleKey: 'Custom Navigation',
+    build: () => <CustomNavManagement />,
   },
 ] as const
 

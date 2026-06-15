@@ -339,6 +339,21 @@ func SetApiRouter(router *gin.Engine) {
 			prefillGroupRoute.DELETE("/:id", controller.DeletePrefillGroup)
 		}
 
+		customNavRoute := apiRouter.Group("/custom_nav")
+		{
+			// 公开接口 - 获取已启用的导航项
+			customNavRoute.GET("/enabled", controller.GetAllCustomNavItems)
+			// 管理员接口
+			customNavRoute.Use(middleware.AdminAuth())
+			customNavRoute.GET("/", controller.GetAllCustomNavItems)
+			customNavRoute.GET("/:id", controller.GetCustomNavItem)
+			customNavRoute.POST("/", controller.CreateCustomNavItem)
+			customNavRoute.PUT("/", controller.UpdateCustomNavItem)
+			customNavRoute.DELETE("/:id", controller.DeleteCustomNavItem)
+			customNavRoute.PUT("/:id/toggle", controller.ToggleCustomNavItem)
+			customNavRoute.PUT("/:id/sort", controller.UpdateCustomNavItemSort)
+		}
+
 		mjRoute := apiRouter.Group("/mj")
 		mjRoute.GET("/self", middleware.UserAuth(), controller.GetUserMidjourney)
 		mjRoute.GET("/", middleware.AdminAuth(), controller.GetAllMidjourney)

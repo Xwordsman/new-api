@@ -23,6 +23,7 @@ import { BotProtectionSection } from './bot-protection-section'
 import { CustomOAuthSection } from './custom-oauth/custom-oauth-section'
 import { OAuthSection } from './oauth-section'
 import { PasskeySection } from './passkey-section'
+import { AuthPageAnnouncementSection } from './auth-page-announcement-section'
 
 const AUTH_SECTIONS = [
   {
@@ -116,6 +117,18 @@ const AUTH_SECTIONS = [
     id: 'custom-oauth',
     titleKey: 'Custom OAuth',
     build: () => <CustomOAuthSection />,
+  },
+  {
+    id: 'auth-page-announcement',
+    titleKey: 'Login/Register Page Announcement',
+    build: (settings: AuthSettings) => (
+      <AuthPageAnnouncementSection
+        defaultValues={{
+          auth_page_announcement_enabled: settings.auth_page_announcement_enabled,
+          auth_page_announcement: settings.auth_page_announcement,
+        }}
+      />
+    ),
   },
 ] as const
 

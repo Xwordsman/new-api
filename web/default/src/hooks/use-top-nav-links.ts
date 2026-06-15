@@ -16,11 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useMemo } from 'react'
+import { useMemo, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
 import { parseHeaderNavModulesFromStatus } from '@/lib/nav-modules'
 import { useStatus } from '@/hooks/use-status'
+import { getEnabledCustomNavItems, type CustomNavItem } from '@/features/system-settings/custom-nav'
 
 export type TopNavLink = {
   title: string
@@ -47,6 +48,20 @@ export function useTopNavLinks(): TopNavLink[] {
   const { t } = useTranslation()
   const { status } = useStatus()
   const { auth } = useAuthStore()
+  const [customNavItems, setCustomNavItems] = useState<CustomNavItem[]>([])
+
+  // Load custom navigation items
+  useEffect(() => {
+    getEnabledCustomNavItems()
+      .then((res) => {
+        if (res.success) {
+          setCustomNavItems(res.data)
+        }
+      })
+      .catch(() => {
+        // Silently fail, custom nav is optional
+      })
+  }, [])
 
   // Parse HeaderNavModules
   const modules = useMemo(() => {
@@ -92,6 +107,15 @@ export function useTopNavLinks(): TopNavLink[] {
     const requiresAuth = statusMonitor.requireAuth && !isAuthed
     links.push({ title: t('Status'), href: '/status', requiresAuth })
   }
+
+  // Custom Navigation Items (inserted before Docs and About)
+  customNavItems.forEach((item) => {
+    links.push({
+      title: item.name,
+      href: item.url,
+      external: item.open_new_tab,
+    })
+  })
 
   // Docs (supports external links)
   if (modules?.docs !== false) {
