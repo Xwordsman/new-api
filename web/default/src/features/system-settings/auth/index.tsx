@@ -59,6 +59,8 @@ const defaultAuthSettings: AuthSettings = {
   TurnstileCheckEnabled: false,
   TurnstileSiteKey: '',
   TurnstileSecretKey: '',
+  auth_page_announcement_enabled: false,
+  auth_page_announcement: '',
   'passkey.enabled': false,
   'passkey.rp_display_name': '',
   'passkey.rp_id': '',

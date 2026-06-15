@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useState } from 'react'
-import { AlertCircle, Info } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { useStatus } from '@/hooks/use-status'
 import { cn } from '@/lib/utils'
@@ -28,13 +28,16 @@ export function AuthPageAnnouncement() {
   const [enabled, setEnabled] = useState(false)
 
   useEffect(() => {
-    if (status) {
-      setAnnouncement((status.auth_page_announcement as string) || '')
-      setEnabled((status.auth_page_announcement_enabled as boolean) || false)
-    }
+    if (!status) return
+
+    const rawAnnouncement = status.auth_page_announcement
+    const rawEnabled = status.auth_page_announcement_enabled
+
+    setAnnouncement(typeof rawAnnouncement === 'string' ? rawAnnouncement : '')
+    setEnabled(rawEnabled === true)
   }, [status])
 
-  if (!enabled || !announcement) {
+  if (!enabled || !announcement.trim()) {
     return null
   }
 

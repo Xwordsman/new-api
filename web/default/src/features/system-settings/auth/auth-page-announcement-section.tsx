@@ -28,6 +28,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
+import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { SettingsSection } from '../components/settings-section'
 import { SettingsSwitchField } from '../components/settings-form-layout'
@@ -71,7 +72,7 @@ export function AuthPageAnnouncementSection({
     try {
       await updateOption.mutateAsync({
         key: 'auth_page_announcement',
-        value: value,
+        value,
       })
       toast.success(t('Announcement saved'))
     } catch {
@@ -101,7 +102,6 @@ export function AuthPageAnnouncementSection({
                     placeholder={t('Enter announcement content (supports HTML)')}
                     rows={6}
                     {...field}
-                    onBlur={handleSaveAnnouncement}
                   />
                 </FormControl>
                 <FormDescription>
@@ -112,6 +112,12 @@ export function AuthPageAnnouncementSection({
             )}
           />
         </Form>
+
+        <div className='flex justify-end'>
+          <Button onClick={handleSaveAnnouncement} disabled={updateOption.isPending}>
+            {t('Save Announcement')}
+          </Button>
+        </div>
       </div>
     </SettingsSection>
   )
