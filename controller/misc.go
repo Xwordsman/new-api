@@ -106,6 +106,10 @@ func GetStatus(c *gin.Context) {
 		"HeaderNavModules":    common.OptionMap["HeaderNavModules"],
 		"SidebarModulesAdmin": common.OptionMap["SidebarModulesAdmin"],
 
+		// 登录/注册页面公告
+		"auth_page_announcement_enabled": common.OptionMap["auth_page_announcement_enabled"] == "true",
+		"auth_page_announcement":         common.OptionMap["auth_page_announcement"],
+
 		"oidc_enabled":                system_setting.GetOIDCSettings().Enabled,
 		"oidc_client_id":              system_setting.GetOIDCSettings().ClientId,
 		"oidc_authorization_endpoint": system_setting.GetOIDCSettings().AuthorizationEndpoint,
