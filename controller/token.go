@@ -171,6 +171,18 @@ func AddToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	communityBotSetting := operation_setting.GetCommunityBotSetting()
+	if communityBotSetting.Enabled {
+		approved, err := model.HasCommunityTokenApproval(c.GetInt("id"))
+		if err != nil {
+			common.ApiErrorMsg(c, "令牌创建授权校验失败，请稍后重试")
+			return
+		}
+		if !approved {
+			common.ApiErrorMsg(c, communityBotSetting.TokenBlockPrompt)
+			return
+		}
+	}
 	if len(token.Name) > 50 {
 		common.ApiErrorI18n(c, i18n.MsgTokenNameTooLong)
 		return

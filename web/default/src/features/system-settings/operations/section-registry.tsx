@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { SystemBehaviorSection } from '../general/system-behavior-section'
+import { CommunityBotSection } from './community-bot-section'
 import { EmailSettingsSection } from '../integrations/email-settings-section'
 import { MonitoringSettingsSection } from '../integrations/monitoring-settings-section'
 import { WorkerSettingsSection } from '../integrations/worker-settings-section'
@@ -90,6 +91,36 @@ const OPERATIONS_SECTIONS = [
           WorkerValidKey: settings.WorkerValidKey,
           WorkerAllowHttpImageRequestEnabled:
             settings.WorkerAllowHttpImageRequestEnabled,
+        }}
+      />
+    ),
+  },
+  {
+    id: 'community-bot',
+    titleKey: 'Community Bot',
+    build: (settings: OperationsSettings) => (
+      <CommunityBotSection
+        defaultValues={{
+          enabled: settings['community_bot.enabled'],
+          baseUrl: settings['community_bot.base_url'],
+          roomId: settings['community_bot.room_id'],
+          botToken: settings['community_bot.bot_token'],
+          pollIntervalSeconds: settings['community_bot.poll_interval_seconds'],
+          oauthProviderId: settings['community_bot.oauth_provider_id'],
+          oauthProviderSlug: settings['community_bot.oauth_provider_slug'],
+          checkinCommand: settings['community_bot.checkin_command'],
+          tokenRequestCommand: settings['community_bot.token_request_command'],
+          minAmount: settings['community_bot.min_amount'],
+          maxAmount: settings['community_bot.max_amount'],
+          checkinSuccessReply: settings['community_bot.checkin_success_reply'],
+          checkinAlreadyReply: settings['community_bot.checkin_already_reply'],
+          checkinUnboundReply: settings['community_bot.checkin_unbound_reply'],
+          tokenApprovedReply: settings['community_bot.token_approved_reply'],
+          tokenAlreadyApprovedReply:
+            settings['community_bot.token_already_approved_reply'],
+          tokenUnboundReply: settings['community_bot.token_unbound_reply'],
+          unknownErrorReply: settings['community_bot.unknown_error_reply'],
+          tokenBlockPrompt: settings['community_bot.token_block_prompt'],
         }}
       />
     ),

@@ -309,6 +309,25 @@ export type OperationsSettings = {
   'perf_metrics_setting.flush_interval': number
   'perf_metrics_setting.bucket_time': 'hour' | 'minute' | '5min'
   'perf_metrics_setting.retention_days': number
+  'community_bot.enabled': boolean
+  'community_bot.base_url': string
+  'community_bot.room_id': string
+  'community_bot.bot_token': string
+  'community_bot.poll_interval_seconds': number
+  'community_bot.oauth_provider_id': number
+  'community_bot.oauth_provider_slug': string
+  'community_bot.checkin_command': string
+  'community_bot.token_request_command': string
+  'community_bot.min_amount': number
+  'community_bot.max_amount': number
+  'community_bot.checkin_success_reply': string
+  'community_bot.checkin_already_reply': string
+  'community_bot.checkin_unbound_reply': string
+  'community_bot.token_approved_reply': string
+  'community_bot.token_already_approved_reply': string
+  'community_bot.token_unbound_reply': string
+  'community_bot.unknown_error_reply': string
+  'community_bot.token_block_prompt': string
 }
 
 export type SecuritySettings = {
