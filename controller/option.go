@@ -3,6 +3,7 @@ package controller
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -27,6 +28,79 @@ var completionRatioMetaOptionKeys = []string{
 	"ImageRatio",
 	"AudioRatio",
 	"AudioCompletionRatio",
+}
+
+func isSensitiveOptionKey(key string) bool {
+	lowerKey := strings.ToLower(key)
+	return strings.HasSuffix(key, "Token") ||
+		strings.HasSuffix(key, "Secret") ||
+		strings.HasSuffix(key, "Key") ||
+		strings.HasSuffix(key, "secret") ||
+		strings.HasSuffix(key, "api_key") ||
+		strings.HasSuffix(lowerKey, "_token") ||
+		strings.Contains(lowerKey, "bot_token")
+}
+
+func validateCommunityBotOption(key, value string) string {
+	switch key {
+	case "community_bot.base_url":
+		if strings.TrimSpace(value) == "" {
+			return "社区机器人 API 地址不能为空"
+		}
+		parsed, err := url.ParseRequestURI(strings.TrimSpace(value))
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+			return "社区机器人 API 地址必须是有效的 http(s) 地址"
+		}
+	case "community_bot.poll_interval_seconds":
+		seconds, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil || seconds < 5 {
+			return "社区机器人轮询间隔不能小于 5 秒"
+		}
+	case "community_bot.min_amount", "community_bot.max_amount":
+		amount, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+		if err != nil || amount < 0 {
+			return "社区机器人签到金额必须是非负数字"
+		}
+		setting := operation_setting.GetCommunityBotSetting()
+		minAmount := setting.MinAmount
+		maxAmount := setting.MaxAmount
+		if key == "community_bot.min_amount" {
+			minAmount = amount
+		} else {
+			maxAmount = amount
+		}
+		if maxAmount < minAmount {
+			return "社区机器人签到最大金额不能小于最小金额"
+		}
+	case "community_bot.oauth_provider_id":
+		providerId, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil || providerId < 0 {
+			return "OAuth 提供方 ID 必须是非负整数"
+		}
+		if providerId > 0 {
+			if _, err := model.GetCustomOAuthProviderById(providerId); err != nil {
+				return "指定的 OAuth 提供方不存在"
+			}
+		}
+	case "community_bot.oauth_provider_slug":
+		slug := strings.TrimSpace(value)
+		if slug != "" {
+			if _, err := model.GetCustomOAuthProviderBySlug(slug); err != nil {
+				return "指定的 OAuth 提供方标识不存在"
+			}
+		}
+	case "community_bot.enabled":
+		if value == "true" {
+			setting := operation_setting.GetCommunityBotSetting()
+			if strings.TrimSpace(setting.BaseURL) == "" || strings.TrimSpace(setting.RoomID) == "" || strings.TrimSpace(setting.BotToken) == "" {
+				return "启用社区机器人前，请先填写 API 地址、群组 ID 和机器人 Token"
+			}
+			if setting.OAuthProviderID <= 0 && strings.TrimSpace(setting.OAuthProviderSlug) == "" {
+				return "启用社区机器人前，请先填写 OAuth 提供方 ID 或标识"
+			}
+		}
+	}
+	return ""
 }
 
 func isPaymentComplianceOptionKey(key string) bool {
@@ -81,12 +155,7 @@ func GetOptions(c *gin.Context) {
 	common.OptionMapRWMutex.Lock()
 	for k, v := range common.OptionMap {
 		value := common.Interface2String(v)
-		isSensitiveKey := strings.HasSuffix(k, "Token") ||
-			strings.HasSuffix(k, "Secret") ||
-			strings.HasSuffix(k, "Key") ||
-			strings.HasSuffix(k, "secret") ||
-			strings.HasSuffix(k, "api_key")
-		if isSensitiveKey {
+		if isSensitiveOptionKey(k) {
 			continue
 		}
 		options = append(options, &model.Option{
@@ -146,6 +215,12 @@ func UpdateOption(c *gin.Context) {
 	default:
 		if isPaymentComplianceOptionKey(option.Key) {
 			common.ApiErrorMsg(c, "合规确认字段不允许通过通用设置接口修改")
+			return
+		}
+	}
+	if strings.HasPrefix(option.Key, "community_bot.") {
+		if message := validateCommunityBotOption(option.Key, option.Value.(string)); message != "" {
+			common.ApiErrorMsg(c, message)
 			return
 		}
 	}

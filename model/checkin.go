@@ -10,6 +10,11 @@ import (
 	"gorm.io/gorm"
 )
 
+var (
+	ErrCheckinDisabled       = errors.New("签到功能未启用")
+	ErrAlreadyCheckedInToday = errors.New("今日已签到")
+)
+
 // Checkin 签到记录
 type Checkin struct {
 	Id           int    `json:"id" gorm:"primaryKey;autoIncrement"`
@@ -55,7 +60,14 @@ func HasCheckedInToday(userId int) (bool, error) {
 func UserCheckin(userId int) (*Checkin, error) {
 	setting := operation_setting.GetCheckinSetting()
 	if !setting.Enabled {
-		return nil, errors.New("签到功能未启用")
+		return nil, ErrCheckinDisabled
+	}
+	return UserCheckinWithQuotaRange(userId, setting.MinQuota, setting.MaxQuota)
+}
+
+func UserCheckinWithQuotaRange(userId int, minQuota int, maxQuota int) (*Checkin, error) {
+	if minQuota < 0 || maxQuota < minQuota {
+		return nil, errors.New("签到额度配置无效")
 	}
 
 	// 检查今天是否已签到
@@ -64,13 +76,13 @@ func UserCheckin(userId int) (*Checkin, error) {
 		return nil, err
 	}
 	if hasChecked {
-		return nil, errors.New("今日已签到")
+		return nil, ErrAlreadyCheckedInToday
 	}
 
 	// 计算随机额度奖励
-	quotaAwarded := setting.MinQuota
-	if setting.MaxQuota > setting.MinQuota {
-		quotaAwarded = setting.MinQuota + rand.Intn(setting.MaxQuota-setting.MinQuota+1)
+	quotaAwarded := minQuota
+	if maxQuota > minQuota {
+		quotaAwarded = minQuota + rand.Intn(maxQuota-minQuota+1)
 	}
 
 	today := time.Now().Format("2006-01-02")
