@@ -359,6 +359,7 @@ func handleCommunityCheckin(ctx context.Context, setting *operation_setting.Comm
 	if err != nil {
 		return err
 	}
+	model.RecordLog(userId, model.LogTypeSystem, fmt.Sprintf("社区群签到，获得额度 %s，社区用户 @%s", logger.LogQuota(checkin.QuotaAwarded), providerUserID))
 	return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.CheckinSuccessReply, map[string]string{
 		"amount":           formatCommunityAmount(amount),
 		"balance":          formatCommunityAmount(float64(user.Quota) / common.QuotaPerUnit),
@@ -396,6 +397,8 @@ func handleCommunityTokenRequest(ctx context.Context, setting *operation_setting
 	reply := setting.TokenApprovedReply
 	if !created {
 		reply = setting.TokenAlreadyApprovedReply
+	} else {
+		model.RecordLog(userId, model.LogTypeSystem, fmt.Sprintf("社区群申请创建令牌，已授予创建权限，社区用户 @%s", providerUserID))
 	}
 	return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(reply, map[string]string{
 		"command":          command,
