@@ -75,7 +75,7 @@ const defaultOperationsSettings: OperationsSettings = {
   'community_bot.min_amount': 1,
   'community_bot.max_amount': 5,
   'community_bot.checkin_success_reply': '$[sparkle $[rainbow 🎉 恭喜 @{provider_user_id} 领到了{amount}美元！]] $[sparkle $[rainbow 当前余额：{balance}美刀]]',
-  'community_bot.checkin_already_reply': '⏰ @{provider_user_id} 你今天已经签到过啦！明天再来领取奖励吧',,
+  'community_bot.checkin_already_reply': '⏰ @{provider_user_id} 你今天已经签到过啦！明天再来领取奖励吧',
   'community_bot.checkin_unbound_reply': '请先使用社区账号登录并绑定 new-api 账号。',
   'community_bot.token_approved_reply': '$[border.style=solid,width=3,color=0af,radius=5 $[tada $[fg.color=0af 🔑 令牌授权成功！]]] $[fg.color=0af @{provider_user_id} 你现在可以创建令牌了]',
   'community_bot.token_already_approved_reply': '你已经拥有令牌创建权限。',
