@@ -35,14 +35,16 @@ var (
 )
 
 type communityMessage struct {
-	ID        string
-	CreatedAt time.Time
-	UserID    string
-	Text      string
+	ID              string
+	CreatedAt       time.Time
+	UserID          string
+	ProviderUserIDs []string
+	Text            string
 }
 
 type communityRemoteUser struct {
-	ID string `json:"id"`
+	ID       string `json:"id"`
+	Username string `json:"username"`
 }
 
 type communityRemoteMessage struct {
@@ -180,12 +182,25 @@ func fetchCommunityMessages(ctx context.Context, setting *operation_setting.Comm
 		if err != nil {
 			createdAt = time.Now()
 		}
-		messages = append(messages, communityMessage{
+		message := communityMessage{
 			ID:        remoteMessage.ID,
 			CreatedAt: createdAt,
 			UserID:    userID,
 			Text:      remoteMessage.Text,
-		})
+		}
+		if strings.TrimSpace(remoteMessage.FromUser.Username) != "" {
+			message.ProviderUserIDs = append(message.ProviderUserIDs, strings.TrimSpace(remoteMessage.FromUser.Username))
+		}
+		if strings.TrimSpace(remoteMessage.FromUserID) != "" {
+			message.ProviderUserIDs = append(message.ProviderUserIDs, strings.TrimSpace(remoteMessage.FromUserID))
+		}
+		if strings.TrimSpace(remoteMessage.FromUser.ID) != "" {
+			message.ProviderUserIDs = append(message.ProviderUserIDs, strings.TrimSpace(remoteMessage.FromUser.ID))
+		}
+		if strings.TrimSpace(remoteMessage.User.ID) != "" {
+			message.ProviderUserIDs = append(message.ProviderUserIDs, strings.TrimSpace(remoteMessage.User.ID))
+		}
+		messages = append(messages, message)
 	}
 	return messages, nil
 }
@@ -253,27 +268,56 @@ func processCommunityMessage(ctx context.Context, setting *operation_setting.Com
 		return err
 	}
 
-	user, err := model.GetUserByOAuthBinding(providerId, message.UserID)
+	user, providerUserID, err := getCommunityMessageUser(ctx, providerId, message)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			if text == checkinCommand {
 				return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.CheckinUnboundReply, map[string]string{
 					"command":          text,
-					"provider_user_id": message.UserID,
+					"provider_user_id": providerUserID,
 				}))
 			}
 			return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.TokenUnboundReply, map[string]string{
 				"command":          text,
-				"provider_user_id": message.UserID,
+				"provider_user_id": providerUserID,
 			}))
 		}
 		return err
 	}
 
 	if text == checkinCommand {
-		return handleCommunityCheckin(ctx, setting, message, user.Id, text)
+		return handleCommunityCheckin(ctx, setting, message, user.Id, providerUserID, text)
 	}
-	return handleCommunityTokenRequest(ctx, setting, message, providerId, user.Id, text)
+	return handleCommunityTokenRequest(ctx, setting, message, providerId, user.Id, providerUserID, text)
+}
+
+func getCommunityMessageUser(ctx context.Context, providerId int, message communityMessage) (*model.User, string, error) {
+	seen := make(map[string]struct{})
+	candidates := append([]string{}, message.ProviderUserIDs...)
+	candidates = append(candidates, message.UserID)
+	var lastErr error
+	for _, candidate := range candidates {
+		providerUserID := strings.TrimSpace(candidate)
+		if providerUserID == "" {
+			continue
+		}
+		if _, ok := seen[providerUserID]; ok {
+			continue
+		}
+		seen[providerUserID] = struct{}{}
+		user, err := model.GetUserByOAuthBinding(providerId, providerUserID)
+		if err == nil {
+			return user, providerUserID, nil
+		}
+		lastErr = err
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			logger.LogWarn(ctx, fmt.Sprintf("community bot OAuth binding lookup failed: provider_id=%d provider_user_id=%s error=%v", providerId, providerUserID, err))
+		}
+	}
+	if lastErr == nil {
+		lastErr = gorm.ErrRecordNotFound
+	}
+	return nil, message.UserID, lastErr
 }
 
 func resolveCommunityBotOAuthProviderID(setting *operation_setting.CommunityBotSetting) (int, error) {
@@ -291,7 +335,7 @@ func resolveCommunityBotOAuthProviderID(setting *operation_setting.CommunityBotS
 	return provider.Id, nil
 }
 
-func handleCommunityCheckin(ctx context.Context, setting *operation_setting.CommunityBotSetting, message communityMessage, userId int, command string) error {
+func handleCommunityCheckin(ctx context.Context, setting *operation_setting.CommunityBotSetting, message communityMessage, userId int, providerUserID string, command string) error {
 	amount := randomCommunityCheckinAmount(setting.MinAmount, setting.MaxAmount)
 	quotaAwarded := int(math.Round(amount * common.QuotaPerUnit))
 	checkin, err := model.UserCheckinWithQuotaRange(userId, quotaAwarded, quotaAwarded)
@@ -301,13 +345,13 @@ func handleCommunityCheckin(ctx context.Context, setting *operation_setting.Comm
 				"command":          command,
 				"date":             time.Now().Format("2006-01-02"),
 				"user_id":          fmt.Sprintf("%d", userId),
-				"provider_user_id": message.UserID,
+				"provider_user_id": providerUserID,
 			}))
 		}
 		_ = sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.UnknownErrorReply, map[string]string{
 			"command":          command,
 			"user_id":          fmt.Sprintf("%d", userId),
-			"provider_user_id": message.UserID,
+			"provider_user_id": providerUserID,
 		}))
 		return err
 	}
@@ -322,7 +366,7 @@ func handleCommunityCheckin(ctx context.Context, setting *operation_setting.Comm
 		"quota":            fmt.Sprintf("%d", checkin.QuotaAwarded),
 		"date":             checkin.CheckinDate,
 		"user_id":          fmt.Sprintf("%d", userId),
-		"provider_user_id": message.UserID,
+		"provider_user_id": providerUserID,
 	}))
 }
 
@@ -339,13 +383,13 @@ func formatCommunityAmount(amount float64) string {
 	return fmt.Sprintf("%.2f", amount)
 }
 
-func handleCommunityTokenRequest(ctx context.Context, setting *operation_setting.CommunityBotSetting, message communityMessage, providerId int, userId int, command string) error {
-	created, err := model.GrantCommunityTokenApproval(userId, providerId, message.UserID, setting.RoomID, message.ID)
+func handleCommunityTokenRequest(ctx context.Context, setting *operation_setting.CommunityBotSetting, message communityMessage, providerId int, userId int, providerUserID string, command string) error {
+	created, err := model.GrantCommunityTokenApproval(userId, providerId, providerUserID, setting.RoomID, message.ID)
 	if err != nil {
 		_ = sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.UnknownErrorReply, map[string]string{
 			"command":          command,
 			"user_id":          fmt.Sprintf("%d", userId),
-			"provider_user_id": message.UserID,
+			"provider_user_id": providerUserID,
 		}))
 		return err
 	}
@@ -357,7 +401,7 @@ func handleCommunityTokenRequest(ctx context.Context, setting *operation_setting
 		"command":          command,
 		"date":             time.Now().Format("2006-01-02"),
 		"user_id":          fmt.Sprintf("%d", userId),
-		"provider_user_id": message.UserID,
+		"provider_user_id": providerUserID,
 	}))
 }
 
