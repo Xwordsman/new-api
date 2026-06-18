@@ -179,7 +179,15 @@ func AddToken(c *gin.Context) {
 			return
 		}
 		if !approved {
-			common.ApiErrorMsg(c, communityBotSetting.TokenBlockPrompt)
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": communityBotSetting.TokenBlockPrompt,
+				"data": gin.H{
+					"type":    "community_token_required",
+					"room_id": communityBotSetting.RoomID,
+					"url":     strings.TrimRight(communityBotSetting.NormalizedBaseURL(), "/") + "/chat/room/" + communityBotSetting.RoomID,
+				},
+			})
 			return
 		}
 	}

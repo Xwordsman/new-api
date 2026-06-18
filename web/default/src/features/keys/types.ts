@@ -59,6 +59,12 @@ export interface ApiResponse<T = unknown> {
   data?: T
 }
 
+export type CommunityTokenRequiredData = {
+  type: 'community_token_required'
+  room_id?: string
+  url?: string
+}
+
 export interface GetApiKeysParams {
   p?: number
   size?: number

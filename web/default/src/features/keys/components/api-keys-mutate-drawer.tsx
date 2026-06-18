@@ -20,13 +20,29 @@ import { useEffect, useState } from 'react'
 import { useForm, type SubmitErrorHandler } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown, KeyRound, Settings2, WalletCards } from 'lucide-react'
+import {
+  ChevronDown,
+  ExternalLink,
+  KeyRound,
+  Settings2,
+  WalletCards,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { getUserModels, getUserGroups } from '@/lib/api'
 import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
 import { cn } from '@/lib/utils'
 import { useStatus } from '@/hooks/use-status'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import {
   Collapsible,
@@ -74,7 +90,7 @@ import {
   transformFormDataToPayload,
   transformApiKeyToFormDefaults,
 } from '../lib'
-import { type ApiKey } from '../types'
+import { type ApiKey, type CommunityTokenRequiredData } from '../types'
 import {
   ApiKeyGroupCombobox,
   type ApiKeyGroupOption,
@@ -97,6 +113,8 @@ export function ApiKeysMutateDrawer({
   const { triggerRefresh } = useApiKeys()
   const { status } = useStatus()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [communityTokenRequired, setCommunityTokenRequired] =
+    useState<CommunityTokenRequiredData | null>(null)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const defaultUseAutoGroup = status?.default_use_auto_group === true
 
@@ -196,6 +214,10 @@ export function ApiKeysMutateDrawer({
           if (result.success) {
             successCount++
           } else {
+            const communityData = result.data as CommunityTokenRequiredData | undefined
+            if (communityData?.type === 'community_token_required') {
+              setCommunityTokenRequired(communityData)
+            }
             toast.error(result.message || t(ERROR_MESSAGES.CREATE_FAILED))
             break
           }
@@ -245,6 +267,7 @@ export function ApiKeysMutateDrawer({
     : t('Enter quota in {{currency}}', { currency: currencyLabel })
   const selectedGroup = form.watch('group')
   const unlimitedQuota = form.watch('unlimited_quota')
+  const communityRoomUrl = communityTokenRequired?.url || 'https://dc.hhhl.cc/chat/room/an2rdvbtxj'
 
   return (
     <Sheet
@@ -592,6 +615,39 @@ export function ApiKeysMutateDrawer({
           </Button>
         </SheetFooter>
       </SheetContent>
+      <AlertDialog
+        open={!!communityTokenRequired}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setCommunityTokenRequired(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('Community approval required')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t(
+                'You have not received permission to create API keys. Please send the configured request command in the community group first.'
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('Later')}</AlertDialogCancel>
+            <AlertDialogAction
+              render={
+                <a
+                  href={communityRoomUrl}
+                  target='_blank'
+                  rel='noreferrer'
+                  className='inline-flex items-center gap-2'
+                />
+              }
+            >
+              <ExternalLink className='size-4' />
+              {t('Open community group')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sheet>
   )
 }
