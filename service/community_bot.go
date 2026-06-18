@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -124,6 +125,7 @@ func runCommunityBotOnce() {
 			return
 		}
 	}
+	expireCommunityRedPackets(ctx, setting)
 }
 
 func validateCommunityBotRuntimeSetting(setting *operation_setting.CommunityBotSetting) string {
@@ -139,7 +141,7 @@ func validateCommunityBotRuntimeSetting(setting *operation_setting.CommunityBotS
 	if setting.OAuthProviderID <= 0 && strings.TrimSpace(setting.OAuthProviderSlug) == "" {
 		return "oauth provider is empty"
 	}
-	if strings.TrimSpace(setting.CheckinCommand) == "" && strings.TrimSpace(setting.TokenRequestCommand) == "" {
+	if strings.TrimSpace(setting.CheckinCommand) == "" && strings.TrimSpace(setting.TokenRequestCommand) == "" && (!setting.LotteryEnabled || strings.TrimSpace(setting.LotteryCommand) == "") {
 		return "commands are empty"
 	}
 	if setting.MinAmount < 0 || setting.MaxAmount < setting.MinAmount {
@@ -258,7 +260,13 @@ func processCommunityMessage(ctx context.Context, setting *operation_setting.Com
 
 	checkinCommand := strings.TrimSpace(setting.CheckinCommand)
 	tokenRequestCommand := strings.TrimSpace(setting.TokenRequestCommand)
-	if text != checkinCommand && text != tokenRequestCommand {
+	lotteryCommand := strings.TrimSpace(setting.LotteryCommand)
+	isLotteryCommand := setting.LotteryEnabled && lotteryCommand != "" && text == lotteryCommand
+	redPacketCreateCommand := strings.TrimSpace(setting.RedPacketCreateCommand)
+	redPacketClaimCommand := strings.TrimSpace(setting.RedPacketClaimCommand)
+	isRedPacketCreateCommand := setting.RedPacketEnabled && redPacketCreateCommand != "" && strings.HasPrefix(text, redPacketCreateCommand)
+	isRedPacketClaimCommand := setting.RedPacketEnabled && redPacketClaimCommand != "" && text == redPacketClaimCommand
+	if text != checkinCommand && text != tokenRequestCommand && !isLotteryCommand && !isRedPacketCreateCommand && !isRedPacketClaimCommand {
 		return nil
 	}
 
@@ -277,6 +285,18 @@ func processCommunityMessage(ctx context.Context, setting *operation_setting.Com
 					"provider_user_id": providerUserID,
 				}))
 			}
+			if isLotteryCommand {
+				return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.LotteryUnboundReply, map[string]string{
+					"command":          text,
+					"provider_user_id": providerUserID,
+				}))
+			}
+			if isRedPacketCreateCommand || isRedPacketClaimCommand {
+				return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.RedPacketUnboundReply, map[string]string{
+					"command":          text,
+					"provider_user_id": providerUserID,
+				}))
+			}
 			return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.TokenUnboundReply, map[string]string{
 				"command":          text,
 				"provider_user_id": providerUserID,
@@ -287,6 +307,15 @@ func processCommunityMessage(ctx context.Context, setting *operation_setting.Com
 
 	if text == checkinCommand {
 		return handleCommunityCheckin(ctx, setting, message, user.Id, providerUserID, text)
+	}
+	if isLotteryCommand {
+		return handleCommunityLottery(ctx, setting, message, providerId, user.Id, providerUserID, text)
+	}
+	if isRedPacketCreateCommand {
+		return handleCommunityRedPacketCreate(ctx, setting, message, user.Id, providerUserID, text, redPacketCreateCommand)
+	}
+	if isRedPacketClaimCommand {
+		return handleCommunityRedPacketClaim(ctx, setting, message, user.Id, providerUserID, text)
 	}
 	return handleCommunityTokenRequest(ctx, setting, message, providerId, user.Id, providerUserID, text)
 }
@@ -382,6 +411,301 @@ func randomCommunityCheckinAmount(minAmount float64, maxAmount float64) float64 
 
 func formatCommunityAmount(amount float64) string {
 	return fmt.Sprintf("%.2f", amount)
+}
+
+func handleCommunityLottery(ctx context.Context, setting *operation_setting.CommunityBotSetting, message communityMessage, providerId int, userId int, providerUserID string, command string) error {
+	sessions, err := operation_setting.ParseCommunityLotterySessions(setting.LotterySessions)
+	if err != nil {
+		_ = sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.LotteryErrorReply, map[string]string{
+			"command":          command,
+			"user_id":          fmt.Sprintf("%d", userId),
+			"provider_user_id": providerUserID,
+		}))
+		return err
+	}
+	now := time.Now()
+	session, nextSession, ok := getActiveCommunityLotterySession(sessions, now)
+	baseValues := map[string]string{
+		"command":          command,
+		"date":             now.Format("2006-01-02"),
+		"user_id":          fmt.Sprintf("%d", userId),
+		"provider_user_id": providerUserID,
+	}
+	if nextSession != nil {
+		baseValues["next_session_name"] = nextSession.Name
+		baseValues["next_start"] = nextSession.Start
+		baseValues["next_end"] = nextSession.End
+	}
+	if !ok {
+		return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.LotteryOutOfSessionReply, baseValues))
+	}
+	addCommunityLotterySessionTemplateValues(baseValues, session)
+
+	prizes := make([]model.CommunityLotteryPrizeCandidate, 0, len(session.Prizes))
+	for _, prize := range session.Prizes {
+		amountCents := amountToCents(prize.Amount)
+		prizes = append(prizes, model.CommunityLotteryPrizeCandidate{
+			Name:         prize.Name,
+			Weight:       prize.Weight,
+			AmountCents:  amountCents,
+			QuotaAwarded: centsToQuota(amountCents),
+		})
+	}
+	result, err := model.CreateCommunityLotteryDraw(model.CommunityLotteryDrawParams{
+		UserId:         userId,
+		ProviderId:     providerId,
+		ProviderUserId: providerUserID,
+		RoomId:         setting.RoomID,
+		MessageId:      message.ID,
+		DrawDate:       now.Format("2006-01-02"),
+		SessionKey:     session.Key,
+		SessionName:    session.Name,
+		SessionStart:   session.Start,
+		SessionEnd:     session.End,
+		BudgetCents:    amountToCents(session.Budget),
+		Prizes:         prizes,
+	})
+	if err != nil {
+		_ = sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.LotteryErrorReply, baseValues))
+		return err
+	}
+	if result.AlreadyDrawn {
+		return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.LotteryAlreadyDrawnReply, baseValues))
+	}
+	baseValues["remaining_budget"] = formatCommunityAmount(centsToAmount(result.RemainingCents))
+	if result.PoolEmpty || result.Draw == nil {
+		return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.LotteryPoolEmptyReply, baseValues))
+	}
+	draw := result.Draw
+	user, err := model.GetUserById(userId, false)
+	if err != nil {
+		return err
+	}
+	baseValues["prize_name"] = draw.PrizeName
+	baseValues["amount"] = formatCommunityAmount(centsToAmount(draw.AmountCents))
+	baseValues["quota"] = fmt.Sprintf("%d", draw.QuotaAwarded)
+	baseValues["balance"] = formatCommunityAmount(float64(user.Quota) / common.QuotaPerUnit)
+	model.RecordLog(userId, model.LogTypeSystem, fmt.Sprintf("社区群抽奖，场次：%s，奖项：%s，获得额度 %s，社区用户 @%s", draw.SessionName, draw.PrizeName, logger.LogQuota(draw.QuotaAwarded), providerUserID))
+	reply := setting.LotteryWinReply
+	if draw.AmountCents == 0 {
+		reply = setting.LotteryNoPrizeReply
+	}
+	return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(reply, baseValues))
+}
+
+func getActiveCommunityLotterySession(sessions []operation_setting.CommunityLotterySession, now time.Time) (*operation_setting.CommunityLotterySession, *operation_setting.CommunityLotterySession, bool) {
+	currentMinute := now.Hour()*60 + now.Minute()
+	var next *operation_setting.CommunityLotterySession
+	var nextStart int
+	for i := range sessions {
+		session := &sessions[i]
+		start := communityClockToMinute(session.Start)
+		end := communityClockToMinute(session.End)
+		if currentMinute >= start && currentMinute < end {
+			return session, nil, true
+		}
+		candidateStart := start
+		if start <= currentMinute {
+			candidateStart += 24 * 60
+		}
+		if next == nil || candidateStart < nextStart {
+			next = session
+			nextStart = candidateStart
+		}
+	}
+	return nil, next, false
+}
+
+func addCommunityLotterySessionTemplateValues(values map[string]string, session *operation_setting.CommunityLotterySession) {
+	values["session_key"] = session.Key
+	values["session_name"] = session.Name
+	values["session_start"] = session.Start
+	values["session_end"] = session.End
+}
+
+func communityClockToMinute(clock string) int {
+	parts := strings.Split(clock, ":")
+	if len(parts) != 2 || len(parts[0]) != 2 || len(parts[1]) != 2 {
+		return 0
+	}
+	return (int(parts[0][0]-'0')*10+int(parts[0][1]-'0'))*60 + int(parts[1][0]-'0')*10 + int(parts[1][1]-'0')
+}
+
+func amountToCents(amount float64) int {
+	return int(math.Round(amount * 100))
+}
+
+func centsToAmount(cents int) float64 {
+	return float64(cents) / 100
+}
+
+func centsToQuota(cents int) int {
+	return int(math.Round(centsToAmount(cents) * common.QuotaPerUnit))
+}
+
+func parseCommunityRedPacketCreateArgs(text string, prefix string) (totalAmount float64, totalCount int, ok bool) {
+	stripped := strings.TrimSpace(strings.TrimPrefix(text, prefix))
+	if stripped == "" {
+		return 0, 0, false
+	}
+	fields := strings.Fields(stripped)
+	if len(fields) < 2 {
+		return 0, 0, false
+	}
+	amount, err := strconv.ParseFloat(fields[0], 64)
+	if err != nil || amount <= 0 {
+		return 0, 0, false
+	}
+	count, err := strconv.Atoi(fields[1])
+	if err != nil || count <= 0 {
+		return 0, 0, false
+	}
+	return amount, count, true
+}
+
+func handleCommunityRedPacketCreate(ctx context.Context, setting *operation_setting.CommunityBotSetting, message communityMessage, userId int, providerUserID string, command string, prefix string) error {
+	baseValues := map[string]string{
+		"command":          command,
+		"create_command":   strings.TrimSpace(setting.RedPacketCreateCommand),
+		"claim_command":    strings.TrimSpace(setting.RedPacketClaimCommand),
+		"date":             time.Now().Format("2006-01-02"),
+		"user_id":          fmt.Sprintf("%d", userId),
+		"provider_user_id": providerUserID,
+		"creator":          providerUserID,
+	}
+	if !operation_setting.IsCommunityRedPacketCreator(setting, append([]string{providerUserID}, message.ProviderUserIDs...)...) {
+		return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.RedPacketNotAllowedReply, baseValues))
+	}
+	if err := operation_setting.ValidateCommunityRedPacketSetting(setting); err != nil {
+		_ = sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.RedPacketErrorReply, baseValues))
+		return err
+	}
+	totalAmount, totalCount, ok := parseCommunityRedPacketCreateArgs(command, prefix)
+	if !ok {
+		return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.RedPacketUsageReply, baseValues))
+	}
+	if totalAmount < setting.RedPacketMinTotalAmount || totalAmount > setting.RedPacketMaxTotalAmount {
+		baseValues["min_amount"] = formatCommunityAmount(setting.RedPacketMinTotalAmount)
+		baseValues["max_amount"] = formatCommunityAmount(setting.RedPacketMaxTotalAmount)
+		return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.RedPacketUsageReply, baseValues))
+	}
+	if totalCount < setting.RedPacketMinCount || totalCount > setting.RedPacketMaxCount {
+		baseValues["min_count"] = fmt.Sprintf("%d", setting.RedPacketMinCount)
+		baseValues["max_count"] = fmt.Sprintf("%d", setting.RedPacketMaxCount)
+		return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.RedPacketUsageReply, baseValues))
+	}
+	totalCents := amountToCents(totalAmount)
+	if totalCents < totalCount {
+		return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.RedPacketUsageReply, baseValues))
+	}
+	result, err := model.CreateCommunityRedPacket(model.CreateCommunityRedPacketParams{
+		RoomId:                setting.RoomID,
+		CreatorProviderUserId: providerUserID,
+		CreatorUserId:         userId,
+		TotalAmountCents:      totalCents,
+		TotalCount:            totalCount,
+		SplitMode:             setting.RedPacketSplitMode,
+		ExpireMinutes:         setting.RedPacketExpireMinutes,
+		SourceMessageId:       message.ID,
+		ConcurrencyMode:       setting.RedPacketConcurrencyMode,
+	})
+	if err != nil {
+		_ = sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.RedPacketErrorReply, baseValues))
+		return err
+	}
+	if result.Conflict {
+		return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.RedPacketUsageReply, baseValues))
+	}
+	if result.Packet == nil {
+		_ = sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.RedPacketErrorReply, baseValues))
+		return errors.New("create red packet returned empty packet")
+	}
+	packet := result.Packet
+	model.RecordLog(userId, model.LogTypeSystem, fmt.Sprintf("社区群红包发放，总金额 %s，份数 %d，社区用户 @%s", logger.LogQuota(int(float64(packet.TotalAmountCents)/100*common.QuotaPerUnit)), packet.TotalCount, providerUserID))
+	baseValues["total_amount"] = formatCommunityAmount(centsToAmount(packet.TotalAmountCents))
+	baseValues["total_count"] = fmt.Sprintf("%d", packet.TotalCount)
+	if packet.ExpiresAt > 0 {
+		baseValues["expires_at"] = time.Unix(packet.ExpiresAt, 0).Format("2006-01-02 15:04:05")
+	} else {
+		baseValues["expires_at"] = "-"
+	}
+	return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.RedPacketCreatedReply, baseValues))
+}
+
+func handleCommunityRedPacketClaim(ctx context.Context, setting *operation_setting.CommunityBotSetting, message communityMessage, userId int, providerUserID string, command string) error {
+	baseValues := map[string]string{
+		"command":          command,
+		"create_command":   strings.TrimSpace(setting.RedPacketCreateCommand),
+		"claim_command":    strings.TrimSpace(setting.RedPacketClaimCommand),
+		"date":             time.Now().Format("2006-01-02"),
+		"user_id":          fmt.Sprintf("%d", userId),
+		"provider_user_id": providerUserID,
+	}
+	result, err := model.ClaimCommunityRedPacket(model.ClaimCommunityRedPacketParams{
+		RoomId:          setting.RoomID,
+		UserId:          userId,
+		ProviderUserId:  providerUserID,
+		SourceMessageId: message.ID,
+	})
+	if err != nil {
+		_ = sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.RedPacketErrorReply, baseValues))
+		return err
+	}
+	if result.Packet != nil {
+		baseValues["creator"] = result.Packet.CreatorProviderUserId
+		baseValues["total_amount"] = formatCommunityAmount(centsToAmount(result.Packet.TotalAmountCents))
+		baseValues["total_count"] = fmt.Sprintf("%d", result.Packet.TotalCount)
+		baseValues["remaining_count"] = fmt.Sprintf("%d", result.Packet.RemainingCount)
+		baseValues["remaining_amount"] = formatCommunityAmount(centsToAmount(result.Packet.RemainingAmountCents))
+	}
+	if result.NoPacket {
+		return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.RedPacketEmptyReply, baseValues))
+	}
+	if result.Expired {
+		return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.RedPacketExpiredReply, baseValues))
+	}
+	if result.AlreadyClaimed {
+		return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.RedPacketAlreadyReply, baseValues))
+	}
+	if result.Claim == nil {
+		_ = sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.RedPacketErrorReply, baseValues))
+		return errors.New("claim red packet returned empty claim")
+	}
+	user, err := model.GetUserById(userId, false)
+	if err != nil {
+		return err
+	}
+	baseValues["amount"] = formatCommunityAmount(centsToAmount(result.Claim.AmountCents))
+	baseValues["quota"] = fmt.Sprintf("%d", result.Claim.QuotaAwarded)
+	baseValues["balance"] = formatCommunityAmount(float64(user.Quota) / common.QuotaPerUnit)
+	model.RecordLog(userId, model.LogTypeSystem, fmt.Sprintf("社区群红包，抢到金额 %s，社区用户 @%s", logger.LogQuota(result.Claim.QuotaAwarded), providerUserID))
+	return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.RedPacketClaimedReply, baseValues))
+}
+
+func expireCommunityRedPackets(ctx context.Context, setting *operation_setting.CommunityBotSetting) {
+	if !setting.RedPacketEnabled {
+		return
+	}
+	packets, err := model.ExpireCommunityRedPackets(setting.RoomID)
+	if err != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("community bot expire red packets failed: %v", err))
+		return
+	}
+	for _, packet := range packets {
+		values := map[string]string{
+			"creator":          packet.CreatorProviderUserId,
+			"provider_user_id": packet.CreatorProviderUserId,
+			"total_amount":     formatCommunityAmount(centsToAmount(packet.TotalAmountCents)),
+			"total_count":      fmt.Sprintf("%d", packet.TotalCount),
+			"remaining_count":  fmt.Sprintf("%d", packet.RemainingCount),
+			"remaining_amount": formatCommunityAmount(centsToAmount(packet.RemainingAmountCents)),
+			"date":             time.Now().Format("2006-01-02"),
+			"command":          strings.TrimSpace(setting.RedPacketCreateCommand),
+			"create_command":   strings.TrimSpace(setting.RedPacketCreateCommand),
+			"claim_command":    strings.TrimSpace(setting.RedPacketClaimCommand),
+		}
+		_ = sendCommunityReply(ctx, setting, packet.SourceMessageId, renderCommunityBotTemplate(setting.RedPacketExpiredReply, values))
+	}
 }
 
 func handleCommunityTokenRequest(ctx context.Context, setting *operation_setting.CommunityBotSetting, message communityMessage, providerId int, userId int, providerUserID string, command string) error {

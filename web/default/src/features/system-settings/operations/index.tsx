@@ -82,6 +82,60 @@ const defaultOperationsSettings: OperationsSettings = {
   'community_bot.token_unbound_reply': '请先使用社区账号登录并绑定 new-api 账号。',
   'community_bot.unknown_error_reply': '处理失败，请稍后再试。',
   'community_bot.token_block_prompt': '请先在社区群内发送“创建令牌”完成令牌创建授权。',
+  'community_bot.lottery_enabled': false,
+  'community_bot.lottery_command': '抽奖',
+  'community_bot.lottery_sessions': `[
+  {
+    "key": "evening",
+    "name": "晚间场",
+    "start": "20:00",
+    "end": "21:00",
+    "budget": 100,
+    "prizes": [
+      { "name": "谢谢参与", "weight": 50, "amount": 0 },
+      { "name": "小确幸", "weight": 35, "amount": 0.2 },
+      { "name": "好运奖", "weight": 12, "amount": 1 },
+      { "name": "欧皇奖", "weight": 3, "amount": 5 }
+    ]
+  }
+]`,
+  'community_bot.lottery_win_reply':
+    '$[sparkle $[rainbow 🎁 恭喜 @{provider_user_id} 在「{session_name}」抽中了「{prize_name}」：{amount}美元！]] $[sparkle $[rainbow 当前余额：{balance}美刀]]',
+  'community_bot.lottery_no_prize_reply':
+    '🎲 @{provider_user_id} 在「{session_name}」抽中了「{prize_name}」，这次没有获得奖励，祝你下次好运！',
+  'community_bot.lottery_already_drawn_reply':
+    '🎲 @{provider_user_id} 你已经参加过「{session_name}」啦，请等待下一场',
+  'community_bot.lottery_out_of_session_reply':
+    '⏰ @{provider_user_id} 当前不在抽奖时间内，下一场：{next_session_name} {next_start}-{next_end}',
+  'community_bot.lottery_pool_empty_reply':
+    '🎁 「{session_name}」奖池已经被抽完啦，请等待下一场',
+  'community_bot.lottery_unbound_reply': '请先使用社区账号登录并绑定 new-api 账号。',
+  'community_bot.lottery_error_reply': '抽奖失败，请稍后再试。',
+  'community_bot.red_packet_enabled': false,
+  'community_bot.red_packet_create_command': '发红包',
+  'community_bot.red_packet_claim_command': '抢红包',
+  'community_bot.red_packet_whitelist': '',
+  'community_bot.red_packet_concurrency_mode': 'single',
+  'community_bot.red_packet_expire_minutes': 10,
+  'community_bot.red_packet_split_mode': 'random',
+  'community_bot.red_packet_min_total_amount': 0.5,
+  'community_bot.red_packet_max_total_amount': 100,
+  'community_bot.red_packet_min_count': 1,
+  'community_bot.red_packet_max_count': 100,
+  'community_bot.red_packet_created_reply':
+    '🧧 @{provider_user_id} 发了一个 {total_amount} 美元红包，共 {total_count} 份！发送「{claim_command}」领取。',
+  'community_bot.red_packet_claimed_reply':
+    '🧧 @{provider_user_id} 抢到了 {amount} 美元！当前余额：{balance} 美刀。剩余 {remaining_count} 份。',
+  'community_bot.red_packet_empty_reply': '🧧 「{creator}」的红包已经被抢完啦！',
+  'community_bot.red_packet_already_reply':
+    '🧧 @{provider_user_id} 你已经抢过这个红包啦。',
+  'community_bot.red_packet_not_allowed_reply':
+    '🚫 @{provider_user_id} 你没有发红包的权限。',
+  'community_bot.red_packet_expired_reply': '🧧 「{creator}」的红包已过期。',
+  'community_bot.red_packet_usage_reply':
+    '🧧 命令格式错误，正确用法：{create_command} 总金额 份数',
+  'community_bot.red_packet_unbound_reply': '请先使用社区账号登录并绑定 new-api 账号。',
+  'community_bot.red_packet_error_reply': '🧧 红包处理失败，请稍后再试。',
 }
 
 export function OperationsSettings() {

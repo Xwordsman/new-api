@@ -328,6 +328,36 @@ export type OperationsSettings = {
   'community_bot.token_unbound_reply': string
   'community_bot.unknown_error_reply': string
   'community_bot.token_block_prompt': string
+  'community_bot.lottery_enabled': boolean
+  'community_bot.lottery_command': string
+  'community_bot.lottery_sessions': string
+  'community_bot.lottery_win_reply': string
+  'community_bot.lottery_no_prize_reply': string
+  'community_bot.lottery_already_drawn_reply': string
+  'community_bot.lottery_out_of_session_reply': string
+  'community_bot.lottery_pool_empty_reply': string
+  'community_bot.lottery_unbound_reply': string
+  'community_bot.lottery_error_reply': string
+  'community_bot.red_packet_enabled': boolean
+  'community_bot.red_packet_create_command': string
+  'community_bot.red_packet_claim_command': string
+  'community_bot.red_packet_whitelist': string
+  'community_bot.red_packet_concurrency_mode': 'single' | 'multiple'
+  'community_bot.red_packet_expire_minutes': number
+  'community_bot.red_packet_split_mode': 'random' | 'average'
+  'community_bot.red_packet_min_total_amount': number
+  'community_bot.red_packet_max_total_amount': number
+  'community_bot.red_packet_min_count': number
+  'community_bot.red_packet_max_count': number
+  'community_bot.red_packet_created_reply': string
+  'community_bot.red_packet_claimed_reply': string
+  'community_bot.red_packet_empty_reply': string
+  'community_bot.red_packet_already_reply': string
+  'community_bot.red_packet_not_allowed_reply': string
+  'community_bot.red_packet_expired_reply': string
+  'community_bot.red_packet_usage_reply': string
+  'community_bot.red_packet_unbound_reply': string
+  'community_bot.red_packet_error_reply': string
 }
 
 export type SecuritySettings = {

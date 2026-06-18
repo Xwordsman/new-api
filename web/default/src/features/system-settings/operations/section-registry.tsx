@@ -121,6 +121,55 @@ const OPERATIONS_SECTIONS = [
           tokenUnboundReply: settings['community_bot.token_unbound_reply'],
           unknownErrorReply: settings['community_bot.unknown_error_reply'],
           tokenBlockPrompt: settings['community_bot.token_block_prompt'],
+          lotteryEnabled: settings['community_bot.lottery_enabled'],
+          lotteryCommand: settings['community_bot.lottery_command'],
+          lotterySessions: settings['community_bot.lottery_sessions'],
+          lotteryWinReply: settings['community_bot.lottery_win_reply'],
+          lotteryNoPrizeReply:
+            settings['community_bot.lottery_no_prize_reply'],
+          lotteryAlreadyDrawnReply:
+            settings['community_bot.lottery_already_drawn_reply'],
+          lotteryOutOfSessionReply:
+            settings['community_bot.lottery_out_of_session_reply'],
+          lotteryPoolEmptyReply:
+            settings['community_bot.lottery_pool_empty_reply'],
+          lotteryUnboundReply: settings['community_bot.lottery_unbound_reply'],
+          lotteryErrorReply: settings['community_bot.lottery_error_reply'],
+          redPacketEnabled: settings['community_bot.red_packet_enabled'],
+          redPacketCreateCommand:
+            settings['community_bot.red_packet_create_command'],
+          redPacketClaimCommand:
+            settings['community_bot.red_packet_claim_command'],
+          redPacketWhitelist: settings['community_bot.red_packet_whitelist'],
+          redPacketConcurrencyMode:
+            settings['community_bot.red_packet_concurrency_mode'],
+          redPacketExpireMinutes:
+            settings['community_bot.red_packet_expire_minutes'],
+          redPacketSplitMode: settings['community_bot.red_packet_split_mode'],
+          redPacketMinTotalAmount:
+            settings['community_bot.red_packet_min_total_amount'],
+          redPacketMaxTotalAmount:
+            settings['community_bot.red_packet_max_total_amount'],
+          redPacketMinCount: settings['community_bot.red_packet_min_count'],
+          redPacketMaxCount: settings['community_bot.red_packet_max_count'],
+          redPacketCreatedReply:
+            settings['community_bot.red_packet_created_reply'],
+          redPacketClaimedReply:
+            settings['community_bot.red_packet_claimed_reply'],
+          redPacketEmptyReply:
+            settings['community_bot.red_packet_empty_reply'],
+          redPacketAlreadyReply:
+            settings['community_bot.red_packet_already_reply'],
+          redPacketNotAllowedReply:
+            settings['community_bot.red_packet_not_allowed_reply'],
+          redPacketExpiredReply:
+            settings['community_bot.red_packet_expired_reply'],
+          redPacketUsageReply:
+            settings['community_bot.red_packet_usage_reply'],
+          redPacketUnboundReply:
+            settings['community_bot.red_packet_unbound_reply'],
+          redPacketErrorReply:
+            settings['community_bot.red_packet_error_reply'],
         }}
       />
     ),

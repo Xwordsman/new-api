@@ -72,6 +72,57 @@ func validateCommunityBotOption(key, value string) string {
 		if maxAmount < minAmount {
 			return "社区机器人签到最大金额不能小于最小金额"
 		}
+	case "community_bot.lottery_sessions":
+		if _, err := operation_setting.ParseCommunityLotterySessions(value); err != nil {
+			return "社区机器人抽奖场次配置无效：" + err.Error()
+		}
+	case "community_bot.red_packet_concurrency_mode":
+		mode := strings.TrimSpace(value)
+		if mode != "single" && mode != "multiple" {
+			return "红包并发模式必须是 single 或 multiple"
+		}
+	case "community_bot.red_packet_split_mode":
+		mode := strings.TrimSpace(value)
+		if mode != "random" && mode != "average" {
+			return "红包拆分模式必须是 random 或 average"
+		}
+	case "community_bot.red_packet_expire_minutes":
+		minutes, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil || minutes < 0 {
+			return "红包有效分钟数必须为非负整数，0 表示无限期"
+		}
+	case "community_bot.red_packet_min_total_amount", "community_bot.red_packet_max_total_amount":
+		amount, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+		if err != nil || amount < 0 {
+			return "红包金额上下限必须为非负数字"
+		}
+		setting := operation_setting.GetCommunityBotSetting()
+		minAmount := setting.RedPacketMinTotalAmount
+		maxAmount := setting.RedPacketMaxTotalAmount
+		if key == "community_bot.red_packet_min_total_amount" {
+			minAmount = amount
+		} else {
+			maxAmount = amount
+		}
+		if maxAmount < minAmount {
+			return "红包最大总金额不能小于最小总金额"
+		}
+	case "community_bot.red_packet_min_count", "community_bot.red_packet_max_count":
+		count, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil || count < 1 {
+			return "红包份数必须是大于等于 1 的整数"
+		}
+		setting := operation_setting.GetCommunityBotSetting()
+		minCount := setting.RedPacketMinCount
+		maxCount := setting.RedPacketMaxCount
+		if key == "community_bot.red_packet_min_count" {
+			minCount = count
+		} else {
+			maxCount = count
+		}
+		if maxCount < minCount {
+			return "红包最大份数不能小于最小份数"
+		}
 	case "community_bot.oauth_provider_id":
 		providerId, err := strconv.Atoi(strings.TrimSpace(value))
 		if err != nil || providerId < 0 {
