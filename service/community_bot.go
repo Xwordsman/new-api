@@ -46,10 +46,12 @@ type communityRemoteUser struct {
 }
 
 type communityRemoteMessage struct {
-	ID        string              `json:"id"`
-	CreatedAt string              `json:"createdAt"`
-	Text      string              `json:"text"`
-	User      communityRemoteUser `json:"user"`
+	ID         string              `json:"id"`
+	CreatedAt  string              `json:"createdAt"`
+	Text       string              `json:"text"`
+	FromUserID string              `json:"fromUserId"`
+	User       communityRemoteUser `json:"user"`
+	FromUser   communityRemoteUser `json:"fromUser"`
 }
 
 func StartCommunityBotTask() {
@@ -164,7 +166,14 @@ func fetchCommunityMessages(ctx context.Context, setting *operation_setting.Comm
 
 	messages := make([]communityMessage, 0, len(remoteMessages))
 	for _, remoteMessage := range remoteMessages {
-		if remoteMessage.ID == "" || remoteMessage.User.ID == "" {
+		userID := strings.TrimSpace(remoteMessage.FromUserID)
+		if userID == "" {
+			userID = strings.TrimSpace(remoteMessage.FromUser.ID)
+		}
+		if userID == "" {
+			userID = strings.TrimSpace(remoteMessage.User.ID)
+		}
+		if remoteMessage.ID == "" || userID == "" {
 			continue
 		}
 		createdAt, err := time.Parse(time.RFC3339Nano, remoteMessage.CreatedAt)
@@ -174,7 +183,7 @@ func fetchCommunityMessages(ctx context.Context, setting *operation_setting.Comm
 		messages = append(messages, communityMessage{
 			ID:        remoteMessage.ID,
 			CreatedAt: createdAt,
-			UserID:    remoteMessage.User.ID,
+			UserID:    userID,
 			Text:      remoteMessage.Text,
 		})
 	}
