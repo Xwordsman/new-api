@@ -123,7 +123,20 @@ const OPERATIONS_SECTIONS = [
           tokenBlockPrompt: settings['community_bot.token_block_prompt'],
           lotteryEnabled: settings['community_bot.lottery_enabled'],
           lotteryCommand: settings['community_bot.lottery_command'],
+          lotteryMode: settings['community_bot.lottery_mode'],
+          lotteryRollingIntervalMinutes:
+            settings['community_bot.lottery_rolling_interval_minutes'],
+          lotteryRollingBudget:
+            settings['community_bot.lottery_rolling_budget'],
+          lotteryRollingPrizes:
+            settings['community_bot.lottery_rolling_prizes'],
           lotterySessions: settings['community_bot.lottery_sessions'],
+          lotteryReminderEnabled:
+            settings['community_bot.lottery_reminder_enabled'],
+          lotteryReminderIntervalMinutes:
+            settings['community_bot.lottery_reminder_interval_minutes'],
+          lotteryReminderReply:
+            settings['community_bot.lottery_reminder_reply'],
           lotteryWinReply: settings['community_bot.lottery_win_reply'],
           lotteryNoPrizeReply:
             settings['community_bot.lottery_no_prize_reply'],
@@ -166,10 +179,18 @@ const OPERATIONS_SECTIONS = [
             settings['community_bot.red_packet_expired_reply'],
           redPacketUsageReply:
             settings['community_bot.red_packet_usage_reply'],
+          redPacketBusyReply:
+            settings['community_bot.red_packet_busy_reply'],
           redPacketUnboundReply:
             settings['community_bot.red_packet_unbound_reply'],
           redPacketErrorReply:
             settings['community_bot.red_packet_error_reply'],
+          redPacketReminderEnabled:
+            settings['community_bot.red_packet_reminder_enabled'],
+          redPacketReminderIntervalMinutes:
+            settings['community_bot.red_packet_reminder_interval_minutes'],
+          redPacketReminderReply:
+            settings['community_bot.red_packet_reminder_reply'],
         }}
       />
     ),

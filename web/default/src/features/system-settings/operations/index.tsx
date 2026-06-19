@@ -84,6 +84,19 @@ const defaultOperationsSettings: OperationsSettings = {
   'community_bot.token_block_prompt': '请先在社区群内发送“创建令牌”完成令牌创建授权。',
   'community_bot.lottery_enabled': false,
   'community_bot.lottery_command': '抽奖',
+  'community_bot.lottery_mode': 'rolling',
+  'community_bot.lottery_rolling_interval_minutes': 60,
+  'community_bot.lottery_rolling_budget': 5,
+  'community_bot.lottery_rolling_prizes': `[
+  { "name": "谢谢参与", "weight": 50, "min_amount": 0, "max_amount": 0 },
+  { "name": "小确幸", "weight": 35, "min_amount": 0.1, "max_amount": 0.5 },
+  { "name": "好运奖", "weight": 12, "min_amount": 0.5, "max_amount": 2 },
+  { "name": "欧皇奖", "weight": 3, "min_amount": 3, "max_amount": 8 }
+]`,
+  'community_bot.lottery_reminder_enabled': false,
+  'community_bot.lottery_reminder_interval_minutes': 30,
+  'community_bot.lottery_reminder_reply':
+    '🎁 当前抽奖时段「{session_name}」奖池剩余 {remaining_budget} 美元，发送「{command}」抽奖！',
   'community_bot.lottery_sessions': `[
   {
     "key": "evening",
@@ -134,8 +147,14 @@ const defaultOperationsSettings: OperationsSettings = {
   'community_bot.red_packet_expired_reply': '🧧 「{creator}」的红包已过期。',
   'community_bot.red_packet_usage_reply':
     '🧧 命令格式错误，正确用法：{create_command} 总金额 份数',
+  'community_bot.red_packet_busy_reply':
+    '🧧 当前还有未领完的红包，请等它领完或过期后再发新红包。',
   'community_bot.red_packet_unbound_reply': '请先使用社区账号登录并绑定 new-api 账号。',
   'community_bot.red_packet_error_reply': '🧧 红包处理失败，请稍后再试。',
+  'community_bot.red_packet_reminder_enabled': false,
+  'community_bot.red_packet_reminder_interval_minutes': 5,
+  'community_bot.red_packet_reminder_reply':
+    '🧧 「{creator}」的红包还剩 {remaining_count} 份共 {remaining_amount} 美元，发送「{claim_command}」领取！',
 }
 
 export function OperationsSettings() {

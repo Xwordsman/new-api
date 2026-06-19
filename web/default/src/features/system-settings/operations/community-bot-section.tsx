@@ -65,7 +65,14 @@ type CommunityBotValues = {
   tokenBlockPrompt: string
   lotteryEnabled: boolean
   lotteryCommand: string
+  lotteryMode: 'rolling' | 'scheduled'
+  lotteryRollingIntervalMinutes: number
+  lotteryRollingBudget: number
+  lotteryRollingPrizes: string
   lotterySessions: string
+  lotteryReminderEnabled: boolean
+  lotteryReminderIntervalMinutes: number
+  lotteryReminderReply: string
   lotteryWinReply: string
   lotteryNoPrizeReply: string
   lotteryAlreadyDrawnReply: string
@@ -91,8 +98,12 @@ type CommunityBotValues = {
   redPacketNotAllowedReply: string
   redPacketExpiredReply: string
   redPacketUsageReply: string
+  redPacketBusyReply: string
   redPacketUnboundReply: string
   redPacketErrorReply: string
+  redPacketReminderEnabled: boolean
+  redPacketReminderIntervalMinutes: number
+  redPacketReminderReply: string
 }
 
 const createSchema = (t: (key: string) => string) =>
@@ -124,6 +135,21 @@ const createSchema = (t: (key: string) => string) =>
       tokenBlockPrompt: z.string(),
       lotteryEnabled: z.boolean(),
       lotteryCommand: z.string(),
+      lotteryMode: z.enum(['rolling', 'scheduled']),
+      lotteryRollingIntervalMinutes: z.coerce.number().int().min(5).max(24 * 60),
+      lotteryRollingBudget: z.coerce.number().min(0),
+      lotteryRollingPrizes: z
+        .string()
+        .refine((value) => {
+          const trimmed = value.trim()
+          if (trimmed === '') return true
+          try {
+            const parsed = JSON.parse(trimmed)
+            return Array.isArray(parsed)
+          } catch {
+            return false
+          }
+        }, t('Lottery rolling prizes must be a valid JSON array')),
       lotterySessions: z
         .string()
         .refine((value) => {
@@ -136,6 +162,9 @@ const createSchema = (t: (key: string) => string) =>
             return false
           }
         }, t('Lottery sessions must be a valid JSON array')),
+      lotteryReminderEnabled: z.boolean(),
+      lotteryReminderIntervalMinutes: z.coerce.number().int().min(1),
+      lotteryReminderReply: z.string(),
       lotteryWinReply: z.string(),
       lotteryNoPrizeReply: z.string(),
       lotteryAlreadyDrawnReply: z.string(),
@@ -161,8 +190,12 @@ const createSchema = (t: (key: string) => string) =>
       redPacketNotAllowedReply: z.string(),
       redPacketExpiredReply: z.string(),
       redPacketUsageReply: z.string(),
+      redPacketBusyReply: z.string(),
       redPacketUnboundReply: z.string(),
       redPacketErrorReply: z.string(),
+      redPacketReminderEnabled: z.boolean(),
+      redPacketReminderIntervalMinutes: z.coerce.number().int().min(1),
+      redPacketReminderReply: z.string(),
     })
     .superRefine((values, ctx) => {
       if (values.maxAmount < values.minAmount) {
@@ -236,7 +269,16 @@ const optionMap: Record<keyof CommunityBotValues, string> = {
   tokenBlockPrompt: 'community_bot.token_block_prompt',
   lotteryEnabled: 'community_bot.lottery_enabled',
   lotteryCommand: 'community_bot.lottery_command',
+  lotteryMode: 'community_bot.lottery_mode',
+  lotteryRollingIntervalMinutes:
+    'community_bot.lottery_rolling_interval_minutes',
+  lotteryRollingBudget: 'community_bot.lottery_rolling_budget',
+  lotteryRollingPrizes: 'community_bot.lottery_rolling_prizes',
   lotterySessions: 'community_bot.lottery_sessions',
+  lotteryReminderEnabled: 'community_bot.lottery_reminder_enabled',
+  lotteryReminderIntervalMinutes:
+    'community_bot.lottery_reminder_interval_minutes',
+  lotteryReminderReply: 'community_bot.lottery_reminder_reply',
   lotteryWinReply: 'community_bot.lottery_win_reply',
   lotteryNoPrizeReply: 'community_bot.lottery_no_prize_reply',
   lotteryAlreadyDrawnReply: 'community_bot.lottery_already_drawn_reply',
@@ -262,8 +304,13 @@ const optionMap: Record<keyof CommunityBotValues, string> = {
   redPacketNotAllowedReply: 'community_bot.red_packet_not_allowed_reply',
   redPacketExpiredReply: 'community_bot.red_packet_expired_reply',
   redPacketUsageReply: 'community_bot.red_packet_usage_reply',
+  redPacketBusyReply: 'community_bot.red_packet_busy_reply',
   redPacketUnboundReply: 'community_bot.red_packet_unbound_reply',
   redPacketErrorReply: 'community_bot.red_packet_error_reply',
+  redPacketReminderEnabled: 'community_bot.red_packet_reminder_enabled',
+  redPacketReminderIntervalMinutes:
+    'community_bot.red_packet_reminder_interval_minutes',
+  redPacketReminderReply: 'community_bot.red_packet_reminder_reply',
 }
 
 function normalize(values: CommunityBotValues): CommunityBotValues {
@@ -277,6 +324,7 @@ function normalize(values: CommunityBotValues): CommunityBotValues {
     tokenRequestCommand: values.tokenRequestCommand.trim(),
     lotteryCommand: values.lotteryCommand.trim(),
     lotterySessions: values.lotterySessions.trim(),
+    lotteryRollingPrizes: values.lotteryRollingPrizes.trim(),
     redPacketCreateCommand: values.redPacketCreateCommand.trim(),
     redPacketClaimCommand: values.redPacketClaimCommand.trim(),
     redPacketWhitelist: values.redPacketWhitelist.trim(),
@@ -299,6 +347,7 @@ type CommunityBotTextareaKey =
   | 'lotteryPoolEmptyReply'
   | 'lotteryUnboundReply'
   | 'lotteryErrorReply'
+  | 'lotteryReminderReply'
   | 'redPacketCreatedReply'
   | 'redPacketClaimedReply'
   | 'redPacketEmptyReply'
@@ -306,8 +355,10 @@ type CommunityBotTextareaKey =
   | 'redPacketNotAllowedReply'
   | 'redPacketExpiredReply'
   | 'redPacketUsageReply'
+  | 'redPacketBusyReply'
   | 'redPacketUnboundReply'
   | 'redPacketErrorReply'
+  | 'redPacketReminderReply'
 
 function textareaField(
   name: CommunityBotTextareaKey,
@@ -452,6 +503,12 @@ export function CommunityBotSection({
       2
     ),
     textareaField(
+      'lotteryReminderReply',
+      'Lottery reminder reply',
+      'Sent periodically while a lottery session is open. Supports {session_name}, {remaining_budget}, {command}.',
+      2
+    ),
+    textareaField(
       'redPacketCreatedReply',
       'Red packet created reply',
       'Supports {provider_user_id}, {creator}, {total_amount}, {total_count}, {claim_command}.',
@@ -494,6 +551,12 @@ export function CommunityBotSection({
       2
     ),
     textareaField(
+      'redPacketBusyReply',
+      'Red packet busy reply',
+      'Sent when there is already an open red packet (single mode).',
+      2
+    ),
+    textareaField(
       'redPacketUnboundReply',
       'Red packet unbound reply',
       'Sent when the requester has not bound their community account.',
@@ -503,6 +566,12 @@ export function CommunityBotSection({
       'redPacketErrorReply',
       'Red packet error reply',
       'Sent when an internal error happens during red packet processing.',
+      2
+    ),
+    textareaField(
+      'redPacketReminderReply',
+      'Red packet reminder reply',
+      'Sent periodically while a red packet has remaining shares. Supports {creator}, {remaining_count}, {remaining_amount}, {claim_command}.',
       2
     ),
   ]
@@ -752,7 +821,106 @@ export function CommunityBotSection({
                 </FormItem>
               )}
             />
+
+            <FormField
+              control={form.control}
+              name='lotteryMode'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Lottery mode')}</FormLabel>
+                  <FormControl>
+                    <select
+                      className='border-input bg-background flex h-9 w-full rounded-md border px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50'
+                      disabled={!enabled}
+                      value={field.value}
+                      onChange={(event) => field.onChange(event.target.value)}
+                    >
+                      <option value='rolling'>
+                        {t('Rolling (auto-generated sessions)')}
+                      </option>
+                      <option value='scheduled'>
+                        {t('Scheduled (custom sessions JSON)')}
+                      </option>
+                    </select>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='lotteryRollingIntervalMinutes'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Rolling session length (minutes)')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type='number'
+                      min={5}
+                      max={1440}
+                      disabled={!enabled}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'Used only when lottery mode is rolling. Each session lasts this many minutes, computed from 00:00.'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='lotteryRollingBudget'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Rolling session budget (USD)')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type='number'
+                      min={0}
+                      step='0.01'
+                      disabled={!enabled}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t('Maximum total amount paid out per rolling session.')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </div>
+
+          <FormField
+            control={form.control}
+            name='lotteryRollingPrizes'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Rolling prizes JSON')}</FormLabel>
+                <FormControl>
+                  <Textarea
+                    rows={10}
+                    spellCheck={false}
+                    className='font-mono text-xs'
+                    disabled={!enabled}
+                    {...field}
+                  />
+                </FormControl>
+                <FormDescription>
+                  {t(
+                    'Each prize: name, weight, plus min_amount/max_amount or amount. Used in rolling mode.'
+                  )}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
           <FormField
             control={form.control}
@@ -778,6 +946,49 @@ export function CommunityBotSection({
               </FormItem>
             )}
           />
+
+          <FormField
+            control={form.control}
+            name='lotteryReminderEnabled'
+            render={({ field }) => (
+              <SettingsSwitchItem>
+                <SettingsSwitchContent>
+                  <FormLabel>{t('Enable lottery reminders')}</FormLabel>
+                  <FormDescription>
+                    {t(
+                      'Periodically post a reminder while a lottery session is open with remaining budget.'
+                    )}
+                  </FormDescription>
+                </SettingsSwitchContent>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    disabled={!enabled || updateOption.isPending || form.formState.isSubmitting}
+                  />
+                </FormControl>
+              </SettingsSwitchItem>
+            )}
+          />
+
+          <div className='grid gap-6 sm:grid-cols-2'>
+            <FormField
+              control={form.control}
+              name='lotteryReminderIntervalMinutes'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Lottery reminder interval (minutes)')}</FormLabel>
+                  <FormControl>
+                    <Input type='number' min={1} disabled={!enabled} {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    {t('Minimum minutes between two reminders within the same session.')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
 
           <FormField
             control={form.control}
@@ -964,6 +1175,49 @@ export function CommunityBotSection({
                   <FormControl>
                     <Input type='number' min={1} disabled={!enabled} {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className='grid gap-6 sm:grid-cols-2'>
+            <FormField
+              control={form.control}
+              name='redPacketReminderEnabled'
+              render={({ field }) => (
+                <SettingsSwitchItem>
+                  <SettingsSwitchContent>
+                    <FormLabel>{t('Enable red packet reminders')}</FormLabel>
+                    <FormDescription>
+                      {t(
+                        'Periodically post a reminder while a red packet still has remaining shares.'
+                      )}
+                    </FormDescription>
+                  </SettingsSwitchContent>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      disabled={!enabled || updateOption.isPending || form.formState.isSubmitting}
+                    />
+                  </FormControl>
+                </SettingsSwitchItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='redPacketReminderIntervalMinutes'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Red packet reminder interval (minutes)')}</FormLabel>
+                  <FormControl>
+                    <Input type='number' min={1} disabled={!enabled} {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    {t('Minimum minutes between two reminders for the same red packet.')}
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

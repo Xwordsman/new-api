@@ -17,6 +17,14 @@ type CommunityLotteryPrize struct {
 	Amount float64 `json:"amount"`
 }
 
+type CommunityLotteryRollingPrize struct {
+	Name      string  `json:"name"`
+	Weight    int     `json:"weight"`
+	Amount    float64 `json:"amount,omitempty"`
+	MinAmount float64 `json:"min_amount,omitempty"`
+	MaxAmount float64 `json:"max_amount,omitempty"`
+}
+
 type CommunityLotterySession struct {
 	Key    string                  `json:"key"`
 	Name   string                  `json:"name"`
@@ -42,110 +50,139 @@ const defaultCommunityLotterySessions = `[
   }
 ]`
 
+const defaultCommunityLotteryRollingPrizes = `[
+  { "name": "谢谢参与", "weight": 50, "min_amount": 0, "max_amount": 0 },
+  { "name": "小确幸", "weight": 35, "min_amount": 0.1, "max_amount": 0.5 },
+  { "name": "好运奖", "weight": 12, "min_amount": 0.5, "max_amount": 2 },
+  { "name": "欧皇奖", "weight": 3, "min_amount": 3, "max_amount": 8 }
+]`
+
 var communityLotteryTimePattern = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)
 
 type CommunityBotSetting struct {
-	Enabled                   bool    `json:"enabled"`
-	BaseURL                   string  `json:"base_url"`
-	RoomID                    string  `json:"room_id"`
-	BotToken                  string  `json:"bot_token"`
-	PollIntervalSeconds       int     `json:"poll_interval_seconds"`
-	OAuthProviderID           int     `json:"oauth_provider_id"`
-	OAuthProviderSlug         string  `json:"oauth_provider_slug"`
-	CheckinCommand            string  `json:"checkin_command"`
-	TokenRequestCommand       string  `json:"token_request_command"`
-	MinAmount                 float64 `json:"min_amount"`
-	MaxAmount                 float64 `json:"max_amount"`
-	LotteryEnabled            bool    `json:"lottery_enabled"`
-	LotteryCommand            string  `json:"lottery_command"`
-	LotterySessions           string  `json:"lottery_sessions"`
-	LotteryWinReply           string  `json:"lottery_win_reply"`
-	LotteryNoPrizeReply       string  `json:"lottery_no_prize_reply"`
-	LotteryAlreadyDrawnReply  string  `json:"lottery_already_drawn_reply"`
-	LotteryOutOfSessionReply  string  `json:"lottery_out_of_session_reply"`
-	LotteryPoolEmptyReply     string  `json:"lottery_pool_empty_reply"`
-	LotteryUnboundReply       string  `json:"lottery_unbound_reply"`
-	LotteryErrorReply         string  `json:"lottery_error_reply"`
-	CheckinSuccessReply       string  `json:"checkin_success_reply"`
-	CheckinAlreadyReply       string  `json:"checkin_already_reply"`
-	CheckinUnboundReply       string  `json:"checkin_unbound_reply"`
-	TokenApprovedReply        string  `json:"token_approved_reply"`
-	TokenAlreadyApprovedReply string  `json:"token_already_approved_reply"`
-	TokenUnboundReply         string  `json:"token_unbound_reply"`
-	UnknownErrorReply         string  `json:"unknown_error_reply"`
-	TokenBlockPrompt          string  `json:"token_block_prompt"`
-	RedPacketEnabled          bool    `json:"red_packet_enabled"`
-	RedPacketCreateCommand    string  `json:"red_packet_create_command"`
-	RedPacketClaimCommand     string  `json:"red_packet_claim_command"`
-	RedPacketWhitelist        string  `json:"red_packet_whitelist"`
-	RedPacketConcurrencyMode  string  `json:"red_packet_concurrency_mode"`
-	RedPacketExpireMinutes    int     `json:"red_packet_expire_minutes"`
-	RedPacketSplitMode        string  `json:"red_packet_split_mode"`
-	RedPacketMinTotalAmount   float64 `json:"red_packet_min_total_amount"`
-	RedPacketMaxTotalAmount   float64 `json:"red_packet_max_total_amount"`
-	RedPacketMinCount         int     `json:"red_packet_min_count"`
-	RedPacketMaxCount         int     `json:"red_packet_max_count"`
-	RedPacketCreatedReply     string  `json:"red_packet_created_reply"`
-	RedPacketClaimedReply     string  `json:"red_packet_claimed_reply"`
-	RedPacketEmptyReply       string  `json:"red_packet_empty_reply"`
-	RedPacketAlreadyReply     string  `json:"red_packet_already_reply"`
-	RedPacketNotAllowedReply  string  `json:"red_packet_not_allowed_reply"`
-	RedPacketExpiredReply     string  `json:"red_packet_expired_reply"`
-	RedPacketUsageReply       string  `json:"red_packet_usage_reply"`
-	RedPacketUnboundReply     string  `json:"red_packet_unbound_reply"`
-	RedPacketErrorReply       string  `json:"red_packet_error_reply"`
+	Enabled                          bool    `json:"enabled"`
+	BaseURL                          string  `json:"base_url"`
+	RoomID                           string  `json:"room_id"`
+	BotToken                         string  `json:"bot_token"`
+	PollIntervalSeconds              int     `json:"poll_interval_seconds"`
+	OAuthProviderID                  int     `json:"oauth_provider_id"`
+	OAuthProviderSlug                string  `json:"oauth_provider_slug"`
+	CheckinCommand                   string  `json:"checkin_command"`
+	TokenRequestCommand              string  `json:"token_request_command"`
+	MinAmount                        float64 `json:"min_amount"`
+	MaxAmount                        float64 `json:"max_amount"`
+	LotteryEnabled                   bool    `json:"lottery_enabled"`
+	LotteryCommand                   string  `json:"lottery_command"`
+	LotteryMode                      string  `json:"lottery_mode"`
+	LotteryRollingIntervalMinutes    int     `json:"lottery_rolling_interval_minutes"`
+	LotteryRollingBudget             float64 `json:"lottery_rolling_budget"`
+	LotteryRollingPrizes             string  `json:"lottery_rolling_prizes"`
+	LotterySessions                  string  `json:"lottery_sessions"`
+	LotteryReminderEnabled           bool    `json:"lottery_reminder_enabled"`
+	LotteryReminderIntervalMinutes   int     `json:"lottery_reminder_interval_minutes"`
+	LotteryReminderReply             string  `json:"lottery_reminder_reply"`
+	LotteryWinReply                  string  `json:"lottery_win_reply"`
+	LotteryNoPrizeReply              string  `json:"lottery_no_prize_reply"`
+	LotteryAlreadyDrawnReply         string  `json:"lottery_already_drawn_reply"`
+	LotteryOutOfSessionReply         string  `json:"lottery_out_of_session_reply"`
+	LotteryPoolEmptyReply            string  `json:"lottery_pool_empty_reply"`
+	LotteryUnboundReply              string  `json:"lottery_unbound_reply"`
+	LotteryErrorReply                string  `json:"lottery_error_reply"`
+	CheckinSuccessReply              string  `json:"checkin_success_reply"`
+	CheckinAlreadyReply              string  `json:"checkin_already_reply"`
+	CheckinUnboundReply              string  `json:"checkin_unbound_reply"`
+	TokenApprovedReply               string  `json:"token_approved_reply"`
+	TokenAlreadyApprovedReply        string  `json:"token_already_approved_reply"`
+	TokenUnboundReply                string  `json:"token_unbound_reply"`
+	UnknownErrorReply                string  `json:"unknown_error_reply"`
+	TokenBlockPrompt                 string  `json:"token_block_prompt"`
+	RedPacketEnabled                 bool    `json:"red_packet_enabled"`
+	RedPacketCreateCommand           string  `json:"red_packet_create_command"`
+	RedPacketClaimCommand            string  `json:"red_packet_claim_command"`
+	RedPacketWhitelist               string  `json:"red_packet_whitelist"`
+	RedPacketConcurrencyMode         string  `json:"red_packet_concurrency_mode"`
+	RedPacketExpireMinutes           int     `json:"red_packet_expire_minutes"`
+	RedPacketSplitMode               string  `json:"red_packet_split_mode"`
+	RedPacketMinTotalAmount          float64 `json:"red_packet_min_total_amount"`
+	RedPacketMaxTotalAmount          float64 `json:"red_packet_max_total_amount"`
+	RedPacketMinCount                int     `json:"red_packet_min_count"`
+	RedPacketMaxCount                int     `json:"red_packet_max_count"`
+	RedPacketCreatedReply            string  `json:"red_packet_created_reply"`
+	RedPacketClaimedReply            string  `json:"red_packet_claimed_reply"`
+	RedPacketEmptyReply              string  `json:"red_packet_empty_reply"`
+	RedPacketAlreadyReply            string  `json:"red_packet_already_reply"`
+	RedPacketNotAllowedReply         string  `json:"red_packet_not_allowed_reply"`
+	RedPacketExpiredReply            string  `json:"red_packet_expired_reply"`
+	RedPacketUsageReply              string  `json:"red_packet_usage_reply"`
+	RedPacketBusyReply               string  `json:"red_packet_busy_reply"`
+	RedPacketUnboundReply            string  `json:"red_packet_unbound_reply"`
+	RedPacketErrorReply              string  `json:"red_packet_error_reply"`
+	RedPacketReminderEnabled         bool    `json:"red_packet_reminder_enabled"`
+	RedPacketReminderIntervalMinutes int     `json:"red_packet_reminder_interval_minutes"`
+	RedPacketReminderReply           string  `json:"red_packet_reminder_reply"`
 }
 
 var communityBotSetting = CommunityBotSetting{
-	Enabled:                   false,
-	BaseURL:                   "https://dc.hhhl.cc",
-	RoomID:                    "",
-	BotToken:                  "",
-	PollIntervalSeconds:       15,
-	OAuthProviderID:           0,
-	OAuthProviderSlug:         "",
-	CheckinCommand:            "签到",
-	TokenRequestCommand:       "创建令牌",
-	MinAmount:                 1,
-	MaxAmount:                 5,
-	LotteryEnabled:            false,
-	LotteryCommand:            "抽奖",
-	LotterySessions:           defaultCommunityLotterySessions,
-	LotteryWinReply:           "$[sparkle $[rainbow 🎁 恭喜 @{provider_user_id} 在「{session_name}」抽中了「{prize_name}」：{amount}美元！]] $[sparkle $[rainbow 当前余额：{balance}美刀]]",
-	LotteryNoPrizeReply:       "🎲 @{provider_user_id} 在「{session_name}」抽中了「{prize_name}」，这次没有获得奖励，祝你下次好运！",
-	LotteryAlreadyDrawnReply:  "🎲 @{provider_user_id} 你已经参加过「{session_name}」啦，请等待下一场",
-	LotteryOutOfSessionReply:  "⏰ @{provider_user_id} 当前不在抽奖时间内，下一场：{next_session_name} {next_start}-{next_end}",
-	LotteryPoolEmptyReply:     "🎁 「{session_name}」奖池已经被抽完啦，请等待下一场",
-	LotteryUnboundReply:       "请先使用社区账号登录并绑定 new-api 账号。",
-	LotteryErrorReply:         "抽奖失败，请稍后再试。",
-	CheckinSuccessReply:       "$[sparkle $[rainbow 🎉 恭喜 @{provider_user_id} 领到了{amount}美元！]] $[sparkle $[rainbow 当前余额：{balance}美刀]]",
-	CheckinAlreadyReply:       "⏰ @{provider_user_id} 你今天已经签到过啦！明天再来领取奖励吧",
-	CheckinUnboundReply:       "请先使用社区账号登录并绑定 new-api 账号。",
-	TokenApprovedReply:        "$[border.style=solid,width=3,color=0af,radius=5 $[tada $[fg.color=0af 🔑 令牌授权成功！]]] $[fg.color=0af @{provider_user_id} 你现在可以创建令牌了]",
-	TokenAlreadyApprovedReply: "你已经拥有令牌创建权限。",
-	TokenUnboundReply:         "请先使用社区账号登录并绑定 new-api 账号。",
-	UnknownErrorReply:         "处理失败，请稍后再试。",
-	TokenBlockPrompt:          "请先在社区群内发送“创建令牌”完成令牌创建授权。",
-	RedPacketEnabled:          false,
-	RedPacketCreateCommand:    "发红包",
-	RedPacketClaimCommand:     "抢红包",
-	RedPacketWhitelist:        "",
-	RedPacketConcurrencyMode:  "single",
-	RedPacketExpireMinutes:    10,
-	RedPacketSplitMode:        "random",
-	RedPacketMinTotalAmount:   0.5,
-	RedPacketMaxTotalAmount:   100,
-	RedPacketMinCount:         1,
-	RedPacketMaxCount:         100,
-	RedPacketCreatedReply:     "🧧 @{provider_user_id} 发了一个 {total_amount} 美元红包，共 {total_count} 份！发送「{claim_command}」领取。",
-	RedPacketClaimedReply:     "🧧 @{provider_user_id} 抢到了 {amount} 美元！当前余额：{balance} 美刀。剩余 {remaining_count} 份。",
-	RedPacketEmptyReply:       "🧧 「{creator}」的红包已经被抢完啦！",
-	RedPacketAlreadyReply:     "🧧 @{provider_user_id} 你已经抢过这个红包啦。",
-	RedPacketNotAllowedReply:  "🚫 @{provider_user_id} 你没有发红包的权限。",
-	RedPacketExpiredReply:     "🧧 「{creator}」的红包已过期。",
-	RedPacketUsageReply:       "🧧 命令格式错误，正确用法：{create_command} 总金额 份数",
-	RedPacketUnboundReply:     "请先使用社区账号登录并绑定 new-api 账号。",
-	RedPacketErrorReply:       "🧧 红包处理失败，请稍后再试。",
+	Enabled:                          false,
+	BaseURL:                          "https://dc.hhhl.cc",
+	RoomID:                           "",
+	BotToken:                         "",
+	PollIntervalSeconds:              15,
+	OAuthProviderID:                  0,
+	OAuthProviderSlug:                "",
+	CheckinCommand:                   "签到",
+	TokenRequestCommand:              "创建令牌",
+	MinAmount:                        1,
+	MaxAmount:                        5,
+	LotteryEnabled:                   false,
+	LotteryCommand:                   "抽奖",
+	LotteryMode:                      "rolling",
+	LotteryRollingIntervalMinutes:    60,
+	LotteryRollingBudget:             5,
+	LotteryRollingPrizes:             defaultCommunityLotteryRollingPrizes,
+	LotterySessions:                  defaultCommunityLotterySessions,
+	LotteryReminderEnabled:           false,
+	LotteryReminderIntervalMinutes:   30,
+	LotteryReminderReply:             "🎁 当前抽奖时段「{session_name}」奖池剩余 {remaining_budget} 美元，发送「{command}」抽奖！",
+	LotteryWinReply:                  "$[sparkle $[rainbow 🎁 恭喜 @{provider_user_id} 在「{session_name}」抽中了「{prize_name}」：{amount}美元！]] $[sparkle $[rainbow 当前余额：{balance}美刀]]",
+	LotteryNoPrizeReply:              "🎲 @{provider_user_id} 在「{session_name}」抽中了「{prize_name}」，这次没有获得奖励，祝你下次好运！",
+	LotteryAlreadyDrawnReply:         "🎲 @{provider_user_id} 你已经参加过「{session_name}」啦，请等待下一场",
+	LotteryOutOfSessionReply:         "⏰ @{provider_user_id} 当前不在抽奖时间内，下一场：{next_session_name} {next_start}-{next_end}",
+	LotteryPoolEmptyReply:            "🎁 「{session_name}」奖池已经被抽完啦，请等待下一场",
+	LotteryUnboundReply:              "请先使用社区账号登录并绑定 new-api 账号。",
+	LotteryErrorReply:                "抽奖失败，请稍后再试。",
+	CheckinSuccessReply:              "$[sparkle $[rainbow 🎉 恭喜 @{provider_user_id} 领到了{amount}美元！]] $[sparkle $[rainbow 当前余额：{balance}美刀]]",
+	CheckinAlreadyReply:              "⏰ @{provider_user_id} 你今天已经签到过啦！明天再来领取奖励吧",
+	CheckinUnboundReply:              "请先使用社区账号登录并绑定 new-api 账号。",
+	TokenApprovedReply:               "$[border.style=solid,width=3,color=0af,radius=5 $[tada $[fg.color=0af 🔑 令牌授权成功！]]] $[fg.color=0af @{provider_user_id} 你现在可以创建令牌了]",
+	TokenAlreadyApprovedReply:        "你已经拥有令牌创建权限。",
+	TokenUnboundReply:                "请先使用社区账号登录并绑定 new-api 账号。",
+	UnknownErrorReply:                "处理失败，请稍后再试。",
+	TokenBlockPrompt:                 "请先在社区群内发送“创建令牌”完成令牌创建授权。",
+	RedPacketEnabled:                 false,
+	RedPacketCreateCommand:           "发红包",
+	RedPacketClaimCommand:            "抢红包",
+	RedPacketWhitelist:               "",
+	RedPacketConcurrencyMode:         "single",
+	RedPacketExpireMinutes:           10,
+	RedPacketSplitMode:               "random",
+	RedPacketMinTotalAmount:          0.5,
+	RedPacketMaxTotalAmount:          100,
+	RedPacketMinCount:                1,
+	RedPacketMaxCount:                100,
+	RedPacketCreatedReply:            "🧧 @{provider_user_id} 发了一个 {total_amount} 美元红包，共 {total_count} 份！发送「{claim_command}」领取。",
+	RedPacketClaimedReply:            "🧧 @{provider_user_id} 抢到了 {amount} 美元！当前余额：{balance} 美刀。剩余 {remaining_count} 份。",
+	RedPacketEmptyReply:              "🧧 「{creator}」的红包已经被抢完啦！",
+	RedPacketAlreadyReply:            "🧧 @{provider_user_id} 你已经抢过这个红包啦。",
+	RedPacketNotAllowedReply:         "🚫 @{provider_user_id} 你没有发红包的权限。",
+	RedPacketExpiredReply:            "🧧 「{creator}」的红包已过期。",
+	RedPacketUsageReply:              "🧧 命令格式错误，正确用法：{create_command} 总金额 份数",
+	RedPacketBusyReply:               "🧧 当前还有未领完的红包，请等它领完或过期后再发新红包。",
+	RedPacketUnboundReply:            "请先使用社区账号登录并绑定 new-api 账号。",
+	RedPacketErrorReply:              "🧧 红包处理失败，请稍后再试。",
+	RedPacketReminderEnabled:         false,
+	RedPacketReminderIntervalMinutes: 5,
+	RedPacketReminderReply:           "🧧 「{creator}」的红包还剩 {remaining_count} 份共 {remaining_amount} 美元，发送「{claim_command}」领取！",
 }
 
 func init() {
@@ -170,6 +207,47 @@ func GetCommunityBotPollInterval() time.Duration {
 
 func (setting *CommunityBotSetting) NormalizedBaseURL() string {
 	return strings.TrimRight(strings.TrimSpace(setting.BaseURL), "/")
+}
+
+func ParseCommunityLotteryRollingPrizes(raw string) ([]CommunityLotteryRollingPrize, error) {
+	var prizes []CommunityLotteryRollingPrize
+	if strings.TrimSpace(raw) == "" {
+		return prizes, nil
+	}
+	if err := common.UnmarshalJsonStr(raw, &prizes); err != nil {
+		return nil, err
+	}
+	if err := ValidateCommunityLotteryRollingPrizes(prizes); err != nil {
+		return nil, err
+	}
+	return prizes, nil
+}
+
+func ValidateCommunityLotteryRollingPrizes(prizes []CommunityLotteryRollingPrize) error {
+	if len(prizes) == 0 {
+		return errors.New("奖池不能为空")
+	}
+	for i := range prizes {
+		prize := &prizes[i]
+		prize.Name = strings.TrimSpace(prize.Name)
+		if prize.Name == "" {
+			return fmt.Errorf("第 %d 个奖项缺少名称", i+1)
+		}
+		if prize.Weight <= 0 {
+			return fmt.Errorf("奖项 %s 权重必须大于 0", prize.Name)
+		}
+		if prize.MinAmount == 0 && prize.MaxAmount == 0 && prize.Amount > 0 {
+			prize.MinAmount = prize.Amount
+			prize.MaxAmount = prize.Amount
+		}
+		if prize.MinAmount < 0 || prize.MaxAmount < 0 {
+			return fmt.Errorf("奖项 %s 金额不能小于 0", prize.Name)
+		}
+		if prize.MaxAmount < prize.MinAmount {
+			return fmt.Errorf("奖项 %s 最大金额不能小于最小金额", prize.Name)
+		}
+	}
+	return nil
 }
 
 func ParseCommunityLotterySessions(raw string) ([]CommunityLotterySession, error) {

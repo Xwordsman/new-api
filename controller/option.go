@@ -76,6 +76,33 @@ func validateCommunityBotOption(key, value string) string {
 		if _, err := operation_setting.ParseCommunityLotterySessions(value); err != nil {
 			return "社区机器人抽奖场次配置无效：" + err.Error()
 		}
+	case "community_bot.lottery_mode":
+		mode := strings.TrimSpace(value)
+		if mode != "rolling" && mode != "scheduled" {
+			return "抽奖模式必须是 rolling 或 scheduled"
+		}
+	case "community_bot.lottery_rolling_interval_minutes":
+		minutes, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil || minutes < 5 {
+			return "滚动抽奖每场长度不能小于 5 分钟"
+		}
+		if minutes > 24*60 {
+			return "滚动抽奖每场长度不能超过 24 小时"
+		}
+	case "community_bot.lottery_rolling_budget":
+		amount, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+		if err != nil || amount < 0 {
+			return "滚动抽奖每场预算必须是非负数字"
+		}
+	case "community_bot.lottery_rolling_prizes":
+		if _, err := operation_setting.ParseCommunityLotteryRollingPrizes(value); err != nil {
+			return "滚动抽奖奖池配置无效：" + err.Error()
+		}
+	case "community_bot.lottery_reminder_interval_minutes":
+		minutes, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil || minutes < 1 {
+			return "抽奖提醒间隔必须是大于等于 1 的整数"
+		}
 	case "community_bot.red_packet_concurrency_mode":
 		mode := strings.TrimSpace(value)
 		if mode != "single" && mode != "multiple" {
@@ -122,6 +149,11 @@ func validateCommunityBotOption(key, value string) string {
 		}
 		if maxCount < minCount {
 			return "红包最大份数不能小于最小份数"
+		}
+	case "community_bot.red_packet_reminder_interval_minutes":
+		minutes, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil || minutes < 1 {
+			return "红包提醒间隔必须是大于等于 1 的整数"
 		}
 	case "community_bot.oauth_provider_id":
 		providerId, err := strconv.Atoi(strings.TrimSpace(value))

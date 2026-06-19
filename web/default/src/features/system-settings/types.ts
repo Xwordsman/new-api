@@ -330,7 +330,14 @@ export type OperationsSettings = {
   'community_bot.token_block_prompt': string
   'community_bot.lottery_enabled': boolean
   'community_bot.lottery_command': string
+  'community_bot.lottery_mode': 'rolling' | 'scheduled'
+  'community_bot.lottery_rolling_interval_minutes': number
+  'community_bot.lottery_rolling_budget': number
+  'community_bot.lottery_rolling_prizes': string
   'community_bot.lottery_sessions': string
+  'community_bot.lottery_reminder_enabled': boolean
+  'community_bot.lottery_reminder_interval_minutes': number
+  'community_bot.lottery_reminder_reply': string
   'community_bot.lottery_win_reply': string
   'community_bot.lottery_no_prize_reply': string
   'community_bot.lottery_already_drawn_reply': string
@@ -356,8 +363,12 @@ export type OperationsSettings = {
   'community_bot.red_packet_not_allowed_reply': string
   'community_bot.red_packet_expired_reply': string
   'community_bot.red_packet_usage_reply': string
+  'community_bot.red_packet_busy_reply': string
   'community_bot.red_packet_unbound_reply': string
   'community_bot.red_packet_error_reply': string
+  'community_bot.red_packet_reminder_enabled': boolean
+  'community_bot.red_packet_reminder_interval_minutes': number
+  'community_bot.red_packet_reminder_reply': string
 }
 
 export type SecuritySettings = {

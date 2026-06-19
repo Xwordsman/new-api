@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"math"
 	"math/rand"
 
 	"github.com/QuantumNous/new-api/common"
@@ -64,6 +65,7 @@ type CommunityRedPacket struct {
 	Status                string `json:"status" gorm:"type:varchar(16);not null;index:idx_community_red_packet_status"`
 	ExpiresAt             int64  `json:"expires_at" gorm:"bigint;not null;default:0"`
 	SourceMessageId       string `json:"source_message_id" gorm:"type:varchar(256);not null"`
+	LastRemindedAt        int64  `json:"last_reminded_at" gorm:"bigint;not null;default:0"`
 	CreatedAt             int64  `json:"created_at" gorm:"bigint;not null"`
 	UpdatedAt             int64  `json:"updated_at" gorm:"bigint;not null"`
 }
@@ -80,10 +82,18 @@ type CommunityRedPacketClaim struct {
 }
 
 type CommunityLotteryPrizeCandidate struct {
-	Name         string
-	Weight       int
-	AmountCents  int
-	QuotaAwarded int
+	Name           string
+	Weight         int
+	MinAmountCents int
+	MaxAmountCents int
+}
+
+type CommunityLotteryReminder struct {
+	Id             int    `json:"id" gorm:"primaryKey"`
+	RoomId         string `json:"room_id" gorm:"type:varchar(128);not null;uniqueIndex:idx_community_lottery_reminder"`
+	SessionKey     string `json:"session_key" gorm:"type:varchar(128);not null;uniqueIndex:idx_community_lottery_reminder"`
+	LastRemindedAt int64  `json:"last_reminded_at" gorm:"bigint;not null"`
+	UpdatedAt      int64  `json:"updated_at" gorm:"bigint;not null"`
 }
 
 type CommunityLotteryDrawParams struct {
@@ -226,7 +236,7 @@ func CreateCommunityLotteryDraw(params CommunityLotteryDrawParams) (*CommunityLo
 
 		availablePrizes := make([]CommunityLotteryPrizeCandidate, 0, len(params.Prizes))
 		for _, prize := range params.Prizes {
-			if prize.Weight > 0 && prize.AmountCents <= remainingCents {
+			if prize.Weight > 0 && prize.MinAmountCents <= remainingCents {
 				availablePrizes = append(availablePrizes, prize)
 			}
 		}
@@ -236,6 +246,8 @@ func CreateCommunityLotteryDraw(params CommunityLotteryDrawParams) (*CommunityLo
 		}
 
 		selected := selectCommunityLotteryPrize(availablePrizes)
+		amountCents := selectCommunityLotteryAmount(selected, remainingCents)
+		quotaAwarded := int(math.Round(float64(amountCents) / 100 * common.QuotaPerUnit))
 		draw := &CommunityLotteryDraw{
 			UserId:         params.UserId,
 			ProviderId:     params.ProviderId,
@@ -248,8 +260,8 @@ func CreateCommunityLotteryDraw(params CommunityLotteryDrawParams) (*CommunityLo
 			SessionStart:   params.SessionStart,
 			SessionEnd:     params.SessionEnd,
 			PrizeName:      selected.Name,
-			AmountCents:    selected.AmountCents,
-			QuotaAwarded:   selected.QuotaAwarded,
+			AmountCents:    amountCents,
+			QuotaAwarded:   quotaAwarded,
 			CreatedAt:      common.GetTimestamp(),
 		}
 		if err := tx.Create(draw).Error; err != nil {
@@ -259,20 +271,20 @@ func CreateCommunityLotteryDraw(params CommunityLotteryDrawParams) (*CommunityLo
 			}
 			return err
 		}
-		if selected.QuotaAwarded > 0 {
+		if quotaAwarded > 0 {
 			if common.UsingSQLite {
-				if err := IncreaseUserQuota(params.UserId, selected.QuotaAwarded, true); err != nil {
+				if err := IncreaseUserQuota(params.UserId, quotaAwarded, true); err != nil {
 					return err
 				}
 			} else {
 				if err := tx.Model(&User{}).Where("id = ?", params.UserId).
-					Update("quota", gorm.Expr("quota + ?", selected.QuotaAwarded)).Error; err != nil {
+					Update("quota", gorm.Expr("quota + ?", quotaAwarded)).Error; err != nil {
 					return err
 				}
 			}
 		}
 		result.Draw = draw
-		result.RemainingCents = remainingCents - selected.AmountCents
+		result.RemainingCents = remainingCents - amountCents
 		if result.RemainingCents < 0 {
 			result.RemainingCents = 0
 		}
@@ -305,6 +317,87 @@ func selectCommunityLotteryPrize(prizes []CommunityLotteryPrizeCandidate) Commun
 		roll -= prize.Weight
 	}
 	return prizes[len(prizes)-1]
+}
+
+func selectCommunityLotteryAmount(prize CommunityLotteryPrizeCandidate, remainingCents int) int {
+	min := prize.MinAmountCents
+	max := prize.MaxAmountCents
+	if max > remainingCents {
+		max = remainingCents
+	}
+	if min > max {
+		min = max
+	}
+	if min < 0 {
+		min = 0
+	}
+	if max <= 0 {
+		return 0
+	}
+	if max == min {
+		return min
+	}
+	return min + rand.Intn(max-min+1)
+}
+
+func GetCommunityLotteryReminder(roomId, sessionKey string) (*CommunityLotteryReminder, error) {
+	var reminder CommunityLotteryReminder
+	err := DB.Where("room_id = ? AND session_key = ?", roomId, sessionKey).First(&reminder).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &reminder, nil
+}
+
+func UpsertCommunityLotteryReminder(roomId, sessionKey string, ts int64) error {
+	var reminder CommunityLotteryReminder
+	err := DB.Where("room_id = ? AND session_key = ?", roomId, sessionKey).First(&reminder).Error
+	if err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		reminder = CommunityLotteryReminder{
+			RoomId:         roomId,
+			SessionKey:     sessionKey,
+			LastRemindedAt: ts,
+			UpdatedAt:      ts,
+		}
+		return DB.Create(&reminder).Error
+	}
+	return DB.Model(&reminder).Updates(map[string]interface{}{
+		"last_reminded_at": ts,
+		"updated_at":       ts,
+	}).Error
+}
+
+func SumCommunityLotterySessionAmountCents(roomId, sessionKey, drawDate string) (int, error) {
+	var total int64
+	err := DB.Model(&CommunityLotteryDraw{}).
+		Where("room_id = ? AND session_key = ? AND draw_date = ?", roomId, sessionKey, drawDate).
+		Select("COALESCE(SUM(amount_cents), 0)").
+		Scan(&total).Error
+	return int(total), err
+}
+
+func GetCommunityRedPacketsForReminder(roomId string, intervalSeconds int64) ([]CommunityRedPacket, error) {
+	now := common.GetTimestamp()
+	var packets []CommunityRedPacket
+	err := DB.Where("room_id = ? AND status = ? AND remaining_count > 0", roomId, CommunityRedPacketStatusOpen).
+		Where("(expires_at = 0 OR expires_at > ?)", now).
+		Where("(? - last_reminded_at) >= ?", now, intervalSeconds).
+		Find(&packets).Error
+	return packets, err
+}
+
+func UpdateCommunityRedPacketReminder(packetId int, ts int64) error {
+	return DB.Model(&CommunityRedPacket{}).Where("id = ?", packetId).
+		Updates(map[string]interface{}{
+			"last_reminded_at": ts,
+			"updated_at":       ts,
+		}).Error
 }
 
 type CreateCommunityRedPacketParams struct {
@@ -377,6 +470,7 @@ func CreateCommunityRedPacket(params CreateCommunityRedPacketParams) (*CreateCom
 			Status:                CommunityRedPacketStatusOpen,
 			ExpiresAt:             expiresAt,
 			SourceMessageId:       params.SourceMessageId,
+			LastRemindedAt:        now,
 			CreatedAt:             now,
 			UpdatedAt:             now,
 		}
@@ -479,22 +573,27 @@ func ClaimCommunityRedPacket(params ClaimCommunityRedPacketParams) (*ClaimCommun
 			}
 			return err
 		}
+		newRemainingAmountCents := packet.RemainingAmountCents - amountCents
+		newRemainingCount := packet.RemainingCount - 1
+		newStatus := packet.Status
+		if newRemainingCount <= 0 || newRemainingAmountCents <= 0 {
+			newStatus = CommunityRedPacketStatusClosed
+		}
 		updates := map[string]interface{}{
-			"remaining_amount_cents": packet.RemainingAmountCents - amountCents,
-			"remaining_count":        packet.RemainingCount - 1,
+			"remaining_amount_cents": newRemainingAmountCents,
+			"remaining_count":        newRemainingCount,
 			"updated_at":             now,
 		}
-		if packet.RemainingCount-1 <= 0 || packet.RemainingAmountCents-amountCents <= 0 {
-			updates["status"] = CommunityRedPacketStatusClosed
+		if newStatus != packet.Status {
+			updates["status"] = newStatus
 		}
 		if err := tx.Model(&packet).Updates(updates).Error; err != nil {
 			return err
 		}
-		packet.RemainingAmountCents -= amountCents
-		packet.RemainingCount -= 1
-		if packet.RemainingCount <= 0 || packet.RemainingAmountCents <= 0 {
-			packet.Status = CommunityRedPacketStatusClosed
-		}
+		packet.RemainingAmountCents = newRemainingAmountCents
+		packet.RemainingCount = newRemainingCount
+		packet.Status = newStatus
+		packet.UpdatedAt = now
 		if quotaAwarded > 0 {
 			if common.UsingSQLite {
 				if err := IncreaseUserQuota(params.UserId, quotaAwarded, true); err != nil {

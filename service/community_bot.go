@@ -126,6 +126,8 @@ func runCommunityBotOnce() {
 		}
 	}
 	expireCommunityRedPackets(ctx, setting)
+	remindCommunityLottery(ctx, setting)
+	remindCommunityRedPackets(ctx, setting)
 }
 
 func validateCommunityBotRuntimeSetting(setting *operation_setting.CommunityBotSetting) string {
@@ -414,43 +416,112 @@ func formatCommunityAmount(amount float64) string {
 }
 
 func handleCommunityLottery(ctx context.Context, setting *operation_setting.CommunityBotSetting, message communityMessage, providerId int, userId int, providerUserID string, command string) error {
-	sessions, err := operation_setting.ParseCommunityLotterySessions(setting.LotterySessions)
-	if err != nil {
-		_ = sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.LotteryErrorReply, map[string]string{
-			"command":          command,
-			"user_id":          fmt.Sprintf("%d", userId),
-			"provider_user_id": providerUserID,
-		}))
-		return err
-	}
 	now := time.Now()
-	session, nextSession, ok := getActiveCommunityLotterySession(sessions, now)
 	baseValues := map[string]string{
 		"command":          command,
 		"date":             now.Format("2006-01-02"),
 		"user_id":          fmt.Sprintf("%d", userId),
 		"provider_user_id": providerUserID,
 	}
-	if nextSession != nil {
-		baseValues["next_session_name"] = nextSession.Name
-		baseValues["next_start"] = nextSession.Start
-		baseValues["next_end"] = nextSession.End
+
+	mode := strings.TrimSpace(setting.LotteryMode)
+	if mode == "" {
+		mode = "rolling"
 	}
-	if !ok {
+
+	var (
+		sessionKey     string
+		sessionName    string
+		sessionStart   string
+		sessionEnd     string
+		budgetCents    int
+		prizes         []model.CommunityLotteryPrizeCandidate
+		nextSessionMsg map[string]string
+		inSession      bool
+	)
+
+	if mode == "scheduled" {
+		sessions, err := operation_setting.ParseCommunityLotterySessions(setting.LotterySessions)
+		if err != nil {
+			_ = sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.LotteryErrorReply, baseValues))
+			return err
+		}
+		session, nextSession, ok := getActiveCommunityLotterySession(sessions, now)
+		if nextSession != nil {
+			baseValues["next_session_name"] = nextSession.Name
+			baseValues["next_start"] = nextSession.Start
+			baseValues["next_end"] = nextSession.End
+		}
+		if !ok {
+			return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.LotteryOutOfSessionReply, baseValues))
+		}
+		inSession = true
+		sessionKey = session.Key
+		sessionName = session.Name
+		sessionStart = session.Start
+		sessionEnd = session.End
+		budgetCents = amountToCents(session.Budget)
+		for _, prize := range session.Prizes {
+			cents := amountToCents(prize.Amount)
+			prizes = append(prizes, model.CommunityLotteryPrizeCandidate{
+				Name:           prize.Name,
+				Weight:         prize.Weight,
+				MinAmountCents: cents,
+				MaxAmountCents: cents,
+			})
+		}
+	} else {
+		rolling, err := operation_setting.ParseCommunityLotteryRollingPrizes(setting.LotteryRollingPrizes)
+		if err != nil {
+			_ = sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.LotteryErrorReply, baseValues))
+			return err
+		}
+		if len(rolling) == 0 {
+			_ = sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.LotteryErrorReply, baseValues))
+			return errors.New("rolling lottery prizes empty")
+		}
+		key, name, start, end := computeCommunityRollingSession(setting.LotteryRollingIntervalMinutes, now)
+		nextKey, nextName, nextStart, nextEnd := computeCommunityRollingNextSession(setting.LotteryRollingIntervalMinutes, now)
+		nextSessionMsg = map[string]string{
+			"next_session_key":  nextKey,
+			"next_session_name": nextName,
+			"next_start":        nextStart,
+			"next_end":          nextEnd,
+		}
+		inSession = true
+		sessionKey = key
+		sessionName = name
+		sessionStart = start
+		sessionEnd = end
+		budgetCents = amountToCents(setting.LotteryRollingBudget)
+		for _, prize := range rolling {
+			minCents := amountToCents(prize.MinAmount)
+			maxCents := amountToCents(prize.MaxAmount)
+			if minCents == 0 && maxCents == 0 && prize.Amount > 0 {
+				minCents = amountToCents(prize.Amount)
+				maxCents = minCents
+			}
+			prizes = append(prizes, model.CommunityLotteryPrizeCandidate{
+				Name:           prize.Name,
+				Weight:         prize.Weight,
+				MinAmountCents: minCents,
+				MaxAmountCents: maxCents,
+			})
+		}
+	}
+
+	if !inSession {
 		return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.LotteryOutOfSessionReply, baseValues))
 	}
-	addCommunityLotterySessionTemplateValues(baseValues, session)
 
-	prizes := make([]model.CommunityLotteryPrizeCandidate, 0, len(session.Prizes))
-	for _, prize := range session.Prizes {
-		amountCents := amountToCents(prize.Amount)
-		prizes = append(prizes, model.CommunityLotteryPrizeCandidate{
-			Name:         prize.Name,
-			Weight:       prize.Weight,
-			AmountCents:  amountCents,
-			QuotaAwarded: centsToQuota(amountCents),
-		})
+	baseValues["session_key"] = sessionKey
+	baseValues["session_name"] = sessionName
+	baseValues["session_start"] = sessionStart
+	baseValues["session_end"] = sessionEnd
+	for k, v := range nextSessionMsg {
+		baseValues[k] = v
 	}
+
 	result, err := model.CreateCommunityLotteryDraw(model.CommunityLotteryDrawParams{
 		UserId:         userId,
 		ProviderId:     providerId,
@@ -458,11 +529,11 @@ func handleCommunityLottery(ctx context.Context, setting *operation_setting.Comm
 		RoomId:         setting.RoomID,
 		MessageId:      message.ID,
 		DrawDate:       now.Format("2006-01-02"),
-		SessionKey:     session.Key,
-		SessionName:    session.Name,
-		SessionStart:   session.Start,
-		SessionEnd:     session.End,
-		BudgetCents:    amountToCents(session.Budget),
+		SessionKey:     sessionKey,
+		SessionName:    sessionName,
+		SessionStart:   sessionStart,
+		SessionEnd:     sessionEnd,
+		BudgetCents:    budgetCents,
 		Prizes:         prizes,
 	})
 	if err != nil {
@@ -491,6 +562,50 @@ func handleCommunityLottery(ctx context.Context, setting *operation_setting.Comm
 		reply = setting.LotteryNoPrizeReply
 	}
 	return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(reply, baseValues))
+}
+
+func computeCommunityRollingSession(intervalMinutes int, now time.Time) (key, name, startStr, endStr string) {
+	if intervalMinutes <= 0 {
+		intervalMinutes = 60
+	}
+	minutes := now.Hour()*60 + now.Minute()
+	startMin := (minutes / intervalMinutes) * intervalMinutes
+	endMin := startMin + intervalMinutes
+	if endMin > 24*60 {
+		endMin = 24 * 60
+	}
+	startStr = fmt.Sprintf("%02d:%02d", startMin/60, startMin%60)
+	endHour := endMin / 60
+	endMinPart := endMin % 60
+	if endHour == 24 && endMinPart == 0 {
+		endStr = "24:00"
+	} else {
+		endStr = fmt.Sprintf("%02d:%02d", endHour, endMinPart)
+	}
+	name = fmt.Sprintf("%s-%s", startStr, endStr)
+	key = fmt.Sprintf("%s_%02d%02d", now.Format("2006-01-02"), startMin/60, startMin%60)
+	return
+}
+
+func computeCommunityRollingNextSession(intervalMinutes int, now time.Time) (key, name, startStr, endStr string) {
+	if intervalMinutes <= 0 {
+		intervalMinutes = 60
+	}
+	_, _, _, currentEnd := computeCommunityRollingSession(intervalMinutes, now)
+	parts := strings.Split(currentEnd, ":")
+	if len(parts) != 2 {
+		return "", "", "", ""
+	}
+	endHour, _ := strconv.Atoi(parts[0])
+	endMin, _ := strconv.Atoi(parts[1])
+	nextDayOffset := time.Duration(0)
+	if endHour >= 24 {
+		nextDayOffset = 24 * time.Hour
+		endHour = 0
+		endMin = 0
+	}
+	base := time.Date(now.Year(), now.Month(), now.Day(), endHour, endMin, 0, 0, now.Location()).Add(nextDayOffset)
+	return computeCommunityRollingSession(intervalMinutes, base)
 }
 
 func getActiveCommunityLotterySession(sessions []operation_setting.CommunityLotterySession, now time.Time) (*operation_setting.CommunityLotterySession, *operation_setting.CommunityLotterySession, bool) {
@@ -614,7 +729,7 @@ func handleCommunityRedPacketCreate(ctx context.Context, setting *operation_sett
 		return err
 	}
 	if result.Conflict {
-		return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.RedPacketUsageReply, baseValues))
+		return sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.RedPacketBusyReply, baseValues))
 	}
 	if result.Packet == nil {
 		_ = sendCommunityReply(ctx, setting, message.ID, renderCommunityBotTemplate(setting.RedPacketErrorReply, baseValues))
@@ -705,6 +820,141 @@ func expireCommunityRedPackets(ctx context.Context, setting *operation_setting.C
 			"claim_command":    strings.TrimSpace(setting.RedPacketClaimCommand),
 		}
 		_ = sendCommunityReply(ctx, setting, packet.SourceMessageId, renderCommunityBotTemplate(setting.RedPacketExpiredReply, values))
+	}
+}
+
+func remindCommunityLottery(ctx context.Context, setting *operation_setting.CommunityBotSetting) {
+	if !setting.LotteryEnabled || !setting.LotteryReminderEnabled {
+		return
+	}
+	interval := setting.LotteryReminderIntervalMinutes
+	if interval <= 0 {
+		return
+	}
+	mode := strings.TrimSpace(setting.LotteryMode)
+	if mode == "" {
+		mode = "rolling"
+	}
+
+	now := time.Now()
+	var (
+		sessionKey   string
+		sessionName  string
+		sessionStart string
+		sessionEnd   string
+		budgetCents  int
+		budgetAmount float64
+	)
+
+	if mode == "scheduled" {
+		sessions, err := operation_setting.ParseCommunityLotterySessions(setting.LotterySessions)
+		if err != nil {
+			logger.LogWarn(ctx, fmt.Sprintf("community bot lottery reminder parse sessions failed: %v", err))
+			return
+		}
+		session, _, ok := getActiveCommunityLotterySession(sessions, now)
+		if !ok {
+			return
+		}
+		sessionKey = session.Key
+		sessionName = session.Name
+		sessionStart = session.Start
+		sessionEnd = session.End
+		budgetCents = amountToCents(session.Budget)
+		budgetAmount = session.Budget
+	} else {
+		key, name, start, end := computeCommunityRollingSession(setting.LotteryRollingIntervalMinutes, now)
+		sessionKey = key
+		sessionName = name
+		sessionStart = start
+		sessionEnd = end
+		budgetCents = amountToCents(setting.LotteryRollingBudget)
+		budgetAmount = setting.LotteryRollingBudget
+	}
+
+	reminder, err := model.GetCommunityLotteryReminder(setting.RoomID, sessionKey)
+	if err != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("community bot lottery reminder load failed: %v", err))
+		return
+	}
+	nowUnix := now.Unix()
+	if reminder != nil && nowUnix-reminder.LastRemindedAt < int64(interval)*60 {
+		return
+	}
+
+	usedCents, err := model.SumCommunityLotterySessionAmountCents(setting.RoomID, sessionKey, now.Format("2006-01-02"))
+	if err != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("community bot lottery reminder sum failed: %v", err))
+		return
+	}
+	remainingCents := budgetCents - usedCents
+	if remainingCents <= 0 {
+		return
+	}
+
+	values := map[string]string{
+		"command":          strings.TrimSpace(setting.LotteryCommand),
+		"date":             now.Format("2006-01-02"),
+		"session_key":      sessionKey,
+		"session_name":     sessionName,
+		"session_start":    sessionStart,
+		"session_end":      sessionEnd,
+		"budget":           formatCommunityAmount(budgetAmount),
+		"remaining_budget": formatCommunityAmount(centsToAmount(remainingCents)),
+	}
+	if err := sendCommunityReply(ctx, setting, "", renderCommunityBotTemplate(setting.LotteryReminderReply, values)); err != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("community bot lottery reminder send failed: %v", err))
+		return
+	}
+	if err := model.UpsertCommunityLotteryReminder(setting.RoomID, sessionKey, nowUnix); err != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("community bot lottery reminder upsert failed: %v", err))
+	}
+}
+
+func remindCommunityRedPackets(ctx context.Context, setting *operation_setting.CommunityBotSetting) {
+	if !setting.RedPacketEnabled || !setting.RedPacketReminderEnabled {
+		return
+	}
+	interval := setting.RedPacketReminderIntervalMinutes
+	if interval <= 0 {
+		return
+	}
+	packets, err := model.GetCommunityRedPacketsForReminder(setting.RoomID, int64(interval)*60)
+	if err != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("community bot red packet reminder load failed: %v", err))
+		return
+	}
+	now := time.Now()
+	for _, packet := range packets {
+		values := map[string]string{
+			"creator":          packet.CreatorProviderUserId,
+			"provider_user_id": packet.CreatorProviderUserId,
+			"total_amount":     formatCommunityAmount(centsToAmount(packet.TotalAmountCents)),
+			"total_count":      fmt.Sprintf("%d", packet.TotalCount),
+			"remaining_count":  fmt.Sprintf("%d", packet.RemainingCount),
+			"remaining_amount": formatCommunityAmount(centsToAmount(packet.RemainingAmountCents)),
+			"date":             now.Format("2006-01-02"),
+			"create_command":   strings.TrimSpace(setting.RedPacketCreateCommand),
+			"claim_command":    strings.TrimSpace(setting.RedPacketClaimCommand),
+		}
+		if packet.ExpiresAt > 0 {
+			values["expires_at"] = time.Unix(packet.ExpiresAt, 0).Format("15:04")
+			minutesLeft := (packet.ExpiresAt - now.Unix()) / 60
+			if minutesLeft < 0 {
+				minutesLeft = 0
+			}
+			values["minutes_left"] = fmt.Sprintf("%d", minutesLeft)
+		} else {
+			values["expires_at"] = "-"
+			values["minutes_left"] = "-"
+		}
+		if err := sendCommunityReply(ctx, setting, packet.SourceMessageId, renderCommunityBotTemplate(setting.RedPacketReminderReply, values)); err != nil {
+			logger.LogWarn(ctx, fmt.Sprintf("community bot red packet reminder send failed: packet_id=%d error=%v", packet.Id, err))
+			continue
+		}
+		if err := model.UpdateCommunityRedPacketReminder(packet.Id, now.Unix()); err != nil {
+			logger.LogWarn(ctx, fmt.Sprintf("community bot red packet reminder upsert failed: packet_id=%d error=%v", packet.Id, err))
+		}
 	}
 }
 
