@@ -23,6 +23,18 @@ common.already_exists: "Already exists"
 common.name_cannot_be_empty: "Name cannot be empty"
 common.batch_too_many: "Too many items in batch request, maximum is {{.Max}}"
 
+# Invitation registration extension
+invitation.code_required: "Invitation code is required"
+invitation.code_invalid: "Invalid invitation code"
+invitation.code_disabled: "This invitation code has been disabled"
+invitation.code_expired: "This invitation code has expired"
+invitation.code_exhausted: "This invitation code has reached its usage limit"
+invitation.expiry_in_past: "Expiration time must be in the future"
+invitation.code_format_invalid: "Invitation code must be 4-64 characters and contain only letters, numbers, underscores, or hyphens"
+invitation.prefix_format_invalid: "Prefix must be at most 16 characters and contain only letters, numbers, underscores, or hyphens"
+invitation.code_already_exists: "Invitation code already exists"
+invitation.max_uses_below_used: "Maximum uses cannot be lower than the current used count"
+
 # Auth middleware messages
 auth.not_logged_in: "Unauthorized, not logged in and no access token provided"
 auth.access_token_invalid: "Unauthorized, invalid access token"

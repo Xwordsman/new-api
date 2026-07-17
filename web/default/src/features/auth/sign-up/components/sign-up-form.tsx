@@ -89,6 +89,7 @@ export function SignUpForm({
     defaultValues: {
       username: '',
       email: '',
+      invitationCode: '',
       password: '',
       confirmPassword: '',
     },
@@ -96,6 +97,10 @@ export function SignUpForm({
 
   const emailValue = form.watch('email')
   const emailVerificationRequired = !!status?.email_verification
+  const invitationRegistrationRequired = Boolean(
+    status?.invitation_registration_enabled ??
+    status?.data?.invitation_registration_enabled
+  )
   const hasUserAgreement = Boolean(status?.user_agreement_enabled)
   const hasPrivacyPolicy = Boolean(status?.privacy_policy_enabled)
   const requiresLegalConsent = hasUserAgreement || hasPrivacyPolicy
@@ -153,6 +158,13 @@ export function SignUpForm({
       }
     }
 
+    if (invitationRegistrationRequired && !data.invitationCode?.trim()) {
+      form.setError('invitationCode', {
+        message: t('Please enter an invitation code'),
+      })
+      return
+    }
+
     if (!validateTurnstile()) return
 
     setIsLoading(true)
@@ -163,6 +175,7 @@ export function SignUpForm({
         email: data.email || undefined,
         verification_code: verificationCode || undefined,
         aff_code: getAffiliateCode(),
+        invitation_code: data.invitationCode?.trim() || undefined,
         turnstile: turnstileToken,
       })
 
@@ -277,6 +290,26 @@ export function SignUpForm({
             </FormItem>
           )}
         />
+
+        {invitationRegistrationRequired && (
+          <FormField
+            control={form.control}
+            name='invitationCode'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Invitation Code')}</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder={t('Enter your invitation code')}
+                    autoComplete='one-time-code'
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
         {/* Email Verification Section */}
         {emailVerificationRequired && (

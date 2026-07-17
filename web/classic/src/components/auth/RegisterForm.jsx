@@ -79,6 +79,7 @@ const RegisterForm = () => {
     password2: '',
     email: '',
     verification_code: '',
+    invitation_code: '',
     wechat_verification_code: '',
   });
   const { username, password, password2 } = inputs;
@@ -133,15 +134,18 @@ const RegisterForm = () => {
     (status.custom_oauth_providers || []).length > 0;
   const hasOAuthRegisterOptions = Boolean(
     status.github_oauth ||
-      status.discord_oauth ||
-      status.oidc_enabled ||
-      status.wechat_login ||
-      status.linuxdo_oauth ||
-      status.telegram_oauth ||
-      hasCustomOAuthProviders,
+    status.discord_oauth ||
+    status.oidc_enabled ||
+    status.wechat_login ||
+    status.linuxdo_oauth ||
+    status.telegram_oauth ||
+    hasCustomOAuthProviders,
   );
 
   const [showEmailVerification, setShowEmailVerification] = useState(false);
+  const invitationRegistrationRequired = Boolean(
+    status?.invitation_registration_enabled,
+  );
 
   useEffect(() => {
     setShowEmailVerification(!!status?.email_verification);
@@ -222,6 +226,10 @@ const RegisterForm = () => {
     }
     if (password !== password2) {
       showInfo('两次输入的密码不一致');
+      return;
+    }
+    if (invitationRegistrationRequired && !inputs.invitation_code?.trim()) {
+      showInfo(t('请输入邀请码'));
       return;
     }
     if (username && password) {
@@ -602,6 +610,17 @@ const RegisterForm = () => {
                   prefix={<IconLock />}
                 />
 
+                {invitationRegistrationRequired && (
+                  <Form.Input
+                    field='invitation_code'
+                    label={t('邀请码')}
+                    placeholder={t('请输入邀请码')}
+                    name='invitation_code'
+                    onChange={(value) => handleChange('invitation_code', value)}
+                    prefix={<IconKey />}
+                  />
+                )}
+
                 {showEmailVerification && (
                   <>
                     <Form.Input
@@ -781,8 +800,7 @@ const RegisterForm = () => {
         style={{ top: '50%', left: '-120px' }}
       />
       <div className='w-full max-w-sm mt-[60px]'>
-        {showEmailRegister ||
-        !hasOAuthRegisterOptions
+        {showEmailRegister || !hasOAuthRegisterOptions
           ? renderEmailRegisterForm()
           : renderOAuthOptions()}
         {renderWeChatLoginModal()}

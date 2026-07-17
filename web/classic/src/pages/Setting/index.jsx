@@ -34,6 +34,7 @@ import {
   CreditCard,
   Server,
   Activity,
+  TicketCheck,
 } from 'lucide-react';
 
 import SystemSetting from '../../components/settings/SystemSetting';
@@ -49,6 +50,7 @@ import DrawingSetting from '../../components/settings/DrawingSetting';
 import PaymentSetting from '../../components/settings/PaymentSetting';
 import ModelDeploymentSetting from '../../components/settings/ModelDeploymentSetting';
 import PerformanceSetting from '../../components/settings/PerformanceSetting';
+import InvitationSetting from '../../extensions/invitation/InvitationSetting';
 
 const Setting = () => {
   const { t } = useTranslation();
@@ -58,6 +60,16 @@ const Setting = () => {
   let panes = [];
 
   if (isRoot()) {
+    panes.push({
+      tab: (
+        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <TicketCheck size={18} />
+          {t('邀请码')}
+        </span>
+      ),
+      content: <InvitationSetting />,
+      itemKey: 'invitation',
+    });
     panes.push({
       tab: (
         <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>

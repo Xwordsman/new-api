@@ -24,6 +24,18 @@ common.already_exists: "已存在"
 common.name_cannot_be_empty: "名称不能为空"
 common.batch_too_many: "批量请求数量过多，最多 {{.Max}} 条"
 
+# 邀请码注册扩展
+invitation.code_required: "请输入邀请码"
+invitation.code_invalid: "邀请码无效"
+invitation.code_disabled: "该邀请码已被禁用"
+invitation.code_expired: "该邀请码已过期"
+invitation.code_exhausted: "该邀请码已达到使用次数上限"
+invitation.expiry_in_past: "过期时间必须晚于当前时间"
+invitation.code_format_invalid: "邀请码长度必须为 4-64 位，且只能包含字母、数字、下划线或连字符"
+invitation.prefix_format_invalid: "前缀最长 16 位，且只能包含字母、数字、下划线或连字符"
+invitation.code_already_exists: "邀请码已存在"
+invitation.max_uses_below_used: "最大使用次数不能小于当前已使用次数"
+
 # Auth middleware messages
 auth.not_logged_in: "无权进行此操作，未登录且未提供 access token"
 auth.access_token_invalid: "无权进行此操作，access token 无效"
