@@ -3856,6 +3856,27 @@
     "邀请码设置已保存": "Invitation settings saved",
     "随机码前缀": "Generated Code Prefix",
     "加载邀请码设置失败": "Failed to load invitation settings",
-    "邀请码已创建": "Invitation code created"
+    "邀请码已创建": "Invitation code created",
+    "加载首页设置失败": "Failed to load homepage settings",
+    "首页控制": "Homepage Control",
+    "首页设置已保存": "Homepage settings saved",
+    "关闭公开首页": "Disable Public Homepage",
+    "替换公开首页，但保留登录、注册和控制台地址": "Replace the public homepage while keeping sign-in and console routes available",
+    "替换页面": "Replacement Page",
+    "品牌展示页": "Brand Showcase",
+    "404 风格页": "404 Style Page",
+    "页面标题": "Page Title",
+    "留空则使用默认标题": "Leave blank to use the default title",
+    "页面说明": "Page Description",
+    "留空则使用默认说明": "Leave blank to use the default description",
+    "按钮文字": "Button Text",
+    "打开控制台": "Open Console",
+    "按钮链接": "Button Link",
+    "支持站内路径或完整的 HTTP(S) 地址": "Use a site path or a complete HTTP(S) URL",
+    "此页面暂不可用": "This page is not available",
+    "管理员已关闭公开首页。": "The public homepage has been closed by the administrator.",
+    "网关在线": "Gateway Online",
+    "一个网关，连接所有模型。": "One gateway. Every model.",
+    "专注、快速、可靠的 AI 服务统一入口。": "A focused access point for your AI services, built for speed and reliability."
   }
 }

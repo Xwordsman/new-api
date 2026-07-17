@@ -1,6 +1,7 @@
 package extensions
 
 import (
+	"github.com/QuantumNous/new-api/extensions/homepage"
 	"github.com/QuantumNous/new-api/extensions/invitation"
 
 	"github.com/gin-gonic/gin"
@@ -9,12 +10,20 @@ import (
 
 // Migrate runs database migrations owned by compile-time extensions.
 func Migrate(db *gorm.DB) error {
-	return invitation.Migrate(db)
+	if err := invitation.Migrate(db); err != nil {
+		return err
+	}
+	return homepage.Migrate(db)
 }
 
 // RegisterRoutes mounts routes owned by compile-time extensions.
 func RegisterRoutes(apiRouter *gin.RouterGroup) {
 	invitation.RegisterRoutes(apiRouter)
+	homepage.RegisterRoutes(apiRouter)
+}
+
+func HomepageAccessSettings(db *gorm.DB) (homepage.Settings, error) {
+	return homepage.GetSettings(db)
 }
 
 func InvitationRegistrationEnabled(db *gorm.DB) (bool, error) {

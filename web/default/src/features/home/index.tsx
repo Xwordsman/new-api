@@ -23,6 +23,9 @@ import { PublicLayout } from '@/components/layout'
 import { Footer } from '@/components/layout/components/footer'
 import { RichContent } from '@/components/rich-content'
 import { useTheme } from '@/context/theme-provider'
+import { HomepageReplacement } from '@/extensions/homepage/homepage-replacement'
+import { parseHomepageSettings } from '@/extensions/homepage/parse-settings'
+import { useStatus } from '@/hooks/use-status'
 import { isLikelyHtml } from '@/lib/content-format'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -36,6 +39,8 @@ export function Home() {
   const { auth } = useAuthStore()
   const isAuthenticated = !!auth.user
   const { content, isLoaded, isUrl } = useHomePageContent()
+  const { status, loading: statusLoading } = useStatus()
+  const homepageSettings = parseHomepageSettings(status?.homepage_access)
 
   const syncIframePreferences = useCallback(() => {
     try {
@@ -58,13 +63,27 @@ export function Home() {
     }
   }, [isUrl, syncIframePreferences])
 
-  if (!isLoaded) {
+  if (!isLoaded || (statusLoading && !status)) {
     return (
       <PublicLayout showMainContainer={false}>
         <main className='flex min-h-screen items-center justify-center'>
           <div className='text-muted-foreground'>{t('Loading...')}</div>
         </main>
       </PublicLayout>
+    )
+  }
+
+  if (homepageSettings?.enabled) {
+    return (
+      <HomepageReplacement
+        settings={homepageSettings}
+        systemName={
+          typeof status?.system_name === 'string'
+            ? status.system_name
+            : undefined
+        }
+        logo={typeof status?.logo === 'string' ? status.logo : undefined}
+      />
     )
   }
 

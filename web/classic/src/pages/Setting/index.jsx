@@ -34,6 +34,7 @@ import {
   CreditCard,
   Server,
   Activity,
+  PanelTopClose,
   TicketCheck,
 } from 'lucide-react';
 
@@ -51,6 +52,7 @@ import PaymentSetting from '../../components/settings/PaymentSetting';
 import ModelDeploymentSetting from '../../components/settings/ModelDeploymentSetting';
 import PerformanceSetting from '../../components/settings/PerformanceSetting';
 import InvitationSetting from '../../extensions/invitation/InvitationSetting';
+import HomepageSetting from '../../extensions/homepage/HomepageSetting';
 
 const Setting = () => {
   const { t } = useTranslation();
@@ -60,6 +62,16 @@ const Setting = () => {
   let panes = [];
 
   if (isRoot()) {
+    panes.push({
+      tab: (
+        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <PanelTopClose size={18} />
+          {t('首页控制')}
+        </span>
+      ),
+      content: <HomepageSetting />,
+      itemKey: 'homepage',
+    });
     panes.push({
       tab: (
         <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>

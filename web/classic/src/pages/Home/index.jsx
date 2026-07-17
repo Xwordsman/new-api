@@ -40,6 +40,7 @@ import {
 } from '@douyinfe/semi-icons';
 import { Link } from 'react-router-dom';
 import NoticeModal from '../../components/layout/NoticeModal';
+import HomepageReplacement from '../../extensions/homepage/HomepageReplacement';
 import {
   Moonshot,
   OpenAI,
@@ -148,6 +149,20 @@ const Home = () => {
     return () => clearInterval(timer);
   }, [endpointItems.length]);
 
+  if (!homePageContentLoaded) {
+    return <div className='classic-page-fill min-h-screen' />;
+  }
+
+  if (statusState?.status?.homepage_access?.enabled) {
+    return (
+      <HomepageReplacement
+        settings={statusState.status.homepage_access}
+        systemName={statusState.status.system_name}
+        logo={statusState.status.logo}
+      />
+    );
+  }
+
   return (
     <div className='classic-page-fill classic-home-page w-full overflow-x-hidden'>
       <NoticeModal
@@ -155,7 +170,7 @@ const Home = () => {
         onClose={() => setNoticeVisible(false)}
         isMobile={isMobile}
       />
-      {homePageContentLoaded && homePageContent === '' ? (
+      {homePageContent === '' ? (
         <div className='classic-home-default w-full overflow-x-hidden'>
           {/* Banner 部分 */}
           <div className='classic-home-hero w-full border-b border-semi-color-border relative overflow-x-hidden'>

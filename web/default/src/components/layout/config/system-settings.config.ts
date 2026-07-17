@@ -16,11 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { type TFunction } from 'i18next'
+import type { TFunction } from 'i18next'
 import {
   Box,
   CreditCard,
   Layout,
+  PanelTopClose,
   Settings,
   Shield,
   ShieldAlert,
@@ -28,6 +29,7 @@ import {
   Wrench,
 } from 'lucide-react'
 
+import { getHomepageSectionNavItems } from '@/extensions/homepage/section-registry'
 import { getInvitationSectionNavItems } from '@/extensions/invitation/section-registry'
 import { getAuthSectionNavItems } from '@/features/system-settings/auth/section-registry.tsx'
 import { getBillingSectionNavItems } from '@/features/system-settings/billing/section-registry.tsx'
@@ -56,6 +58,11 @@ function getSystemSettingsNavGroups(t: TFunction): NavGroup[] {
           title: t('Site & Branding'),
           icon: Settings,
           items: getSiteSectionNavItems(t),
+        },
+        {
+          title: t('Homepage Control'),
+          icon: PanelTopClose,
+          items: getHomepageSectionNavItems(t),
         },
         {
           title: t('Authentication'),
