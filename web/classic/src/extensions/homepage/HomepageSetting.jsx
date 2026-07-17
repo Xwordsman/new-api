@@ -111,7 +111,7 @@ const HomepageSetting = () => {
             <div>
               <Title heading={5}>{t('关闭公开首页')}</Title>
               <Text type='tertiary'>
-                {t('替换公开首页，但保留登录、注册和控制台地址')}
+                {t('替换整个根页面，不显示导航、站点标识或公开入口')}
               </Text>
             </div>
             <Switch
@@ -129,7 +129,7 @@ const HomepageSetting = () => {
                 style={{ width: '100%' }}
               >
                 <Select.Option value='showcase'>
-                  {t('品牌展示页')}
+                  {t('沉浸式场景')}
                 </Select.Option>
                 <Select.Option value='not_found'>
                   {t('404 风格页')}
@@ -165,7 +165,7 @@ const HomepageSetting = () => {
                 value={settings.button_text}
                 maxLength={50}
                 onChange={(value) => updateField('button_text', value)}
-                placeholder={t('打开控制台')}
+                placeholder={t('可选按钮')}
               />
             </div>
             <div className='flex flex-col gap-2'>
@@ -174,10 +174,10 @@ const HomepageSetting = () => {
                 value={settings.button_url}
                 maxLength={2048}
                 onChange={(value) => updateField('button_url', value)}
-                placeholder='/console'
+                placeholder='https://example.com'
               />
               <Text type='tertiary' size='small'>
-                {t('支持站内路径或完整的 HTTP(S) 地址')}
+                {t('按钮文字和链接都留空时不显示任何入口')}
               </Text>
             </div>
           </div>

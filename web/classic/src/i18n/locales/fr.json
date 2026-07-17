@@ -3731,6 +3731,15 @@
     "管理员已关闭公开首页。": "La page d'accueil publique a été désactivée par l'administrateur.",
     "网关在线": "Passerelle en ligne",
     "一个网关，连接所有模型。": "Une passerelle. Tous les modèles.",
-    "专注、快速、可靠的 AI 服务统一入口。": "Un point d'accès dédié à vos services d'IA, rapide et fiable."
+    "专注、快速、可靠的 AI 服务统一入口。": "Un point d'accès dédié à vos services d'IA, rapide et fiable.",
+    "午夜档案": "Archives de minuit",
+    "这里只剩下星光。": "Il ne reste ici que la lumière des étoiles.",
+    "今晚，风从很远的地方来。": "Ce soir, le vent vient d'un endroit très lointain.",
+    "这条路径已经漂出了地图。": "Ce chemin a dérivé au-delà de la carte.",
+    "请把声音调低一点，星星正在经过。": "Baissez le volume. Les étoiles sont de passage.",
+    "替换整个根页面，不显示导航、站点标识或公开入口": "Remplacez toute la page racine sans navigation, identité du site ni point d'entrée public",
+    "沉浸式场景": "Scène immersive",
+    "可选按钮": "Bouton facultatif",
+    "按钮文字和链接都留空时不显示任何入口": "Laissez les deux champs du bouton vides pour n'afficher aucun lien"
   }
 }

@@ -155,11 +155,7 @@ const Home = () => {
 
   if (statusState?.status?.homepage_access?.enabled) {
     return (
-      <HomepageReplacement
-        settings={statusState.status.homepage_access}
-        systemName={statusState.status.system_name}
-        logo={statusState.status.logo}
-      />
+      <HomepageReplacement settings={statusState.status.homepage_access} />
     );
   }
 

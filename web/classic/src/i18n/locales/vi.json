@@ -4265,6 +4265,15 @@
     "管理员已关闭公开首页。": "Quản trị viên đã tắt trang chủ công khai.",
     "网关在线": "Cổng đang hoạt động",
     "一个网关，连接所有模型。": "Một cổng kết nối mọi mô hình.",
-    "专注、快速、可靠的 AI 服务统一入口。": "Điểm truy cập hợp nhất cho dịch vụ AI, ưu tiên tốc độ và độ tin cậy."
+    "专注、快速、可靠的 AI 服务统一入口。": "Điểm truy cập hợp nhất cho dịch vụ AI, ưu tiên tốc độ và độ tin cậy.",
+    "午夜档案": "Hồ sơ nửa đêm",
+    "这里只剩下星光。": "Nơi đây chỉ còn lại ánh sao.",
+    "今晚，风从很远的地方来。": "Đêm nay, gió thổi về từ một nơi rất xa.",
+    "这条路径已经漂出了地图。": "Con đường này đã trôi ra ngoài bản đồ.",
+    "请把声音调低一点，星星正在经过。": "Hãy vặn nhỏ âm lượng. Những vì sao đang đi ngang qua.",
+    "替换整个根页面，不显示导航、站点标识或公开入口": "Thay thế toàn bộ trang gốc, không hiển thị điều hướng, nhận diện trang hay lối vào công khai",
+    "沉浸式场景": "Khung cảnh nhập vai",
+    "可选按钮": "Nút tùy chọn",
+    "按钮文字和链接都留空时不显示任何入口": "Để trống cả hai trường nút để không hiển thị liên kết"
   }
 }

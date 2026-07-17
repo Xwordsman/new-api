@@ -74,17 +74,7 @@ export function Home() {
   }
 
   if (homepageSettings?.enabled) {
-    return (
-      <HomepageReplacement
-        settings={homepageSettings}
-        systemName={
-          typeof status?.system_name === 'string'
-            ? status.system_name
-            : undefined
-        }
-        logo={typeof status?.logo === 'string' ? status.logo : undefined}
-      />
-    )
+    return <HomepageReplacement settings={homepageSettings} />
   }
 
   if (content) {

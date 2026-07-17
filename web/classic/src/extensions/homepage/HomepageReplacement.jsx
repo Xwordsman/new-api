@@ -16,113 +16,114 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import React from 'react';
-import { Button } from '@douyinfe/semi-ui';
-import { ArrowRight, Braces, Cpu, Network } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ArrowUpRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-const HomepageReplacement = ({ settings, systemName, logo }) => {
+import NightSky from './NightSky';
+
+const HomepageReplacement = ({ settings }) => {
   const { t } = useTranslation();
-  const destination = settings.button_url || '/console';
-  const buttonText = settings.button_text || t('打开控制台');
+  const [now, setNow] = useState(() => new Date());
 
-  const openDestination = () => {
-    if (/^https?:\/\//i.test(destination)) {
-      window.open(destination, '_blank', 'noopener,noreferrer');
-      return;
-    }
-    window.location.assign(destination);
-  };
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
 
-  if (settings.mode === 'not_found') {
-    return (
-      <main className='classic-page-fill flex min-h-screen items-center justify-center px-6 pt-20'>
-        <div className='max-w-xl text-center'>
-          <div className='mb-5 font-mono text-sm text-semi-color-text-2'>
-            HTTP / 404
-          </div>
-          <div className='text-8xl font-bold leading-none text-semi-color-text-0'>
-            404
-          </div>
-          <h1 className='mt-6 text-2xl font-semibold text-semi-color-text-0'>
-            {settings.title || t('此页面暂不可用')}
-          </h1>
-          <p className='mx-auto mt-3 max-w-md text-base leading-7 text-semi-color-text-2'>
-            {settings.description || t('管理员已关闭公开首页。')}
-          </p>
-          <Button
-            className='mt-8 !rounded-md'
-            theme='solid'
-            type='primary'
-            icon={<ArrowRight size={16} />}
-            onClick={openDestination}
-          >
-            {buttonText}
-          </Button>
-        </div>
-      </main>
-    );
-  }
+  useEffect(() => {
+    const previousTitle = document.title;
+    const favicon = document.querySelector("link[rel~='icon']");
+    const previousFavicon = favicon?.href;
+    const facadeTitle = t('午夜档案');
+    const blankFavicon =
+      'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+    const applyFacadeMetadata = () => {
+      if (document.title !== facadeTitle) document.title = facadeTitle;
+      const currentFavicon = document.querySelector("link[rel~='icon']");
+      if (currentFavicon?.href !== blankFavicon) {
+        currentFavicon?.setAttribute('href', blankFavicon);
+      }
+    };
+    const observer = new MutationObserver(applyFacadeMetadata);
+    observer.observe(document.head, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+    });
+    applyFacadeMetadata();
+
+    return () => {
+      observer.disconnect();
+      document.title = previousTitle;
+      if (favicon && previousFavicon) favicon.href = previousFavicon;
+    };
+  }, [t]);
+
+  const isNotFound = settings.mode === 'not_found';
+  const title = isNotFound
+    ? settings.title || t('这里只剩下星光。')
+    : settings.title || t('今晚，风从很远的地方来。');
+  const description = isNotFound
+    ? settings.description || t('这条路径已经漂出了地图。')
+    : settings.description || t('请把声音调低一点，星星正在经过。');
+  const showButton = Boolean(
+    settings.button_text.trim() && settings.button_url.trim(),
+  );
+  const isExternal = /^https?:\/\//i.test(settings.button_url);
 
   return (
-    <main className='classic-page-fill relative flex min-h-screen items-center overflow-hidden bg-semi-color-bg-0 px-6 pt-20'>
-      <div
-        aria-hidden='true'
-        className='pointer-events-none absolute inset-0 opacity-60'
-      >
-        <div className='absolute inset-y-0 left-[12%] border-l border-semi-color-border' />
-        <div className='absolute inset-y-0 left-[36%] border-l border-semi-color-border' />
-        <div className='absolute inset-y-0 right-[36%] border-l border-semi-color-border' />
-        <div className='absolute inset-y-0 right-[12%] border-l border-semi-color-border' />
-        <div className='absolute inset-x-0 top-[28%] border-t border-semi-color-border' />
-        <div className='absolute inset-x-0 bottom-[24%] border-t border-semi-color-border' />
-        <div className='absolute left-[12%] top-[28%] size-2 -translate-x-1 -translate-y-1 bg-emerald-500' />
-        <div className='absolute bottom-[24%] right-[12%] size-2 translate-x-1 translate-y-1 bg-cyan-500' />
-        <div className='absolute right-[36%] top-[28%] h-px w-24 bg-red-500' />
-      </div>
+    <main className='relative isolate min-h-screen overflow-hidden bg-[#061018] text-[#f3efe3]'>
+      <NightSky />
+      <div className='absolute inset-0 bg-[#061018]/20' aria-hidden='true' />
 
-      <div className='relative mx-auto w-full max-w-5xl py-24 text-center'>
-        <div className='mx-auto mb-7 flex size-16 items-center justify-center border border-semi-color-border'>
-          {logo ? (
-            <img src={logo} alt='' className='size-11 object-contain' />
-          ) : (
-            <Network className='size-8' aria-hidden='true' />
+      <div className='relative z-10 flex min-h-screen flex-col justify-between px-5 py-6 sm:px-8 sm:py-8 lg:px-12 lg:py-10'>
+        <header className='flex items-center justify-between border-b border-white/15 pb-4 font-mono text-[11px] uppercase text-white/60 sm:text-xs'>
+          <span>{t('午夜档案')}</span>
+          <time dateTime={now.toISOString()}>
+            {now.toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            })}
+          </time>
+        </header>
+
+        <section className='w-full max-w-5xl py-16 sm:py-20'>
+          <p className='mb-6 font-mono text-xs uppercase text-cyan-200/75 sm:text-sm'>
+            {isNotFound ? '404 / OFF MAP' : 'NIGHT LOG / 07'}
+          </p>
+          <h1 className='max-w-[14ch] text-4xl font-medium leading-[1.1] sm:text-6xl lg:text-7xl'>
+            {title}
+          </h1>
+          <p className='mt-7 max-w-xl text-base leading-7 text-white/65 sm:text-lg sm:leading-8'>
+            {description}
+          </p>
+
+          {showButton && (
+            <a
+              href={settings.button_url}
+              target={isExternal ? '_blank' : undefined}
+              rel={isExternal ? 'noopener noreferrer' : undefined}
+              className='mt-9 inline-flex h-10 items-center gap-2 rounded-md border border-white/25 bg-black/20 px-4 text-sm text-white transition-colors hover:border-white/50 hover:bg-black/40'
+            >
+              {settings.button_text}
+              <ArrowUpRight size={16} aria-hidden='true' />
+            </a>
           )}
-        </div>
-        <div className='mb-5 flex items-center justify-center gap-3 font-mono text-xs uppercase text-semi-color-text-2'>
-          <span className='size-1.5 bg-emerald-500' aria-hidden='true' />
-          {t('网关在线')}
-        </div>
-        <h1 className='text-4xl font-bold text-semi-color-text-0 sm:text-5xl md:text-6xl'>
-          {systemName || 'New API'}
-        </h1>
-        <p className='mx-auto mt-6 max-w-3xl text-xl font-medium text-semi-color-text-0 sm:text-2xl'>
-          {settings.title || t('一个网关，连接所有模型。')}
-        </p>
-        <p className='mx-auto mt-4 max-w-2xl text-base leading-7 text-semi-color-text-2'>
-          {settings.description || t('专注、快速、可靠的 AI 服务统一入口。')}
-        </p>
-        <Button
-          className='mt-9 !rounded-md'
-          theme='solid'
-          type='primary'
-          icon={<ArrowRight size={16} />}
-          onClick={openDestination}
-        >
-          {buttonText}
-        </Button>
+        </section>
 
-        <div className='mx-auto mt-16 flex max-w-md items-center justify-between border-t border-semi-color-border pt-5 text-semi-color-text-2'>
-          <span className='flex items-center gap-2 text-xs'>
-            <Braces size={16} aria-hidden='true' /> API
+        <footer className='flex flex-wrap items-center justify-between gap-3 border-t border-white/15 pt-4 font-mono text-[10px] uppercase text-white/45 sm:text-xs'>
+          <span>N 77° 07' / NIGHT WATCH</span>
+          <span>
+            FIELD NOTES /{' '}
+            {now.toLocaleDateString([], {
+              month: 'short',
+              day: '2-digit',
+              year: 'numeric',
+            })}
           </span>
-          <span className='flex items-center gap-2 text-xs'>
-            <Cpu size={16} aria-hidden='true' /> AI
-          </span>
-          <span className='flex items-center gap-2 text-xs'>
-            <Network size={16} aria-hidden='true' /> Gateway
-          </span>
-        </div>
+        </footer>
       </div>
     </main>
   );

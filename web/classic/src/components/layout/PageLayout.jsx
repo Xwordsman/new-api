@@ -44,12 +44,20 @@ const { Sider, Content, Header } = Layout;
 
 const PageLayout = () => {
   const [userState, userDispatch] = useContext(UserContext);
-  const [, statusDispatch] = useContext(StatusContext);
+  const [statusState, statusDispatch] = useContext(StatusContext);
   const isMobile = useIsMobile();
   const [collapsed, , setCollapsed] = useSidebarCollapsed();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { i18n } = useTranslation();
   const location = useLocation();
+  const [cachedHomepageReplacement] = useState(() => {
+    try {
+      return !!JSON.parse(localStorage.getItem('status'))?.homepage_access
+        ?.enabled;
+    } catch {
+      return false;
+    }
+  });
 
   const cardProPages = [
     '/console/channel',
@@ -73,6 +81,11 @@ const PageLayout = () => {
   const isConsoleRoute = location.pathname.startsWith('/console');
   const showSider = isConsoleRoute && (!isMobile || drawerOpen);
   const isFixedLayout = isConsoleRoute || location.pathname === '/pricing';
+  const homepageReplacementEnabled = statusState?.status
+    ? !!statusState.status.homepage_access?.enabled
+    : cachedHomepageReplacement;
+  const hidePublicChrome =
+    location.pathname === '/' && homepageReplacementEnabled;
 
   useEffect(() => {
     if (isMobile && drawerOpen && collapsed) {
@@ -106,18 +119,16 @@ const PageLayout = () => {
   useEffect(() => {
     loadUser();
     loadStatus().catch(console.error);
-    let systemName = getSystemName();
-    if (systemName) {
-      document.title = systemName;
-    }
-    let logo = getLogo();
-    if (logo) {
-      let linkElement = document.querySelector("link[rel~='icon']");
-      if (linkElement) {
-        linkElement.href = logo;
-      }
-    }
   }, []);
+
+  useEffect(() => {
+    if (hidePublicChrome) return;
+    const systemName = getSystemName();
+    if (systemName) document.title = systemName;
+    const logo = getLogo();
+    const linkElement = document.querySelector("link[rel~='icon']");
+    if (logo && linkElement) linkElement.href = logo;
+  }, [hidePublicChrome]);
 
   useEffect(() => {
     let preferredLang;
@@ -155,22 +166,24 @@ const PageLayout = () => {
         overflow: isFixedLayout && !isMobile ? 'hidden' : 'visible',
       }}
     >
-      <Header
-        style={{
-          padding: 0,
-          height: 'auto',
-          lineHeight: 'normal',
-          position: 'fixed',
-          width: '100%',
-          top: 0,
-          zIndex: 100,
-        }}
-      >
-        <HeaderBar
-          onMobileMenuToggle={() => setDrawerOpen((prev) => !prev)}
-          drawerOpen={drawerOpen}
-        />
-      </Header>
+      {!hidePublicChrome && (
+        <Header
+          style={{
+            padding: 0,
+            height: 'auto',
+            lineHeight: 'normal',
+            position: 'fixed',
+            width: '100%',
+            top: 0,
+            zIndex: 100,
+          }}
+        >
+          <HeaderBar
+            onMobileMenuToggle={() => setDrawerOpen((prev) => !prev)}
+            drawerOpen={drawerOpen}
+          />
+        </Header>
+      )}
       <Layout
         style={{
           overflow: isFixedLayout && !isMobile ? 'auto' : 'visible',
@@ -212,7 +225,7 @@ const PageLayout = () => {
             minHeight: 0,
           }}
         >
-          <ClassicFrontendDeprecationBanner />
+          {!hidePublicChrome && <ClassicFrontendDeprecationBanner />}
           <Content
             className={isFixedLayout ? undefined : 'public-page-content'}
             style={{
@@ -228,7 +241,7 @@ const PageLayout = () => {
               <App />
             </ErrorBoundary>
           </Content>
-          {!shouldHideFooter && (
+          {!hidePublicChrome && !shouldHideFooter && (
             <Layout.Footer
               style={{
                 flex: '0 0 auto',

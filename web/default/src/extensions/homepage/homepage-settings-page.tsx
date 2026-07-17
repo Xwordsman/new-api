@@ -134,7 +134,7 @@ export function HomepageSettingsPage() {
                     <FormLabel>{t('Disable Public Homepage')}</FormLabel>
                     <FormDescription>
                       {t(
-                        'Replace the public homepage while keeping sign-in and console routes available'
+                        'Replace the entire root page without navigation, site branding, or public entry points'
                       )}
                     </FormDescription>
                   </div>
@@ -158,7 +158,7 @@ export function HomepageSettingsPage() {
                     <FormLabel>{t('Replacement Page')}</FormLabel>
                     <Select
                       items={[
-                        { value: 'showcase', label: t('Brand Showcase') },
+                        { value: 'showcase', label: t('Immersive Scene') },
                         { value: 'not_found', label: t('404 Style Page') },
                       ]}
                       value={field.value}
@@ -172,7 +172,7 @@ export function HomepageSettingsPage() {
                       <SelectContent alignItemWithTrigger={false}>
                         <SelectGroup>
                           <SelectItem value='showcase'>
-                            {t('Brand Showcase')}
+                            {t('Immersive Scene')}
                           </SelectItem>
                           <SelectItem value='not_found'>
                             {t('404 Style Page')}
@@ -181,7 +181,9 @@ export function HomepageSettingsPage() {
                       </SelectContent>
                     </Select>
                     <FormDescription>
-                      {t('Choose what visitors see at the root address')}
+                      {t(
+                        'The immersive scene is completely separate from the application'
+                      )}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -239,7 +241,7 @@ export function HomepageSettingsPage() {
                       <Input
                         {...field}
                         maxLength={50}
-                        placeholder={t('Open Console')}
+                        placeholder={t('Optional button')}
                       />
                     </FormControl>
                     <FormMessage />
@@ -256,11 +258,11 @@ export function HomepageSettingsPage() {
                       <Input
                         {...field}
                         maxLength={2048}
-                        placeholder='/console'
+                        placeholder='https://example.com'
                       />
                     </FormControl>
                     <FormDescription>
-                      {t('Use a site path or a complete HTTP(S) URL')}
+                      {t('Leave both button fields blank to show no link')}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

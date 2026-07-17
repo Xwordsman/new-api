@@ -3877,6 +3877,15 @@
     "管理员已关闭公开首页。": "The public homepage has been closed by the administrator.",
     "网关在线": "Gateway Online",
     "一个网关，连接所有模型。": "One gateway. Every model.",
-    "专注、快速、可靠的 AI 服务统一入口。": "A focused access point for your AI services, built for speed and reliability."
+    "专注、快速、可靠的 AI 服务统一入口。": "A focused access point for your AI services, built for speed and reliability.",
+    "午夜档案": "Midnight Archive",
+    "这里只剩下星光。": "Nothing here but starlight.",
+    "今晚，风从很远的地方来。": "Tonight, the wind comes from somewhere far away.",
+    "这条路径已经漂出了地图。": "This path drifted beyond the map.",
+    "请把声音调低一点，星星正在经过。": "Turn the volume down. The stars are passing by.",
+    "替换整个根页面，不显示导航、站点标识或公开入口": "Replace the entire root page without navigation, site branding, or public entry points",
+    "沉浸式场景": "Immersive Scene",
+    "可选按钮": "Optional button",
+    "按钮文字和链接都留空时不显示任何入口": "Leave both button fields blank to show no link"
   }
 }

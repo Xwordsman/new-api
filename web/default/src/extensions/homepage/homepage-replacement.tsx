@@ -16,126 +16,123 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ArrowRight, Braces, Cpu, Network } from 'lucide-react'
+import { ArrowUpRight } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { PublicLayout } from '@/components/layout'
-import { Button } from '@/components/ui/button'
-
+import { NightSky } from './night-sky'
 import type { HomepageSettings } from './types'
 
 type HomepageReplacementProps = {
   settings: HomepageSettings
-  systemName?: string
-  logo?: string
 }
 
 export function HomepageReplacement(props: HomepageReplacementProps) {
   const { t } = useTranslation()
-  const destination = props.settings.button_url || '/console'
-  const buttonText = props.settings.button_text || t('Open Console')
-  const isExternal = /^https?:\/\//i.test(destination)
+  const [now, setNow] = useState(() => new Date())
 
-  if (props.settings.mode === 'not_found') {
-    return (
-      <PublicLayout showMainContainer={false}>
-        <main className='flex min-h-svh items-center justify-center px-6 pt-16'>
-          <div className='max-w-xl text-center'>
-            <div className='text-muted-foreground mb-5 font-mono text-sm'>
-              HTTP / 404
-            </div>
-            <div className='text-foreground text-8xl leading-none font-bold'>
-              404
-            </div>
-            <h1 className='mt-6 text-2xl font-semibold'>
-              {props.settings.title || t('This page is not available')}
-            </h1>
-            <p className='text-muted-foreground mx-auto mt-3 max-w-md text-base leading-7'>
-              {props.settings.description ||
-                t('The public homepage has been closed by the administrator.')}
-            </p>
-            <Button
-              className='mt-8 rounded-md'
-              render={<a href={destination} />}
-            >
-              {buttonText}
-              <ArrowRight />
-            </Button>
-          </div>
-        </main>
-      </PublicLayout>
-    )
-  }
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    const previousTitle = document.title
+    const favicon = document.querySelector<HTMLLinkElement>("link[rel~='icon']")
+    const previousFavicon = favicon?.href
+    const facadeTitle = t('Midnight Archive')
+    const blankFavicon =
+      'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='
+    const applyFacadeMetadata = () => {
+      if (document.title !== facadeTitle) document.title = facadeTitle
+      const currentFavicon =
+        document.querySelector<HTMLLinkElement>("link[rel~='icon']")
+      if (currentFavicon?.href !== blankFavicon) {
+        currentFavicon?.setAttribute('href', blankFavicon)
+      }
+    }
+    const observer = new MutationObserver(applyFacadeMetadata)
+    observer.observe(document.head, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+    })
+    applyFacadeMetadata()
+
+    return () => {
+      observer.disconnect()
+      document.title = previousTitle
+      if (favicon && previousFavicon) favicon.href = previousFavicon
+    }
+  }, [t])
+
+  const isNotFound = props.settings.mode === 'not_found'
+  const title = isNotFound
+    ? props.settings.title || t('Nothing here but starlight.')
+    : props.settings.title ||
+      t('Tonight, the wind comes from somewhere far away.')
+  const description = isNotFound
+    ? props.settings.description || t('This path drifted beyond the map.')
+    : props.settings.description ||
+      t('Turn the volume down. The stars are passing by.')
+  const showButton = Boolean(
+    props.settings.button_text.trim() && props.settings.button_url.trim()
+  )
+  const isExternal = /^https?:\/\//i.test(props.settings.button_url)
 
   return (
-    <PublicLayout showMainContainer={false}>
-      <main className='bg-background relative flex min-h-svh items-center overflow-hidden px-6 pt-20'>
-        <div
-          aria-hidden='true'
-          className='pointer-events-none absolute inset-0 opacity-60'
-        >
-          <div className='border-border absolute inset-y-0 left-[12%] border-l' />
-          <div className='border-border absolute inset-y-0 left-[36%] border-l' />
-          <div className='border-border absolute inset-y-0 right-[36%] border-l' />
-          <div className='border-border absolute inset-y-0 right-[12%] border-l' />
-          <div className='border-border absolute inset-x-0 top-[28%] border-t' />
-          <div className='border-border absolute inset-x-0 bottom-[24%] border-t' />
-          <div className='absolute top-[28%] left-[12%] size-2 -translate-x-1 -translate-y-1 bg-emerald-500' />
-          <div className='absolute right-[12%] bottom-[24%] size-2 translate-x-1 translate-y-1 bg-cyan-500' />
-          <div className='absolute top-[28%] right-[36%] h-px w-24 bg-red-500' />
-        </div>
+    <main className='relative isolate min-h-svh overflow-hidden bg-[#061018] text-[#f3efe3]'>
+      <NightSky />
+      <div className='absolute inset-0 bg-[#061018]/20' aria-hidden='true' />
 
-        <div className='relative mx-auto w-full max-w-5xl py-24 text-center'>
-          <div className='mx-auto mb-7 flex size-16 items-center justify-center border'>
-            {props.logo ? (
-              <img src={props.logo} alt='' className='size-11 object-contain' />
-            ) : (
-              <Network className='size-8' aria-hidden='true' />
-            )}
-          </div>
-          <div className='text-muted-foreground mb-5 flex items-center justify-center gap-3 font-mono text-xs uppercase'>
-            <span className='size-1.5 bg-emerald-500' aria-hidden='true' />
-            {t('Gateway Online')}
-          </div>
-          <h1 className='text-4xl font-bold sm:text-5xl md:text-6xl'>
-            {props.systemName || 'New API'}
+      <div className='relative z-10 flex min-h-svh flex-col justify-between px-5 py-6 sm:px-8 sm:py-8 lg:px-12 lg:py-10'>
+        <header className='flex items-center justify-between border-b border-white/15 pb-4 font-mono text-[11px] text-white/60 uppercase sm:text-xs'>
+          <span>{t('Midnight Archive')}</span>
+          <time dateTime={now.toISOString()}>
+            {now.toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            })}
+          </time>
+        </header>
+
+        <section className='w-full max-w-5xl py-16 sm:py-20'>
+          <p className='mb-6 font-mono text-xs text-cyan-200/75 uppercase sm:text-sm'>
+            {isNotFound ? '404 / OFF MAP' : 'NIGHT LOG / 07'}
+          </p>
+          <h1 className='max-w-[14ch] text-4xl leading-[1.1] font-medium text-balance sm:text-6xl lg:text-7xl'>
+            {title}
           </h1>
-          <p className='text-foreground mx-auto mt-6 max-w-3xl text-xl font-medium sm:text-2xl'>
-            {props.settings.title || t('One gateway. Every model.')}
+          <p className='mt-7 max-w-xl text-base leading-7 text-white/65 sm:text-lg sm:leading-8'>
+            {description}
           </p>
-          <p className='text-muted-foreground mx-auto mt-4 max-w-2xl text-base leading-7'>
-            {props.settings.description ||
-              t(
-                'A focused access point for your AI services, built for speed and reliability.'
-              )}
-          </p>
-          <Button
-            className='mt-9 rounded-md'
-            render={
-              <a
-                href={destination}
-                target={isExternal ? '_blank' : undefined}
-                rel={isExternal ? 'noopener noreferrer' : undefined}
-              />
-            }
-          >
-            {buttonText}
-            <ArrowRight />
-          </Button>
 
-          <div className='text-muted-foreground mx-auto mt-16 flex max-w-md items-center justify-between border-t pt-5'>
-            <span className='flex items-center gap-2 text-xs'>
-              <Braces className='size-4' aria-hidden='true' /> API
-            </span>
-            <span className='flex items-center gap-2 text-xs'>
-              <Cpu className='size-4' aria-hidden='true' /> AI
-            </span>
-            <span className='flex items-center gap-2 text-xs'>
-              <Network className='size-4' aria-hidden='true' /> Gateway
-            </span>
-          </div>
-        </div>
-      </main>
-    </PublicLayout>
+          {showButton && (
+            <a
+              href={props.settings.button_url}
+              target={isExternal ? '_blank' : undefined}
+              rel={isExternal ? 'noopener noreferrer' : undefined}
+              className='mt-9 inline-flex h-10 items-center gap-2 rounded-md border border-white/25 bg-black/20 px-4 text-sm text-white transition-colors hover:border-white/50 hover:bg-black/40'
+            >
+              {props.settings.button_text}
+              <ArrowUpRight className='size-4' aria-hidden='true' />
+            </a>
+          )}
+        </section>
+
+        <footer className='flex flex-wrap items-center justify-between gap-3 border-t border-white/15 pt-4 font-mono text-[10px] text-white/45 uppercase sm:text-xs'>
+          <span>N 77° 07' / NIGHT WATCH</span>
+          <span>
+            FIELD NOTES /{' '}
+            {now.toLocaleDateString([], {
+              month: 'short',
+              day: '2-digit',
+              year: 'numeric',
+            })}
+          </span>
+        </footer>
+      </div>
+    </main>
   )
 }
