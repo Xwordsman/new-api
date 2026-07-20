@@ -21,16 +21,14 @@ import {
   Box,
   CreditCard,
   Layout,
-  PanelTopClose,
+  Puzzle,
   Settings,
   Shield,
   ShieldAlert,
-  TicketCheck,
   Wrench,
 } from 'lucide-react'
 
-import { getHomepageSectionNavItems } from '@/extensions/homepage/section-registry'
-import { getInvitationSectionNavItems } from '@/extensions/invitation/section-registry'
+import { getExtensionNavItems } from '@/extensions/navigation-registry'
 import { getAuthSectionNavItems } from '@/features/system-settings/auth/section-registry.tsx'
 import { getBillingSectionNavItems } from '@/features/system-settings/billing/section-registry.tsx'
 import { getContentSectionNavItems } from '@/features/system-settings/content/section-registry.tsx'
@@ -60,19 +58,9 @@ function getSystemSettingsNavGroups(t: TFunction): NavGroup[] {
           items: getSiteSectionNavItems(t),
         },
         {
-          title: t('Homepage Control'),
-          icon: PanelTopClose,
-          items: getHomepageSectionNavItems(t),
-        },
-        {
           title: t('Authentication'),
           icon: Shield,
           items: getAuthSectionNavItems(t),
-        },
-        {
-          title: t('Invitation Codes'),
-          icon: TicketCheck,
-          items: getInvitationSectionNavItems(t),
         },
         {
           title: t('Billing & Payment'),
@@ -98,6 +86,11 @@ function getSystemSettingsNavGroups(t: TFunction): NavGroup[] {
           title: t('Operations'),
           icon: Wrench,
           items: getOperationsSectionNavItems(t),
+        },
+        {
+          title: t('Plugins'),
+          icon: Puzzle,
+          items: getExtensionNavItems(t),
         },
       ],
     },

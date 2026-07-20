@@ -3454,6 +3454,7 @@
     "Please wait a moment, human check is initializing...": "請稍等，人機驗證正在初始化...",
     "Please wait before editing to avoid overwriting saved values.": "請等待載入完成後再編輯，以免覆蓋已儲存的值。",
     "Please wait for the current generation to complete": "請等待目前生成完成",
+    "Plugins": "外掛程式",
     "Policy JSON": "政策 JSON",
     "Polling": "輪詢",
     "Polling mode requires Redis and memory cache, otherwise performance will be significantly degraded": "輪詢模式需要 Redis 和記憶體緩存，否則效能將顯著下降",

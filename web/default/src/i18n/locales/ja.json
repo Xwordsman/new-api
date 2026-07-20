@@ -3454,6 +3454,7 @@
     "Please wait a moment, human check is initializing...": "しばらくお待ちください、人間チェックを初期化中です...",
     "Please wait before editing to avoid overwriting saved values.": "保存済みの値を上書きしないよう、編集前に読み込み完了をお待ちください。",
     "Please wait for the current generation to complete": "現在の生成が完了するまでお待ちください",
+    "Plugins": "プラグイン",
     "Policy JSON": "ポリシーJSON",
     "Polling": "ポーリング",
     "Polling mode requires Redis and memory cache, otherwise performance will be significantly degraded": "ポーリングモードにはRedisとメモリキャッシュが必要です。そうでない場合、パフォーマンスが大幅に低下します",

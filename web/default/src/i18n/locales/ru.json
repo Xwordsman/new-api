@@ -3454,6 +3454,7 @@
     "Please wait a moment, human check is initializing...": "Пожалуйста, подождите немного, инициализация проверки человеком...",
     "Please wait before editing to avoid overwriting saved values.": "Дождитесь загрузки перед редактированием, чтобы не перезаписать сохраненные значения.",
     "Please wait for the current generation to complete": "Дождитесь завершения текущей генерации",
+    "Plugins": "Плагины",
     "Policy JSON": "JSON политики",
     "Polling": "Опрос",
     "Polling mode requires Redis and memory cache, otherwise performance will be significantly degraded": "Режим опроса требует Redis и кэш памяти, в противном случае производительность будет значительно снижена",

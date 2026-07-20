@@ -3454,6 +3454,7 @@
     "Please wait a moment, human check is initializing...": "Veuillez patienter un instant, la vérification humaine s'initialise...",
     "Please wait before editing to avoid overwriting saved values.": "Veuillez patienter avant de modifier afin d'éviter d'écraser les valeurs enregistrées.",
     "Please wait for the current generation to complete": "Veuillez attendre la fin de la génération en cours",
+    "Plugins": "Extensions",
     "Policy JSON": "JSON de stratégie",
     "Polling": "Sondage",
     "Polling mode requires Redis and memory cache, otherwise performance will be significantly degraded": "Le mode d'interrogation nécessite Redis et un cache mémoire, sinon les performances seront considérablement dégradées",

@@ -3454,6 +3454,7 @@
     "Please wait a moment, human check is initializing...": "Vui lòng đợi một chút, kiểm tra con người đang khởi tạo...",
     "Please wait before editing to avoid overwriting saved values.": "Vui lòng chờ trước khi chỉnh sửa để tránh ghi đè các giá trị đã lưu.",
     "Please wait for the current generation to complete": "Vui lòng đợi lượt tạo hiện tại hoàn tất",
+    "Plugins": "Tiện ích",
     "Policy JSON": "JSON chính sách",
     "Polling": "Thăm dò",
     "Polling mode requires Redis and memory cache, otherwise performance will be significantly degraded": "Chế độ thăm dò yêu cầu Redis và bộ nhớ đệm, nếu không hiệu suất sẽ bị suy giảm đáng kể.",
