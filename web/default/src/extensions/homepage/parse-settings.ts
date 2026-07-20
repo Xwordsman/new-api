@@ -23,7 +23,9 @@ export function parseHomepageSettings(value: unknown) {
   const settings = value as Partial<HomepageSettings>
   if (
     typeof settings.enabled !== 'boolean' ||
-    (settings.mode !== 'showcase' && settings.mode !== 'not_found')
+    (settings.mode !== 'showcase' &&
+      settings.mode !== 'not_found' &&
+      settings.mode !== 'community')
   ) {
     return null
   }

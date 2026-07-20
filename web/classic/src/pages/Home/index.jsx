@@ -153,10 +153,12 @@ const Home = () => {
     return <div className='classic-page-fill min-h-screen' />;
   }
 
-  if (statusState?.status?.homepage_access?.enabled) {
-    return (
-      <HomepageReplacement settings={statusState.status.homepage_access} />
-    );
+  const homepageSettings = statusState?.status?.homepage_access;
+  const showStandaloneReplacement =
+    homepageSettings?.enabled && homepageSettings.mode !== 'community';
+
+  if (showStandaloneReplacement) {
+    return <HomepageReplacement settings={homepageSettings} />;
   }
 
   return (

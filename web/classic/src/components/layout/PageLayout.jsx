@@ -52,8 +52,10 @@ const PageLayout = () => {
   const location = useLocation();
   const [cachedHomepageReplacement] = useState(() => {
     try {
-      return !!JSON.parse(localStorage.getItem('status'))?.homepage_access
-        ?.enabled;
+      const settings = JSON.parse(
+        localStorage.getItem('status'),
+      )?.homepage_access;
+      return !!settings?.enabled && settings.mode !== 'community';
     } catch {
       return false;
     }
@@ -82,7 +84,8 @@ const PageLayout = () => {
   const showSider = isConsoleRoute && (!isMobile || drawerOpen);
   const isFixedLayout = isConsoleRoute || location.pathname === '/pricing';
   const homepageReplacementEnabled = statusState?.status
-    ? !!statusState.status.homepage_access?.enabled
+    ? !!statusState.status.homepage_access?.enabled &&
+      statusState.status.homepage_access.mode !== 'community'
     : cachedHomepageReplacement;
   const hidePublicChrome =
     location.pathname === '/' && homepageReplacementEnabled;

@@ -3713,6 +3713,8 @@
     "邀请码已创建": "Code d’invitation créé",
     "加载首页设置失败": "Échec du chargement des paramètres de l'accueil",
     "首页控制": "Contrôle de l'accueil",
+    "首页设置": "Paramètres de l'accueil",
+    "社区首页（仅新版前端）": "Accueil communautaire (nouvelle interface uniquement)",
     "首页设置已保存": "Paramètres de l'accueil enregistrés",
     "关闭公开首页": "Désactiver l'accueil public",
     "替换公开首页，但保留登录、注册和控制台地址": "Remplacez la page d'accueil publique tout en conservant l'accès à la connexion et à la console",

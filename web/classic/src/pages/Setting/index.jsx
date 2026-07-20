@@ -66,7 +66,7 @@ const Setting = () => {
       tab: (
         <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           <PanelTopClose size={18} />
-          {t('首页控制')}
+          {t('首页设置')}
         </span>
       ),
       content: <HomepageSetting />,

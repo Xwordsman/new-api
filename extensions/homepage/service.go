@@ -26,7 +26,9 @@ func NormalizeAndValidateSettings(settings Settings) (Settings, error) {
 	settings.ButtonText = strings.TrimSpace(settings.ButtonText)
 	settings.ButtonURL = strings.TrimSpace(settings.ButtonURL)
 
-	if settings.Mode != ModeShowcase && settings.Mode != ModeNotFound {
+	if settings.Mode != ModeShowcase &&
+		settings.Mode != ModeNotFound &&
+		settings.Mode != ModeCommunity {
 		return Settings{}, ErrInvalidSettings
 	}
 	if utf8.RuneCountInString(settings.Title) > 120 ||

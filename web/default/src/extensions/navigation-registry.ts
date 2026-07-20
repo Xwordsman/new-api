@@ -20,7 +20,7 @@ import type { TFunction } from 'i18next'
 
 const EXTENSION_NAV_ITEMS = [
   {
-    titleKey: 'Homepage Control',
+    titleKey: 'Homepage Settings',
     url: '/system-settings/homepage/settings',
   },
   {

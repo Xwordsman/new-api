@@ -52,7 +52,7 @@ import { getHomepageSettings, updateHomepageSettings } from './api'
 
 const settingsSchema = z.object({
   enabled: z.boolean(),
-  mode: z.enum(['showcase', 'not_found']),
+  mode: z.enum(['showcase', 'not_found', 'community']),
   title: z.string().max(120),
   description: z.string().max(500),
   button_text: z.string().max(50),
@@ -81,6 +81,7 @@ export function HomepageSettingsPage() {
     resolver: zodResolver(settingsSchema),
     defaultValues,
   })
+  const selectedMode = form.watch('mode')
 
   useEffect(() => {
     if (settingsQuery.data) {
@@ -131,10 +132,10 @@ export function HomepageSettingsPage() {
               render={({ field }) => (
                 <FormItem className='flex items-center justify-between gap-6 border-b py-4'>
                   <div className='space-y-1'>
-                    <FormLabel>{t('Disable Public Homepage')}</FormLabel>
+                    <FormLabel>{t('Enable Homepage Override')}</FormLabel>
                     <FormDescription>
                       {t(
-                        'Replace the entire root page without navigation, site branding, or public entry points'
+                        'Choose a custom homepage. Community mode keeps the public navigation; scene and 404 modes hide it.'
                       )}
                     </FormDescription>
                   </div>
@@ -155,9 +156,13 @@ export function HomepageSettingsPage() {
                 name='mode'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('Replacement Page')}</FormLabel>
+                    <FormLabel>{t('Homepage Mode')}</FormLabel>
                     <Select
                       items={[
+                        {
+                          value: 'community',
+                          label: t('Community Homepage'),
+                        },
                         { value: 'showcase', label: t('Immersive Scene') },
                         { value: 'not_found', label: t('404 Style Page') },
                       ]}
@@ -171,6 +176,9 @@ export function HomepageSettingsPage() {
                       </FormControl>
                       <SelectContent alignItemWithTrigger={false}>
                         <SelectGroup>
+                          <SelectItem value='community'>
+                            {t('Community Homepage')}
+                          </SelectItem>
                           <SelectItem value='showcase'>
                             {t('Immersive Scene')}
                           </SelectItem>
@@ -181,9 +189,13 @@ export function HomepageSettingsPage() {
                       </SelectContent>
                     </Select>
                     <FormDescription>
-                      {t(
-                        'The immersive scene is completely separate from the application'
-                      )}
+                      {selectedMode === 'community'
+                        ? t(
+                            'The community homepage replaces the default new frontend homepage and keeps the public header and footer.'
+                          )
+                        : t(
+                            'The immersive scene and 404 page are completely separate from the application.'
+                          )}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -262,7 +274,11 @@ export function HomepageSettingsPage() {
                       />
                     </FormControl>
                     <FormDescription>
-                      {t('Leave both button fields blank to show no link')}
+                      {selectedMode === 'community'
+                        ? t(
+                            'In community mode, this optional link highlights a community resource.'
+                          )
+                        : t('Leave both button fields blank to show no link')}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

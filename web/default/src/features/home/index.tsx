@@ -23,6 +23,7 @@ import { PublicLayout } from '@/components/layout'
 import { Footer } from '@/components/layout/components/footer'
 import { RichContent } from '@/components/rich-content'
 import { useTheme } from '@/context/theme-provider'
+import { CommunityHomepage } from '@/extensions/homepage/community-homepage'
 import { HomepageReplacement } from '@/extensions/homepage/homepage-replacement'
 import { parseHomepageSettings } from '@/extensions/homepage/parse-settings'
 import { useStatus } from '@/hooks/use-status'
@@ -74,6 +75,18 @@ export function Home() {
   }
 
   if (homepageSettings?.enabled) {
+    if (homepageSettings.mode === 'community') {
+      return (
+        <PublicLayout showMainContainer={false}>
+          <CommunityHomepage
+            settings={homepageSettings}
+            status={status}
+            isAuthenticated={isAuthenticated}
+          />
+          <Footer />
+        </PublicLayout>
+      )
+    }
     return <HomepageReplacement settings={homepageSettings} />
   }
 

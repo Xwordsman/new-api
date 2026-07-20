@@ -3,9 +3,10 @@ package homepage
 import "time"
 
 const (
-	settingsID   = 1
-	ModeShowcase = "showcase"
-	ModeNotFound = "not_found"
+	settingsID    = 1
+	ModeShowcase  = "showcase"
+	ModeNotFound  = "not_found"
+	ModeCommunity = "community"
 )
 
 type Settings struct {

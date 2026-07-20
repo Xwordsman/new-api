@@ -128,6 +128,9 @@ const HomepageSetting = () => {
                 onChange={(value) => updateField('mode', value)}
                 style={{ width: '100%' }}
               >
+                <Select.Option value='community'>
+                  {t('社区首页（仅新版前端）')}
+                </Select.Option>
                 <Select.Option value='showcase'>
                   {t('沉浸式场景')}
                 </Select.Option>

@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-export type HomepageMode = 'showcase' | 'not_found'
+export type HomepageMode = 'showcase' | 'not_found' | 'community'
 
 export type HomepageSettings = {
   enabled: boolean

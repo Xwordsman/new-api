@@ -80,3 +80,17 @@ func TestNormalizeAndValidateSettingsAcceptsWebDestinations(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeAndValidateSettingsAcceptsCommunityHomepage(t *testing.T) {
+	settings, err := NormalizeAndValidateSettings(Settings{
+		Enabled:     true,
+		Mode:        ModeCommunity,
+		Title:       "Community AI Hub",
+		Description: "Shared access for community projects.",
+		ButtonText:  "Community guide",
+		ButtonURL:   "/docs/community",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, ModeCommunity, settings.Mode)
+	assert.Equal(t, "Community AI Hub", settings.Title)
+}
