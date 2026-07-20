@@ -18,7 +18,6 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
 import { ArrowRight } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -26,25 +25,22 @@ import { cn } from '@/lib/utils'
 type CommunityPrimaryActionProps = {
   isAuthenticated: boolean
   registerEnabled: boolean
+  label: string
   className?: string
 }
 
 export function CommunityPrimaryAction(props: CommunityPrimaryActionProps) {
-  const { t } = useTranslation()
   const content = (
-    <ArrowRight
-      className='size-4 transition-transform group-hover:translate-x-0.5'
-      aria-hidden='true'
-    />
+    <>
+      <ArrowRight className='ico' aria-hidden='true' />
+      {props.label}
+    </>
   )
+  const className = cn(props.className)
 
   if (props.isAuthenticated) {
     return (
-      <Button
-        className={cn('group', props.className)}
-        render={<Link to='/dashboard' />}
-      >
-        {t('Go to Dashboard')}
+      <Button className={className} render={<Link to='/dashboard' />}>
         {content}
       </Button>
     )
@@ -52,22 +48,14 @@ export function CommunityPrimaryAction(props: CommunityPrimaryActionProps) {
 
   if (props.registerEnabled) {
     return (
-      <Button
-        className={cn('group', props.className)}
-        render={<Link to='/sign-up' />}
-      >
-        {t('Get Started')}
+      <Button className={className} render={<Link to='/sign-up' />}>
         {content}
       </Button>
     )
   }
 
   return (
-    <Button
-      className={cn('group', props.className)}
-      render={<Link to='/sign-in' />}
-    >
-      {t('Sign in')}
+    <Button className={className} render={<Link to='/sign-in' />}>
       {content}
     </Button>
   )

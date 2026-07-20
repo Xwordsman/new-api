@@ -83,7 +83,6 @@ export function Home() {
             status={status}
             isAuthenticated={isAuthenticated}
           />
-          <Footer />
         </PublicLayout>
       )
     }
