@@ -23,11 +23,12 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
+  ExternalLink,
   ListOrdered,
   Shuffle,
   SlidersHorizontal,
 } from 'lucide-react'
-import { useState, useMemo, useContext } from 'react'
+import { useState, useMemo, useContext, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -623,6 +624,53 @@ export function useChannelsColumns(
           const settings = parseChannelSettings(channel.setting)
           const isPassThrough = settings.pass_through_body_enabled === true
           const hasParamOverride = Boolean(channel.param_override?.trim())
+          const baseUrl = channel.base_url?.trim()
+          let websiteUrl: string | undefined
+
+          if (baseUrl) {
+            try {
+              const parsedUrl = new URL(baseUrl)
+              if (
+                parsedUrl.protocol === 'http:' ||
+                parsedUrl.protocol === 'https:'
+              ) {
+                websiteUrl = parsedUrl.href
+              }
+            } catch {
+              // Non-URL channel values remain visible but are not clickable.
+            }
+          }
+
+          let baseUrlContent: ReactNode = null
+          if (baseUrl && !sensitiveVisible) {
+            baseUrlContent = (
+              <span className='text-muted-foreground text-xs'>
+                {SENSITIVE_MASK}
+              </span>
+            )
+          } else if (baseUrl && websiteUrl) {
+            baseUrlContent = (
+              <a
+                href={websiteUrl}
+                target='_blank'
+                rel='noopener noreferrer'
+                title={baseUrl}
+                className='text-primary hover:text-primary/80 flex max-w-full min-w-0 items-center gap-1 text-xs hover:underline'
+                onClick={(event) => event.stopPropagation()}
+              >
+                <span className='truncate'>{baseUrl}</span>
+                <ExternalLink className='h-3 w-3 shrink-0' aria-hidden='true' />
+              </a>
+            )
+          } else if (baseUrl) {
+            baseUrlContent = (
+              <TruncatedText
+                text={baseUrl}
+                className='text-muted-foreground text-xs'
+                maxWidth='max-w-full'
+              />
+            )
+          }
 
           return (
             <div className='flex max-w-full min-w-0 items-center gap-2'>
@@ -665,6 +713,7 @@ export function useChannelsColumns(
                   )}
                   <UpstreamUpdateTags channel={channel} />
                 </div>
+                {baseUrlContent}
                 {channel.remark && (
                   <TooltipProvider delay={200}>
                     <Tooltip>
