@@ -72,6 +72,8 @@ type Log struct {
 	IsStream          bool   `json:"is_stream"`
 	ChannelId         int    `json:"channel" gorm:"index"`
 	ChannelName       string `json:"channel_name" gorm:"->"`
+	ChannelStatus     int    `json:"channel_status" gorm:"-"`
+	ChannelBaseURL    string `json:"channel_base_url" gorm:"-"`
 	TokenId           int    `json:"token_id" gorm:"default:0;index"`
 	Group             string `json:"group" gorm:"index"`
 	Ip                string `json:"ip" gorm:"index;default:''"`
@@ -116,6 +118,8 @@ func assignDisplayLogIds(logs []*Log, startIdx int) {
 func formatUserLogs(logs []*Log, startIdx int) {
 	for i := range logs {
 		logs[i].ChannelName = ""
+		logs[i].ChannelStatus = 0
+		logs[i].ChannelBaseURL = ""
 		var otherMap map[string]interface{}
 		otherMap, _ = common.StrToMap(logs[i].Other)
 		if otherMap != nil {
@@ -524,35 +528,39 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 	}
 
 	if channelIds.Len() > 0 {
-		var channels []struct {
-			Id   int    `gorm:"column:id"`
-			Name string `gorm:"column:name"`
-		}
+		var channels []Channel
 		if common.MemoryCacheEnabled {
 			// Cache get channel
 			for _, channelId := range channelIds.Items() {
 				if cacheChannel, err := CacheGetChannel(channelId); err == nil {
-					channels = append(channels, struct {
-						Id   int    `gorm:"column:id"`
-						Name string `gorm:"column:name"`
-					}{
-						Id:   channelId,
-						Name: cacheChannel.Name,
+					channels = append(channels, Channel{
+						Id:      channelId,
+						Name:    cacheChannel.Name,
+						Status:  cacheChannel.Status,
+						BaseURL: cacheChannel.BaseURL,
 					})
 				}
 			}
 		} else {
 			// Bulk query channels from DB
-			if err = DB.Table("channels").Select("id, name").Where("id IN ?", channelIds.Items()).Find(&channels).Error; err != nil {
+			if err = DB.Table("channels").Select("id, name, status, base_url").Where("id IN ?", channelIds.Items()).Find(&channels).Error; err != nil {
 				return logs, total, err
 			}
 		}
-		channelMap := make(map[int]string, len(channels))
+		channelMap := make(map[int]Channel, len(channels))
 		for _, channel := range channels {
-			channelMap[channel.Id] = channel.Name
+			channelMap[channel.Id] = channel
 		}
 		for i := range logs {
-			logs[i].ChannelName = channelMap[logs[i].ChannelId]
+			channel, ok := channelMap[logs[i].ChannelId]
+			if !ok {
+				continue
+			}
+			logs[i].ChannelName = channel.Name
+			logs[i].ChannelStatus = channel.Status
+			if channel.BaseURL != nil {
+				logs[i].ChannelBaseURL = *channel.BaseURL
+			}
 		}
 	}
 

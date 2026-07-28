@@ -69,6 +69,7 @@ import {
   parseModelsList,
   parseGroupsList,
   parseChannelSettings,
+  resolveChannelWebsiteUrl,
   handleUpdateChannelField,
   handleUpdateTagField,
   handleUpdateChannelBalance,
@@ -625,21 +626,7 @@ export function useChannelsColumns(
           const isPassThrough = settings.pass_through_body_enabled === true
           const hasParamOverride = Boolean(channel.param_override?.trim())
           const baseUrl = channel.base_url?.trim()
-          let websiteUrl: string | undefined
-
-          if (baseUrl) {
-            try {
-              const parsedUrl = new URL(baseUrl)
-              if (
-                parsedUrl.protocol === 'http:' ||
-                parsedUrl.protocol === 'https:'
-              ) {
-                websiteUrl = parsedUrl.href
-              }
-            } catch {
-              // Non-URL channel values remain visible but are not clickable.
-            }
-          }
+          const websiteUrl = resolveChannelWebsiteUrl(baseUrl)
 
           let baseUrlContent: ReactNode = null
           if (baseUrl && !sensitiveVisible) {

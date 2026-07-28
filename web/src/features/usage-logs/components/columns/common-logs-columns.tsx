@@ -16,10 +16,19 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useQueryClient } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
-import { GitBranch, Sparkles, KeyRound } from 'lucide-react'
+import {
+  ExternalLink,
+  GitBranch,
+  KeyRound,
+  Loader2,
+  PowerOff,
+  Sparkles,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { GroupBadge } from '@/components/group-badge'
 import { StatusBadge, type StatusBadgeProps } from '@/components/status-badge'
@@ -35,10 +44,23 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { updateChannelStatus } from '@/features/channels/api'
+import {
+  CHANNEL_STATUS,
+  ERROR_MESSAGES as CHANNEL_ERROR_MESSAGES,
+  SUCCESS_MESSAGES as CHANNEL_SUCCESS_MESSAGES,
+} from '@/features/channels/constants'
+import { resolveChannelWebsiteUrl } from '@/features/channels/lib'
+import {
+  ADMIN_PERMISSION_ACTIONS,
+  ADMIN_PERMISSION_RESOURCES,
+  hasPermission,
+} from '@/lib/admin-permissions'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
 import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 import { formatLogQuota, formatTimestampToDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth-store'
 
 import { LOG_TYPE_ALL_VALUE } from '../../constants'
 import type { UsageLog } from '../../data/schema'
@@ -333,6 +355,9 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         cell: function ChannelCell({ row }) {
           const { sensitiveVisible, setAffinityTarget, setAffinityDialogOpen } =
             useUsageLogsContext()
+          const queryClient = useQueryClient()
+          const currentUser = useAuthStore((state) => state.auth.user)
+          const [isDisabling, setIsDisabling] = useState(false)
           const log = row.original
 
           if (!isDisplayableLogType(log.type)) return null
@@ -352,21 +377,60 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             : `#${log.channel}`
           const channelIdDisplay = `#${log.channel}`
           const channelName = sensitiveVisible ? log.channel_name : '••••'
+          const channelBaseUrl = log.channel_base_url?.trim()
+          const channelWebsiteUrl = resolveChannelWebsiteUrl(channelBaseUrl)
+          const canOperateChannels = hasPermission(
+            currentUser,
+            ADMIN_PERMISSION_RESOURCES.CHANNEL,
+            ADMIN_PERMISSION_ACTIONS.OPERATE
+          )
+          const canDisableChannel =
+            canOperateChannels &&
+            log.channel > 0 &&
+            log.channel_status !== CHANNEL_STATUS.UNKNOWN &&
+            log.channel_status !== CHANNEL_STATUS.MANUAL_DISABLED
           const multiKeyIndex = other?.admin_info?.multi_key_index
           const showMultiKeyIndex =
             other?.admin_info?.is_multi_key === true &&
             typeof multiKeyIndex === 'number' &&
             Number.isFinite(multiKeyIndex)
 
+          const disableChannel = async () => {
+            setIsDisabling(true)
+            try {
+              const response = await updateChannelStatus(
+                log.channel,
+                CHANNEL_STATUS.MANUAL_DISABLED
+              )
+              if (!response.success) {
+                toast.error(
+                  response.message || t(CHANNEL_ERROR_MESSAGES.UPDATE_FAILED)
+                )
+                return
+              }
+
+              if (response.data) {
+                toast.success(t(CHANNEL_SUCCESS_MESSAGES.DISABLED))
+              } else {
+                toast.info(t('Disabled'))
+              }
+              await queryClient.invalidateQueries({ queryKey: ['logs'] })
+            } catch {
+              toast.error(t(CHANNEL_ERROR_MESSAGES.UPDATE_FAILED))
+            } finally {
+              setIsDisabling(false)
+            }
+          }
+
           return (
             <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <div className='flex max-w-[160px] flex-col gap-0.5' />
-                  }
-                >
-                  <div className='relative inline-flex w-fit items-center gap-1'>
+              <div className='flex max-w-[180px] flex-col gap-0.5'>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <div className='relative inline-flex w-fit items-center gap-1' />
+                    }
+                  >
                     <StatusBadge
                       label={channelIdDisplay}
                       autoColor={String(log.channel)}
@@ -438,47 +502,91 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                         <Sparkles className='size-3 fill-current' />
                       </button>
                     )}
-                  </div>
-                  {log.channel_name && (
-                    <span className='text-muted-foreground/70 truncate [font-family:var(--font-body)] !text-xs'>
-                      {channelName}
-                    </span>
-                  )}
-                </TooltipTrigger>
-                <TooltipContent>
-                  <div className='space-y-1'>
-                    <p>
-                      {sensitiveVisible ? channelDisplay : channelIdDisplay}
-                    </p>
-                    {channelChain && (
-                      <p className='text-muted-foreground text-xs'>
-                        {t('Chain')}: {channelChain}
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <div className='space-y-1'>
+                      <p>
+                        {sensitiveVisible ? channelDisplay : channelIdDisplay}
                       </p>
-                    )}
-                    {showMultiKeyIndex && (
-                      <p className='text-muted-foreground text-xs'>
-                        {t('Key')}: {multiKeyIndex}
-                      </p>
-                    )}
-                    {affinity && (
-                      <div className='border-t pt-1 text-xs'>
-                        <p className='font-medium'>{t('Channel Affinity')}</p>
-                        <p>
-                          {t('Rule')}: {affinity.rule_name || '-'}
+                      {channelChain && (
+                        <p className='text-muted-foreground text-xs'>
+                          {t('Chain')}: {channelChain}
                         </p>
-                        <p>
-                          {t('Group')}:{' '}
-                          {sensitiveVisible
-                            ? affinity.using_group ||
-                              affinity.selected_group ||
-                              '-'
-                            : '••••'}
+                      )}
+                      {showMultiKeyIndex && (
+                        <p className='text-muted-foreground text-xs'>
+                          {t('Key')}: {multiKeyIndex}
                         </p>
-                      </div>
+                      )}
+                      {affinity && (
+                        <div className='border-t pt-1 text-xs'>
+                          <p className='font-medium'>{t('Channel Affinity')}</p>
+                          <p>
+                            {t('Rule')}: {affinity.rule_name || '-'}
+                          </p>
+                          <p>
+                            {t('Group')}:{' '}
+                            {sensitiveVisible
+                              ? affinity.using_group ||
+                                affinity.selected_group ||
+                                '-'
+                              : '••••'}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+                {log.channel_name && (
+                  <div className='flex min-w-0 items-center gap-1'>
+                    {channelWebsiteUrl && sensitiveVisible ? (
+                      <a
+                        href={channelWebsiteUrl}
+                        target='_blank'
+                        rel='noopener noreferrer'
+                        title={channelBaseUrl}
+                        className='text-muted-foreground/70 hover:text-primary flex min-w-0 flex-1 items-center gap-1 [font-family:var(--font-body)] !text-xs hover:underline'
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <span className='truncate'>{channelName}</span>
+                        <ExternalLink
+                          className='size-3 shrink-0'
+                          aria-hidden='true'
+                        />
+                      </a>
+                    ) : (
+                      <span
+                        className='text-muted-foreground/70 min-w-0 flex-1 truncate [font-family:var(--font-body)] !text-xs'
+                        title={sensitiveVisible ? log.channel_name : undefined}
+                      >
+                        {channelName}
+                      </span>
+                    )}
+                    {canDisableChannel && (
+                      <button
+                        type='button'
+                        className='text-destructive hover:bg-destructive/10 focus-visible:ring-ring inline-flex size-5 shrink-0 items-center justify-center rounded transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50'
+                        aria-label={t('Disable')}
+                        title={t('Disable')}
+                        disabled={isDisabling}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          void disableChannel()
+                        }}
+                      >
+                        {isDisabling ? (
+                          <Loader2
+                            className='size-3 animate-spin'
+                            aria-hidden='true'
+                          />
+                        ) : (
+                          <PowerOff className='size-3' aria-hidden='true' />
+                        )}
+                      </button>
                     )}
                   </div>
-                </TooltipContent>
-              </Tooltip>
+                )}
+              </div>
             </TooltipProvider>
           )
         },

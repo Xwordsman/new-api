@@ -33,6 +33,24 @@ import type { Channel, ChannelSettings, ChannelOtherSettings } from '../types'
 // Channel Type Utilities
 // ============================================================================
 
+export function resolveChannelWebsiteUrl(
+  baseUrl: string | null | undefined
+): string | undefined {
+  const value = baseUrl?.trim()
+  if (!value) return undefined
+
+  try {
+    const parsedUrl = new URL(value)
+    if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
+      return parsedUrl.href
+    }
+  } catch {
+    return undefined
+  }
+
+  return undefined
+}
+
 /**
  * Get human-readable channel type label
  */
