@@ -3,6 +3,7 @@ package common
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"reflect"
 	"testing"
 
@@ -2063,6 +2064,50 @@ func TestRemoveDisabledFieldsNoControlledFieldsKeepsBody(t *testing.T) {
 		t.Fatalf("RemoveDisabledFields returned error: %v", err)
 	}
 	require.Equal(t, input, string(out))
+}
+
+func TestRemoveDisabledFieldsForceOpenAIFastSuppliesMissingTier(t *testing.T) {
+	input := `{"model":"gpt-5","messages":[]}`
+	settings := dto.ChannelOtherSettings{ForceOpenAIFast: true}
+
+	out, err := RemoveDisabledFields([]byte(input), settings, false)
+	require.NoError(t, err)
+	assertJSONEqual(t, `{"model":"gpt-5","messages":[],"service_tier":"priority"}`, string(out))
+}
+
+func TestRemoveDisabledFieldsForceOpenAIFastPreservesExplicitTier(t *testing.T) {
+	input := `{"model":"gpt-5","service_tier":"flex"}`
+	settings := dto.ChannelOtherSettings{ForceOpenAIFast: true}
+
+	out, err := RemoveDisabledFields([]byte(input), settings, false)
+	require.NoError(t, err)
+	assertJSONEqual(t, input, string(out))
+}
+
+func TestRemoveDisabledFieldsForceOpenAIFastAppliesDuringPassThrough(t *testing.T) {
+	input := `{"model":"gpt-5","input":"hello"}`
+	settings := dto.ChannelOtherSettings{ForceOpenAIFast: true}
+
+	out, err := RemoveDisabledFields([]byte(input), settings, true)
+	require.NoError(t, err)
+	assertJSONEqual(t, `{"model":"gpt-5","input":"hello","service_tier":"priority"}`, string(out))
+}
+
+func TestPreparePassThroughJSONBodyInjectsOpenAIFastTier(t *testing.T) {
+	input := []byte(`{"model":"gpt-5","input":"hello"}`)
+	storage, err := common2.CreateBodyStorage(input)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, storage.Close()) })
+
+	body, size, closer, err := PreparePassThroughJSONBody(storage, dto.ChannelOtherSettings{ForceOpenAIFast: true})
+	require.NoError(t, err)
+	require.NotNil(t, closer)
+	t.Cleanup(func() { require.NoError(t, closer.Close()) })
+
+	out, err := io.ReadAll(body)
+	require.NoError(t, err)
+	require.Equal(t, int64(len(out)), size)
+	assertJSONEqual(t, `{"model":"gpt-5","input":"hello","service_tier":"priority"}`, string(out))
 }
 
 func TestRemoveDisabledFieldsAllowInferenceGeo(t *testing.T) {

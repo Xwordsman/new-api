@@ -286,6 +286,7 @@ const SENSITIVE_FORM_FIELDS = [
   'pass_through_body_enabled',
   'system_prompt',
   'system_prompt_override',
+  'force_openai_fast',
   'allow_service_tier',
   'disable_store',
   'allow_safety_identifier',
@@ -746,6 +747,7 @@ export function ChannelMutateDrawer({
   const currentProxy = form.watch('proxy')
   const currentSystemPrompt = form.watch('system_prompt')
   const currentSystemPromptOverride = form.watch('system_prompt_override')
+  const currentForceOpenAIFast = form.watch('force_openai_fast')
   const currentAllowServiceTier = form.watch('allow_service_tier')
   const currentDisableStore = form.watch('disable_store')
   const currentAllowSafetyIdentifier = form.watch('allow_safety_identifier')
@@ -1018,6 +1020,7 @@ export function ChannelMutateDrawer({
   let fieldPassthroughConfigured = false
   if (currentType === 1 || currentType === 57) {
     fieldPassthroughConfigured = Boolean(
+      currentForceOpenAIFast ||
       currentAllowServiceTier ||
       currentDisableStore ||
       currentAllowSafetyIdentifier ||
@@ -4274,6 +4277,33 @@ export function ChannelMutateDrawer({
                               className='disabled:opacity-60'
                             >
                               <div className='divide-border space-y-0 divide-y border-y'>
+                                {(currentType === 1 || currentType === 57) && (
+                                  <FormField
+                                    control={form.control}
+                                    name='force_openai_fast'
+                                    render={({ field }) => (
+                                      <FormItem className='flex items-center justify-between gap-3 px-4 py-3'>
+                                        <div className='space-y-0.5'>
+                                          <FormLabel className='text-sm'>
+                                            {t('Force OpenAI Fast')}
+                                          </FormLabel>
+                                          <FormDescription>
+                                            {t(
+                                              'When enabled, requests without service_tier are sent with service_tier=priority.'
+                                            )}
+                                          </FormDescription>
+                                        </div>
+                                        <FormControl>
+                                          <Switch
+                                            checked={field.value}
+                                            onCheckedChange={field.onChange}
+                                          />
+                                        </FormControl>
+                                      </FormItem>
+                                    )}
+                                  />
+                                )}
+
                                 <FormField
                                   control={form.control}
                                   name='allow_service_tier'

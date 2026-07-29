@@ -19,6 +19,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 type ThinkingContentInfo struct {
@@ -788,7 +789,7 @@ func FailTaskInfo(reason string) *TaskInfo {
 	}
 }
 
-// RemoveDisabledFields 从请求 JSON 数据中移除渠道设置中禁用的字段
+// RemoveDisabledFields 应用渠道的请求字段控制。
 // service_tier: 服务层级字段，可能导致额外计费（OpenAI、Claude、Responses API 支持）
 // inference_geo: Claude 数据驻留推理区域字段（仅 Claude 支持，默认过滤）
 // speed: Claude 推理速度模式字段（仅 Claude 支持，默认过滤）
@@ -797,10 +798,10 @@ func FailTaskInfo(reason string) *TaskInfo {
 // stream_options.include_obfuscation: 响应流混淆控制字段（仅 OpenAI Responses API 支持）
 func RemoveDisabledFields(jsonData []byte, channelOtherSettings dto.ChannelOtherSettings, channelPassThroughEnabled bool) ([]byte, error) {
 	if model_setting.GetGlobalSettings().PassThroughRequestEnabled || channelPassThroughEnabled {
-		return jsonData, nil
+		return ApplyOpenAIFastServiceTier(jsonData, channelOtherSettings)
 	}
 	if !hasRemovableDisabledField(jsonData, channelOtherSettings) {
-		return jsonData, nil
+		return ApplyOpenAIFastServiceTier(jsonData, channelOtherSettings)
 	}
 
 	var data map[string]interface{}
@@ -810,7 +811,7 @@ func RemoveDisabledFields(jsonData []byte, channelOtherSettings dto.ChannelOther
 	}
 
 	// 默认移除 service_tier，除非明确允许（避免额外计费风险）
-	if !channelOtherSettings.AllowServiceTier {
+	if !channelOtherSettings.AllowServiceTier && !channelOtherSettings.ForceOpenAIFast {
 		if _, exists := data["service_tier"]; exists {
 			delete(data, "service_tier")
 		}
@@ -865,7 +866,21 @@ func RemoveDisabledFields(jsonData []byte, channelOtherSettings dto.ChannelOther
 		common.SysError("RemoveDisabledFields Marshal error :" + err.Error())
 		return jsonData, nil
 	}
-	return jsonDataAfter, nil
+	return ApplyOpenAIFastServiceTier(jsonDataAfter, channelOtherSettings)
+}
+
+// ApplyOpenAIFastServiceTier supplies the priority tier only when the client
+// did not choose a service tier. Explicit client values always win.
+func ApplyOpenAIFastServiceTier(jsonData []byte, channelOtherSettings dto.ChannelOtherSettings) ([]byte, error) {
+	if !channelOtherSettings.ForceOpenAIFast || gjson.GetBytes(jsonData, "service_tier").Exists() {
+		return jsonData, nil
+	}
+
+	updated, err := sjson.SetBytes(jsonData, "service_tier", "priority")
+	if err != nil {
+		return nil, fmt.Errorf("set OpenAI Fast service tier: %w", err)
+	}
+	return updated, nil
 }
 
 func hasRemovableDisabledField(jsonData []byte, channelOtherSettings dto.ChannelOtherSettings) bool {
@@ -879,7 +894,7 @@ func hasRemovableDisabledField(jsonData []byte, channelOtherSettings dto.Channel
 		"stream_options.include_obfuscation",
 	)
 
-	return (!channelOtherSettings.AllowServiceTier && values[0].Exists()) ||
+	return (!channelOtherSettings.AllowServiceTier && !channelOtherSettings.ForceOpenAIFast && values[0].Exists()) ||
 		(!channelOtherSettings.AllowInferenceGeo && values[1].Exists()) ||
 		(!channelOtherSettings.AllowSpeed && values[2].Exists()) ||
 		(channelOtherSettings.DisableStore && values[3].Exists()) ||

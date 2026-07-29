@@ -233,6 +233,7 @@ export const channelFormSchema = z
     aws_key_type: z.enum(['ak_sk', 'api_key']).optional(), // AWS specific
     azure_responses_version: z.string().optional(), // Azure specific
     // Field passthrough controls (stored in settings JSON)
+    force_openai_fast: z.boolean().optional(), // OpenAI/Codex default priority tier
     allow_service_tier: z.boolean().optional(), // OpenAI/Anthropic
     disable_store: z.boolean().optional(), // OpenAI only
     allow_safety_identifier: z.boolean().optional(), // OpenAI only
@@ -383,6 +384,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   aws_key_type: 'ak_sk',
   azure_responses_version: '',
   // Field passthrough controls
+  force_openai_fast: false,
   allow_service_tier: false,
   disable_store: false,
   allow_safety_identifier: false,
@@ -439,6 +441,7 @@ export function transformChannelToFormDefaults(
   let azureResponsesVersion = ''
   let isEnterpriseAccount = false
   let awsKeyType: 'ak_sk' | 'api_key' = 'ak_sk'
+  let forceOpenAIFast = false
   let allowServiceTier = false
   let disableStore = false
   let allowSafetyIdentifier = false
@@ -459,6 +462,7 @@ export function transformChannelToFormDefaults(
       azureResponsesVersion = parsed.azure_responses_version || ''
       isEnterpriseAccount = parsed.openrouter_enterprise === true
       awsKeyType = parsed.aws_key_type || 'ak_sk'
+      forceOpenAIFast = parsed.force_openai_fast === true
       allowServiceTier = parsed.allow_service_tier === true
       disableStore = parsed.disable_store === true
       allowSafetyIdentifier = parsed.allow_safety_identifier === true
@@ -518,6 +522,7 @@ export function transformChannelToFormDefaults(
     vertex_key_type: vertexKeyType,
     azure_responses_version: azureResponsesVersion,
     aws_key_type: awsKeyType,
+    force_openai_fast: forceOpenAIFast,
     allow_service_tier: allowServiceTier,
     disable_store: disableStore,
     allow_include_obfuscation: allowIncludeObfuscation,
@@ -593,8 +598,15 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
   }
 
   // Field passthrough controls:
-  // - OpenAI (type 1) and Anthropic (type 14): allow_service_tier
+  // - OpenAI (type 1) and Codex (type 57): force_openai_fast
+  // - OpenAI (type 1), Anthropic (type 14), and Codex (type 57): allow_service_tier
   // - OpenAI only: disable_store, allow_safety_identifier
+  if (formData.type === 1 || formData.type === 57) {
+    settingsObj.force_openai_fast = formData.force_openai_fast === true
+  } else if ('force_openai_fast' in settingsObj) {
+    delete settingsObj.force_openai_fast
+  }
+
   if (formData.type === 1 || formData.type === 14 || formData.type === 57) {
     settingsObj.allow_service_tier = formData.allow_service_tier === true
   } else if ('allow_service_tier' in settingsObj) {

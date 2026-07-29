@@ -4,6 +4,8 @@ import (
 	"io"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/dto"
+	"github.com/tidwall/gjson"
 )
 
 // NewOutboundJSONBody wraps the already-marshaled upstream request body into a
@@ -28,4 +30,26 @@ func NewOutboundJSONBody(data []byte) (body io.Reader, size int64, closer io.Clo
 		return nil, 0, nil, err
 	}
 	return common.ReaderOnly(storage), storage.Size(), storage, nil
+}
+
+// PreparePassThroughJSONBody keeps the zero-copy pass-through path unless the
+// channel needs to inject the default OpenAI Fast service tier.
+func PreparePassThroughJSONBody(storage common.BodyStorage, settings dto.ChannelOtherSettings) (body io.Reader, size int64, closer io.Closer, err error) {
+	if !settings.ForceOpenAIFast {
+		return common.ReaderOnly(storage), 0, nil, nil
+	}
+
+	data, err := storage.Bytes()
+	if err != nil {
+		return nil, 0, nil, err
+	}
+	if gjson.GetBytes(data, "service_tier").Exists() {
+		return common.ReaderOnly(storage), 0, nil, nil
+	}
+
+	data, err = ApplyOpenAIFastServiceTier(data, settings)
+	if err != nil {
+		return nil, 0, nil, err
+	}
+	return NewOutboundJSONBody(data)
 }
