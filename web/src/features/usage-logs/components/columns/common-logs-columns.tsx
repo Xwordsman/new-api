@@ -719,13 +719,44 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         if (!isDisplayableLogType(log.type)) return null
 
         const modelInfo = formatModelName(log)
+        const reasoningEffort = parseLogOther(
+          log.other
+        )?.reasoning_effort?.trim()
+        let reasoningEffortVariant: StatusBadgeProps['variant'] = 'neutral'
+
+        switch (reasoningEffort?.toLowerCase()) {
+          case 'low':
+            reasoningEffortVariant = 'green'
+            break
+          case 'medium':
+            reasoningEffortVariant = 'yellow'
+            break
+          case 'high':
+            reasoningEffortVariant = 'orange'
+            break
+          case 'xhigh':
+            reasoningEffortVariant = 'red'
+            break
+          case 'max':
+          case 'ultra':
+            reasoningEffortVariant = 'purple'
+            break
+        }
 
         return (
-          <div className='flex w-fit flex-col gap-0.5'>
+          <div className='flex w-fit items-center gap-1.5'>
             <ModelBadge
               modelName={modelInfo.name}
               actualModel={modelInfo.actualModel}
             />
+            {reasoningEffort ? (
+              <StatusBadge
+                label={reasoningEffort}
+                variant={reasoningEffortVariant}
+                size='sm'
+                copyable={false}
+              />
+            ) : null}
           </div>
         )
       },
