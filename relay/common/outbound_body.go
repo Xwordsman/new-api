@@ -4,7 +4,7 @@ import (
 	"io"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/tidwall/gjson"
 )
 
@@ -20,36 +20,36 @@ import (
 // The caller MUST invoke closer.Close() once the upstream call has finished
 // (typically via defer) to release the disk file / memory accounting.
 //
-// The returned reader is wrapped with common.ReaderOnly to prevent the HTTP
-// transport from prematurely closing the underlying BodyStorage. The returned
-// size is meant to be propagated to http.Request.ContentLength because the
-// type-erased io.Reader prevents net/http from auto-detecting it.
-func NewOutboundJSONBody(data []byte) (body io.Reader, size int64, closer io.Closer, err error) {
+// The returned body exposes its size and replay capability without exposing
+// io.Closer. Request construction uses that metadata to populate ContentLength
+// and GetBody, while the caller retains ownership of the underlying storage
+// through the separately returned closer.
+func NewOutboundJSONBody(data []byte) (body common.ReplayableBody, closer io.Closer, err error) {
 	storage, err := common.CreateBodyStorage(data)
 	if err != nil {
-		return nil, 0, nil, err
+		return nil, nil, err
 	}
-	return common.ReaderOnly(storage), storage.Size(), storage, nil
+	return common.NewReplayableBodyReader(storage), storage, nil
 }
 
 // PreparePassThroughJSONBody keeps the zero-copy pass-through path unless the
 // channel needs to inject the default OpenAI Fast service tier.
-func PreparePassThroughJSONBody(storage common.BodyStorage, settings dto.ChannelOtherSettings) (body io.Reader, size int64, closer io.Closer, err error) {
+func PreparePassThroughJSONBody(storage common.BodyStorage, settings dto.ChannelOtherSettings) (body common.ReplayableBody, closer io.Closer, err error) {
 	if !settings.ForceOpenAIFast {
-		return common.ReaderOnly(storage), 0, nil, nil
+		return common.NewReplayableBodyReader(storage), nil, nil
 	}
 
 	data, err := storage.Bytes()
 	if err != nil {
-		return nil, 0, nil, err
+		return nil, nil, err
 	}
 	if gjson.GetBytes(data, "service_tier").Exists() {
-		return common.ReaderOnly(storage), 0, nil, nil
+		return common.NewReplayableBodyReader(storage), nil, nil
 	}
 
 	data, err = ApplyOpenAIFastServiceTier(data, settings)
 	if err != nil {
-		return nil, 0, nil, err
+		return nil, nil, err
 	}
 	return NewOutboundJSONBody(data)
 }
