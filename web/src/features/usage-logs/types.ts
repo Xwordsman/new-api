@@ -75,6 +75,22 @@ export interface TaskLogFilters extends CommonFilters {
  */
 export type LogFilters = CommonLogFilters | DrawingLogFilters | TaskLogFilters
 
+export type UsageLogsSearchParams = {
+  page?: number
+  pageSize?: number
+  type?: string[]
+  filter?: string
+  model?: string
+  token?: string
+  channel?: string
+  group?: string
+  username?: string
+  requestId?: string
+  upstreamRequestId?: string
+  startTime?: number
+  endTime?: number
+}
+
 // ============================================================================
 // Common Logs Additional Types
 // ============================================================================

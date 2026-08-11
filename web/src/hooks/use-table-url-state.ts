@@ -31,7 +31,10 @@ const PAGE_SIZE_STORAGE_KEY = 'page-size'
 
 function getStoredPageSize(): number | undefined {
   try {
-    const n = parseInt(localStorage.getItem(PAGE_SIZE_STORAGE_KEY) ?? '', 10)
+    const n = Number.parseInt(
+      localStorage.getItem(PAGE_SIZE_STORAGE_KEY) ?? '',
+      10
+    )
     return n > 0 ? n : undefined // n > 0 also rejects NaN
   } catch {
     return undefined
@@ -57,6 +60,7 @@ export type NavigateFn = (opts: {
 type UseTableUrlStateParams = {
   search: SearchRecord
   navigate: NavigateFn
+  syncToUrl?: boolean
   pagination?: {
     pageKey?: string
     pageSizeKey?: string
@@ -110,6 +114,7 @@ export function useTableUrlState(
   const {
     search,
     navigate,
+    syncToUrl = true,
     pagination: paginationCfg,
     globalFilter: globalFilterCfg,
     columnFilters: columnFiltersCfg = [],
@@ -151,11 +156,12 @@ export function useTableUrlState(
 
   // URL 为单一数据源：仅当 search（URL）变化时同步，避免依赖 initialColumnFilters 造成死循环（config 常为内联引用）
   useEffect(() => {
+    if (!syncToUrl) return
     setColumnFilters(initialColumnFilters)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search])
+  }, [search, syncToUrl])
 
-  const pagination: PaginationState = useMemo(() => {
+  const urlPagination: PaginationState = useMemo(() => {
     const rawPage = (search as SearchRecord)[pageKey]
     const rawPageSize = (search as SearchRecord)[pageSizeKey]
     const pageNum = typeof rawPage === 'number' ? rawPage : defaultPage
@@ -165,12 +171,19 @@ export function useTableUrlState(
         : (getStoredPageSize() ?? defaultPageSize)
     return { pageIndex: Math.max(0, pageNum - 1), pageSize: pageSizeNum }
   }, [search, pageKey, pageSizeKey, defaultPage, defaultPageSize])
+  const [localPagination, setLocalPagination] =
+    useState<PaginationState>(urlPagination)
+  const pagination = syncToUrl ? urlPagination : localPagination
 
   const onPaginationChange: OnChangeFn<PaginationState> = (updater) => {
     const next = typeof updater === 'function' ? updater(pagination) : updater
     const nextPage = next.pageIndex + 1
     const nextPageSize = next.pageSize
     if (nextPageSize !== pagination.pageSize) setStoredPageSize(nextPageSize)
+    if (!syncToUrl) {
+      setLocalPagination(next)
+      return
+    }
     navigate({
       search: (prev) => ({
         ...(prev as SearchRecord),
@@ -195,6 +208,7 @@ export function useTableUrlState(
               : updater
           const value = trimGlobal ? next.trim() : next
           setGlobalFilter(value)
+          if (!syncToUrl) return
           navigate({
             search: (prev) => ({
               ...(prev as SearchRecord),
@@ -209,21 +223,20 @@ export function useTableUrlState(
     const next =
       typeof updater === 'function' ? updater(columnFilters) : updater
     setColumnFilters(next)
+    if (!syncToUrl) return
 
     const patch: Record<string, unknown> = {}
 
     for (const cfg of columnFiltersCfg) {
       const found = next.find((f) => f.id === cfg.columnId)
+      const foundValue = found?.value
       const serialize = cfg.serialize ?? ((v: unknown) => v)
       if (cfg.type === 'string') {
-        const value =
-          typeof found?.value === 'string' ? (found.value as string) : ''
+        const value = typeof foundValue === 'string' ? foundValue : ''
         patch[cfg.searchKey] =
           value.trim() !== '' ? serialize(value) : undefined
       } else {
-        const value = Array.isArray(found?.value)
-          ? (found!.value as unknown[])
-          : []
+        const value = Array.isArray(foundValue) ? foundValue : []
         patch[cfg.searchKey] = value.length > 0 ? serialize(value) : undefined
       }
     }
@@ -241,14 +254,21 @@ export function useTableUrlState(
     pageCount: number,
     opts: { resetTo?: 'first' | 'last' } = { resetTo: 'first' }
   ) => {
-    const currentPage = (search as SearchRecord)[pageKey]
-    const pageNum = typeof currentPage === 'number' ? currentPage : defaultPage
+    const pageNum = pagination.pageIndex + 1
     if (pageCount > 0 && pageNum > pageCount) {
+      const nextPageIndex = opts.resetTo === 'last' ? pageCount - 1 : 0
+      if (!syncToUrl) {
+        setLocalPagination((current) => ({
+          ...current,
+          pageIndex: nextPageIndex,
+        }))
+        return
+      }
       navigate({
         replace: true,
         search: (prev) => ({
           ...(prev as SearchRecord),
-          [pageKey]: opts.resetTo === 'last' ? pageCount : undefined,
+          [pageKey]: nextPageIndex > 0 ? nextPageIndex + 1 : undefined,
         }),
       })
     }

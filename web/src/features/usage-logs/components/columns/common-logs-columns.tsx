@@ -23,6 +23,7 @@ import {
   GitBranch,
   KeyRound,
   Loader2,
+  Power,
   PowerOff,
   Sparkles,
 } from 'lucide-react'
@@ -50,7 +51,10 @@ import {
   ERROR_MESSAGES as CHANNEL_ERROR_MESSAGES,
   SUCCESS_MESSAGES as CHANNEL_SUCCESS_MESSAGES,
 } from '@/features/channels/constants'
-import { resolveChannelWebsiteUrl } from '@/features/channels/lib'
+import {
+  channelsQueryKeys,
+  resolveChannelWebsiteUrl,
+} from '@/features/channels/lib'
 import {
   ADMIN_PERMISSION_ACTIONS,
   ADMIN_PERMISSION_RESOURCES,
@@ -64,6 +68,7 @@ import { useAuthStore } from '@/stores/auth-store'
 
 import { LOG_TYPE_ALL_VALUE } from '../../constants'
 import type { UsageLog } from '../../data/schema'
+import { getChannelStatusActionAvailability } from '../../lib/channel-status-actions'
 import {
   formatModelName,
   getReasoningEffortVariant,
@@ -353,7 +358,9 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             useUsageLogsContext()
           const queryClient = useQueryClient()
           const currentUser = useAuthStore((state) => state.auth.user)
-          const [isDisabling, setIsDisabling] = useState(false)
+          const [pendingChannelStatus, setPendingChannelStatus] = useState<
+            number | null
+          >(null)
           const log = row.original
 
           if (!isDisplayableLogType(log.type)) return null
@@ -380,23 +387,29 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             ADMIN_PERMISSION_RESOURCES.CHANNEL,
             ADMIN_PERMISSION_ACTIONS.OPERATE
           )
-          const canDisableChannel =
-            canOperateChannels &&
-            log.channel > 0 &&
-            log.channel_status !== CHANNEL_STATUS.UNKNOWN &&
-            log.channel_status !== CHANNEL_STATUS.MANUAL_DISABLED
+          const { canEnableChannel, canDisableChannel } =
+            getChannelStatusActionAvailability(
+              canOperateChannels,
+              log.channel,
+              log.channel_status
+            )
+          const disableChannelLabel = t(
+            log.channel_status === CHANNEL_STATUS.AUTO_DISABLED
+              ? 'Manual Disabled'
+              : 'Disable'
+          )
           const multiKeyIndex = other?.admin_info?.multi_key_index
           const showMultiKeyIndex =
             other?.admin_info?.is_multi_key === true &&
             typeof multiKeyIndex === 'number' &&
             Number.isFinite(multiKeyIndex)
 
-          const disableChannel = async () => {
-            setIsDisabling(true)
+          const changeChannelStatus = async (targetStatus: number) => {
+            setPendingChannelStatus(targetStatus)
             try {
               const response = await updateChannelStatus(
                 log.channel,
-                CHANNEL_STATUS.MANUAL_DISABLED
+                targetStatus
               )
               if (!response.success) {
                 toast.error(
@@ -405,16 +418,28 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                 return
               }
 
+              const enabling = targetStatus === CHANNEL_STATUS.ENABLED
               if (response.data) {
-                toast.success(t(CHANNEL_SUCCESS_MESSAGES.DISABLED))
+                toast.success(
+                  t(
+                    enabling
+                      ? CHANNEL_SUCCESS_MESSAGES.ENABLED
+                      : CHANNEL_SUCCESS_MESSAGES.DISABLED
+                  )
+                )
               } else {
-                toast.info(t('Disabled'))
+                toast.info(t(enabling ? 'Enabled' : 'Disabled'))
               }
-              await queryClient.invalidateQueries({ queryKey: ['logs'] })
+              await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ['logs'] }),
+                queryClient.invalidateQueries({
+                  queryKey: channelsQueryKeys.all,
+                }),
+              ])
             } catch {
               toast.error(t(CHANNEL_ERROR_MESSAGES.UPDATE_FAILED))
             } finally {
-              setIsDisabling(false)
+              setPendingChannelStatus(null)
             }
           }
 
@@ -558,19 +583,44 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                         {channelName}
                       </span>
                     )}
+                    {canEnableChannel && (
+                      <button
+                        type='button'
+                        className='focus-visible:ring-ring inline-flex size-5 shrink-0 items-center justify-center rounded text-emerald-600 transition-colors hover:bg-emerald-500/10 focus-visible:ring-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 dark:text-emerald-400'
+                        aria-label={t('Enable')}
+                        title={t('Enable')}
+                        disabled={pendingChannelStatus !== null}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          void changeChannelStatus(CHANNEL_STATUS.ENABLED)
+                        }}
+                      >
+                        {pendingChannelStatus === CHANNEL_STATUS.ENABLED ? (
+                          <Loader2
+                            className='size-3 animate-spin'
+                            aria-hidden='true'
+                          />
+                        ) : (
+                          <Power className='size-3' aria-hidden='true' />
+                        )}
+                      </button>
+                    )}
                     {canDisableChannel && (
                       <button
                         type='button'
                         className='text-destructive hover:bg-destructive/10 focus-visible:ring-ring inline-flex size-5 shrink-0 items-center justify-center rounded transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50'
-                        aria-label={t('Disable')}
-                        title={t('Disable')}
-                        disabled={isDisabling}
+                        aria-label={disableChannelLabel}
+                        title={disableChannelLabel}
+                        disabled={pendingChannelStatus !== null}
                         onClick={(event) => {
                           event.stopPropagation()
-                          void disableChannel()
+                          void changeChannelStatus(
+                            CHANNEL_STATUS.MANUAL_DISABLED
+                          )
                         }}
                       >
-                        {isDisabling ? (
+                        {pendingChannelStatus ===
+                        CHANNEL_STATUS.MANUAL_DISABLED ? (
                           <Loader2
                             className='size-3 animate-spin'
                             aria-hidden='true'
