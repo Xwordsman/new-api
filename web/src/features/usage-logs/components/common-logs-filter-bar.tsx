@@ -39,7 +39,7 @@ import {
 
 import { LOG_TYPE_ALL_VALUE, LOG_TYPE_FILTERS } from '../constants'
 import { buildSearchParams } from '../lib/filter'
-import { getDefaultTimeRange } from '../lib/utils'
+import { getDefaultCommonLogsTimeRange } from '../lib/utils'
 import type { CommonLogFilters, UsageLogsSearchParams } from '../types'
 import { CommonLogsStats } from './common-logs-stats'
 import { CompactDateTimeRangePicker } from './compact-date-time-range-picker'
@@ -120,7 +120,7 @@ export function CommonLogsFilterBar<TData>(
   const fetchingLogs = useIsFetching({ queryKey: ['logs'] })
 
   const searchState = useMemo<CommonLogDraft>(() => {
-    const { start, end } = getDefaultTimeRange()
+    const { start } = getDefaultCommonLogsTimeRange()
     const sourceValues = {
       startTime: searchParams.startTime,
       endTime: searchParams.endTime,
@@ -137,7 +137,9 @@ export function CommonLogsFilterBar<TData>(
       startTime: searchParams.startTime
         ? new Date(searchParams.startTime)
         : start,
-      endTime: searchParams.endTime ? new Date(searchParams.endTime) : end,
+      endTime: searchParams.endTime
+        ? new Date(searchParams.endTime)
+        : undefined,
       channel: searchParams.channel || undefined,
       model: searchParams.model || undefined,
       token: searchParams.token || undefined,
@@ -195,15 +197,18 @@ export function CommonLogsFilterBar<TData>(
   }, [filters, logType, onApply, queryClient])
 
   const handleReset = useCallback(() => {
-    const { start, end } = getDefaultTimeRange()
-    const resetFilters: CommonLogFilters = { startTime: start, endTime: end }
+    const { start } = getDefaultCommonLogsTimeRange()
+    const resetFilters: CommonLogFilters = { startTime: start }
+    const resetSearchParams: UsageLogsSearchParams = {
+      startTime: start.getTime(),
+    }
     setDraft({
-      sourceKey: buildSearchSourceKey({}),
+      sourceKey: buildSearchSourceKey(resetSearchParams),
       filters: resetFilters,
       logType: LOG_TYPE_ALL_VALUE,
     })
 
-    onApply({})
+    onApply(resetSearchParams)
     queryClient.invalidateQueries({ queryKey: ['logs'] })
     queryClient.invalidateQueries({ queryKey: ['usage-logs-stats'] })
   }, [onApply, queryClient])

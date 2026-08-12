@@ -19,7 +19,11 @@ For commercial licensing, please contact support@quantumnous.com
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 
-import { getDefaultTimeRange } from '../utils'
+import {
+  buildApiParams,
+  getDefaultCommonLogsTimeRange,
+  getDefaultTimeRange,
+} from '../utils'
 
 describe('usage logs default time range', () => {
   test('starts at local midnight and ends at the current time', () => {
@@ -33,5 +37,28 @@ describe('usage logs default time range', () => {
     assert.equal(start.getMilliseconds(), 0)
     assert.ok(end.getTime() >= before)
     assert.ok(end.getTime() <= after)
+  })
+
+  test('common logs start at local midnight without a fixed end time', () => {
+    const { start, end } = getDefaultCommonLogsTimeRange()
+
+    assert.equal(start.getHours(), 0)
+    assert.equal(start.getMinutes(), 0)
+    assert.equal(start.getSeconds(), 0)
+    assert.equal(start.getMilliseconds(), 0)
+    assert.equal(end, undefined)
+  })
+
+  test('common log API params preserve an open-ended range', () => {
+    const startTime = new Date(2026, 7, 11, 0, 0, 0, 0).getTime()
+    const params = buildApiParams({
+      page: 1,
+      pageSize: 100,
+      searchParams: { startTime },
+      isAdmin: true,
+    })
+
+    assert.equal(params.start_timestamp, Math.floor(startTime / 1000))
+    assert.equal(params.end_timestamp, undefined)
   })
 })

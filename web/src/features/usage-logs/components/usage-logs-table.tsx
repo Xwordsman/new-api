@@ -39,7 +39,10 @@ import {
 } from '../constants'
 import { useColumnsByCategory } from '../lib/columns'
 import { parseLogOther } from '../lib/format'
-import { fetchLogsByCategory } from '../lib/utils'
+import {
+  fetchLogsByCategory,
+  getDefaultCommonLogsTimeRange,
+} from '../lib/utils'
 import type { LogCategory, UsageLogsSearchParams } from '../types'
 import { CommonLogsFilterBar } from './common-logs-filter-bar'
 import { TaskLogsFilterBar } from './task-logs-filter-bar'
@@ -85,7 +88,9 @@ export function UsageLogsTable({ logCategory }: UsageLogsTableProps) {
   const routeSearchParams = route.useSearch()
   const isCommon = logCategory === 'common'
   const [commonSearchParams, setCommonSearchParams] =
-    useState<UsageLogsSearchParams>({})
+    useState<UsageLogsSearchParams>(() => ({
+      startTime: getDefaultCommonLogsTimeRange().start.getTime(),
+    }))
   const searchParams = isCommon ? commonSearchParams : routeSearchParams
 
   const {

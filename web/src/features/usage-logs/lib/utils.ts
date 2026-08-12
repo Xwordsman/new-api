@@ -84,6 +84,18 @@ export function getDefaultTimeRange(): { start: Date; end: Date } {
 }
 
 /**
+ * Get the open-ended default range for common logs.
+ */
+export function getDefaultCommonLogsTimeRange(): {
+  start: Date
+  end?: Date
+} {
+  const { start } = getDefaultTimeRange()
+
+  return { start }
+}
+
+/**
  * Convert milliseconds timestamp to seconds for API
  */
 function timestampToSeconds(ms: number): number {
