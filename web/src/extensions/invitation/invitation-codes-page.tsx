@@ -82,6 +82,7 @@ import {
   getInvitationCodes,
   updateInvitationCode,
 } from './api'
+import { InvitationSectionTabs } from './invitation-section-tabs'
 import type { InvitationCode } from './types'
 
 const PAGE_SIZE = 20
@@ -269,6 +270,7 @@ export function InvitationCodesPage() {
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
           <div className='flex h-full min-h-0 flex-col gap-3'>
+            <InvitationSectionTabs />
             <form
               className='flex max-w-md gap-2'
               onSubmit={(event) => {

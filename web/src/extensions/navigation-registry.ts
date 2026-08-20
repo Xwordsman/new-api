@@ -24,12 +24,9 @@ const EXTENSION_NAV_ITEMS = [
     url: '/system-settings/homepage/settings',
   },
   {
-    titleKey: 'Invitation Settings',
+    titleKey: 'Invitation Management',
     url: '/system-settings/invitation/settings',
-  },
-  {
-    titleKey: 'Code Management',
-    url: '/system-settings/invitation/codes',
+    activeUrls: ['/system-settings/invitation/codes'],
   },
 ] as const
 
@@ -37,5 +34,6 @@ export function getExtensionNavItems(t: TFunction) {
   return EXTENSION_NAV_ITEMS.map((item) => ({
     title: t(item.titleKey),
     url: item.url,
+    ...('activeUrls' in item ? { activeUrls: item.activeUrls } : {}),
   }))
 }

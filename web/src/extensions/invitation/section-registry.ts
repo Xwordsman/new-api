@@ -22,15 +22,17 @@ export const INVITATION_SECTION_IDS = ['settings', 'codes'] as const
 export type InvitationSectionId = (typeof INVITATION_SECTION_IDS)[number]
 export const INVITATION_DEFAULT_SECTION: InvitationSectionId = 'settings'
 
+export const INVITATION_SECTION_META: Record<
+  InvitationSectionId,
+  { titleKey: string }
+> = {
+  settings: { titleKey: 'Invitation Settings' },
+  codes: { titleKey: 'Code Management' },
+}
+
 export function getInvitationSectionNavItems(t: TFunction) {
-  return [
-    {
-      title: t('Invitation Settings'),
-      url: '/system-settings/invitation/settings',
-    },
-    {
-      title: t('Code Management'),
-      url: '/system-settings/invitation/codes',
-    },
-  ]
+  return INVITATION_SECTION_IDS.map((section) => ({
+    section,
+    title: t(INVITATION_SECTION_META[section].titleKey),
+  }))
 }

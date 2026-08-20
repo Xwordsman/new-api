@@ -38,6 +38,7 @@ import {
 import { Switch } from '@/components/ui/switch'
 
 import { getInvitationSettings, updateInvitationSettings } from './api'
+import { InvitationSectionTabs } from './invitation-section-tabs'
 
 const settingsSchema = z.object({
   enabled: z.boolean(),
@@ -97,38 +98,41 @@ export function InvitationSettingsPage() {
         </Button>
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit((values) =>
-              updateMutation.mutate(values)
-            )}
-            className='max-w-3xl'
-          >
-            <FormField
-              control={form.control}
-              name='enabled'
-              render={({ field }) => (
-                <FormItem className='flex items-center justify-between gap-6 border-b py-4'>
-                  <div className='space-y-1'>
-                    <FormLabel>{t('Require Invitation Code')}</FormLabel>
-                    <FormDescription>
-                      {t(
-                        'When enabled, password registration requires a valid invitation code'
-                      )}
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                      disabled={settingsQuery.isLoading}
-                    />
-                  </FormControl>
-                </FormItem>
+        <div className='flex h-full min-h-0 flex-col gap-4'>
+          <InvitationSectionTabs />
+          <Form {...form}>
+            <form
+              onSubmit={form.handleSubmit((values) =>
+                updateMutation.mutate(values)
               )}
-            />
-          </form>
-        </Form>
+              className='max-w-3xl'
+            >
+              <FormField
+                control={form.control}
+                name='enabled'
+                render={({ field }) => (
+                  <FormItem className='flex items-center justify-between gap-6 border-b py-4'>
+                    <div className='space-y-1'>
+                      <FormLabel>{t('Require Invitation Code')}</FormLabel>
+                      <FormDescription>
+                        {t(
+                          'When enabled, password registration requires a valid invitation code'
+                        )}
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        disabled={settingsQuery.isLoading}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </form>
+          </Form>
+        </div>
       </SectionPageLayout.Content>
     </SectionPageLayout>
   )
