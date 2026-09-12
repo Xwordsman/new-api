@@ -29,25 +29,53 @@ export const INTERFACE_LANGUAGE_OPTIONS = [
 export type InterfaceLanguageCode =
   (typeof INTERFACE_LANGUAGE_OPTIONS)[number]['code']
 
+const INTERFACE_LANGUAGE_CODES = new Set<string>(
+  INTERFACE_LANGUAGE_OPTIONS.map((lang) => lang.code)
+)
+
 export function normalizeInterfaceLanguage(value?: string | null): string {
   if (!value) return 'en'
 
-  let normalized = value.trim().replaceAll('_', '-').toLowerCase()
-  if (
-    value === 'zh-TW' ||
-    value === 'zh-HK' ||
-    value === 'zh-MO' ||
-    value === 'zhTW'
-  ) {
-    normalized = 'zhTW'
-  }
-  if (value === 'zh-CN' || value === 'zh-Hans' || value === 'zhCN') {
-    normalized = 'zhCN'
+  const trimmed = value.trim()
+  if (!trimmed) return 'en'
+
+  const converted = convertDetectedLanguage(trimmed)
+  if (INTERFACE_LANGUAGE_CODES.has(converted)) {
+    return converted
   }
 
-  return INTERFACE_LANGUAGE_OPTIONS.some((lang) => lang.code === normalized)
-    ? normalized
-    : 'en'
+  const lower = trimmed.replaceAll('_', '-').toLowerCase()
+  const matched = INTERFACE_LANGUAGE_OPTIONS.find((lang) => {
+    const code = lang.code.toLowerCase()
+    return code === lower || lower.startsWith(`${code}-`)
+  })
+  return matched?.code ?? 'en'
+}
+
+export function getUserInterfaceLanguage(user: {
+  language?: unknown
+  setting?: unknown
+}): string | undefined {
+  let language: string | undefined
+
+  if (typeof user.language === 'string') {
+    language = user.language
+  } else if (user.setting && typeof user.setting === 'object') {
+    const languageValue =
+      'language' in user.setting ? user.setting.language : undefined
+    language = typeof languageValue === 'string' ? languageValue : undefined
+  } else if (typeof user.setting === 'string') {
+    try {
+      const setting = JSON.parse(user.setting) as { language?: unknown }
+      language =
+        typeof setting.language === 'string' ? setting.language : undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  if (!language?.trim()) return undefined
+  return normalizeInterfaceLanguage(language)
 }
 
 /**
@@ -64,6 +92,7 @@ export function convertDetectedLanguage(value: string): string {
   const lower = value.trim().replaceAll('_', '-').toLowerCase()
   if (!lower.startsWith('zh')) return value
   if (
+    lower === 'zhtw' ||
     lower === 'zh-tw' ||
     lower === 'zh-hk' ||
     lower === 'zh-mo' ||

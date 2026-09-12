@@ -88,4 +88,16 @@ describe('saved authentication language', () => {
       undefined
     )
   })
+
+  test('maps backend Chinese codes onto interface language codes', () => {
+    assert.equal(
+      getSavedLanguage({ ...user, setting: { language: 'zh' } }),
+      'zhCN'
+    )
+    assert.equal(getSavedLanguage({ ...user, language: 'zh-CN' }), 'zhCN')
+    assert.equal(
+      getSavedLanguage({ ...user, setting: '{"language":"zh-TW"}' }),
+      'zhTW'
+    )
+  })
 })

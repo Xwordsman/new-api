@@ -18,8 +18,9 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import type { QueryClient } from '@tanstack/react-query'
 import axios from 'axios'
-import { t } from 'i18next'
+import i18n, { t } from 'i18next'
 
+import { getUserInterfaceLanguage } from '@/i18n/languages'
 import { publishAuthSessionEvent } from '@/lib/auth-session-sync'
 import { hasSessionHint } from '@/lib/session-hint'
 import {
@@ -147,6 +148,13 @@ function isAuthTokenRotation(value: unknown): value is AuthTokenRotation {
   )
 }
 
+function syncInterfaceLanguage(user: AuthUser): void {
+  const savedLang = getUserInterfaceLanguage(user)
+  if (savedLang && savedLang !== i18n.language) {
+    void i18n.changeLanguage(savedLang)
+  }
+}
+
 export function applyAuthBundle(
   bundle: AuthBundle,
   synchronizeTabs = true
@@ -157,6 +165,7 @@ export function applyAuthBundle(
   if (synchronizeTabs && previousSID !== bundle.session.sid) {
     publishAuthSessionEvent('authenticated', bundle.session.sid)
   }
+  syncInterfaceLanguage(bundle.user)
 }
 
 export function applyAuthRotation(value: unknown): void {
@@ -374,6 +383,7 @@ export async function resolveAuthentication(): Promise<RefreshOutcome> {
   const bundle = currentValidAuthBundle()
   if (bundle) {
     useAuthStore.getState().auth.setBootstrapState('complete')
+    syncInterfaceLanguage(bundle.user)
     return { kind: 'authenticated', bundle }
   }
 
