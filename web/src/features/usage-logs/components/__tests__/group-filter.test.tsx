@@ -23,6 +23,8 @@ import {
   createRoute,
   createRouter,
   RouterProvider,
+  useRouter,
+  useRouterState,
 } from '@tanstack/react-router'
 import { getCoreRowModel, useReactTable } from '@tanstack/react-table'
 import {
@@ -38,6 +40,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth-store'
 
+import type { UsageLogsSearchParams } from '../../types'
 import { CommonLogsFilterBar } from '../common-logs-filter-bar'
 import { UsageLogsProvider } from '../usage-logs-provider'
 
@@ -52,9 +55,21 @@ function FilterFixture() {
     columns: [],
     getCoreRowModel: getCoreRowModel(),
   })
+  const router = useRouter()
+  const searchParams = useRouterState({
+    select: (state) => state.location.search,
+  }) as UsageLogsSearchParams
   return (
     <UsageLogsProvider>
-      <CommonLogsFilterBar table={table} />
+      <CommonLogsFilterBar
+        table={table}
+        searchParams={searchParams}
+        onApply={(nextSearchParams) => {
+          void router.navigate({
+            search: (() => nextSearchParams) as never,
+          })
+        }}
+      />
     </UsageLogsProvider>
   )
 }
@@ -227,7 +242,7 @@ it('keeps the compact input and masks the dropdown together with other sensitive
   const option = await screen.findByRole('option', { name: 'premium' })
   const maskedField = input.closest('.\\[-webkit-text-security\\:disc\\]')
   expect(maskedField).not.toBeNull()
-  expect(maskedField).toContainElement(option)
+  expect(option.closest('.\\[-webkit-text-security\\:disc\\]')).not.toBeNull()
   await userEvent.keyboard('{Escape}')
   expect(input).toHaveAttribute('aria-expanded', 'false')
   await userEvent.tab()

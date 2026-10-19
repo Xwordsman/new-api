@@ -43,6 +43,8 @@ function makeLog(other: LogOtherData): UsageLog {
     is_stream: false,
     channel: 1,
     channel_name: 'channel',
+    channel_status: 0,
+    channel_base_url: '',
     token_id: 1,
     group: 'default',
     ip: '',

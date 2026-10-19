@@ -172,6 +172,8 @@ describe('quota adjustment log localization', () => {
         is_stream: false,
         channel: 0,
         channel_name: '',
+        channel_status: 0,
+        channel_base_url: '',
         token_id: 0,
         group: '',
         ip: '',

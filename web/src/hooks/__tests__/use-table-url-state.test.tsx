@@ -17,10 +17,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import assert from 'node:assert/strict'
-import { after, describe, test } from 'node:test'
 
 import { Window } from 'happy-dom'
 import { useEffect } from 'react'
+import { afterAll, describe, test } from 'vitest'
 
 const domWindow = new Window()
 const domGlobals = [
@@ -49,7 +49,7 @@ reactTestGlobals.IS_REACT_ACT_ENVIRONMENT = true
 type TableState = ReturnType<typeof useTableUrlState>
 
 describe('local table state', () => {
-  after(() => {
+  afterAll(() => {
     domWindow.close()
   })
 

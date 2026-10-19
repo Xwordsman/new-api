@@ -66,26 +66,14 @@ func TestGetAllLogsIncludesCurrentChannelDetails(t *testing.T) {
 		ChannelId: channel.Id,
 	}).Error)
 
-	logs, total, err := GetAllLogs(
-		LogTypeUnknown,
-		0,
-		0,
-		"",
-		"",
-		"",
-		0,
-		10,
-		0,
-		"",
-		"",
-		"",
-	)
+	logs, total, err := GetAllLogs(LogFilter{}, 0, 10)
 	require.NoError(t, err)
 	require.EqualValues(t, 1, total)
 	require.Len(t, logs, 1)
 	assert.Equal(t, channel.Name, logs[0].ChannelName)
 	assert.Equal(t, channel.Status, logs[0].ChannelStatus)
 	assert.Equal(t, baseURL, logs[0].ChannelBaseURL)
+}
 
 func TestTaskPluginLogVisibilityIsRoleSeparated(t *testing.T) {
 	other := common.MapToJsonStr(map[string]any{
