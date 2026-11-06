@@ -4,8 +4,6 @@ import (
 	"io"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/relaykit/dto"
-	"github.com/tidwall/gjson"
 )
 
 // NewOutboundJSONBody wraps the already-marshaled upstream request body into a
@@ -30,26 +28,4 @@ func NewOutboundJSONBody(data []byte) (body common.ReplayableBody, closer io.Clo
 		return nil, nil, err
 	}
 	return common.NewReplayableBodyReader(storage), storage, nil
-}
-
-// PreparePassThroughJSONBody keeps the zero-copy pass-through path unless the
-// channel needs to inject the default OpenAI Fast service tier.
-func PreparePassThroughJSONBody(storage common.BodyStorage, settings dto.ChannelOtherSettings) (body common.ReplayableBody, closer io.Closer, err error) {
-	if !settings.ForceOpenAIFast {
-		return common.NewReplayableBodyReader(storage), nil, nil
-	}
-
-	data, err := storage.Bytes()
-	if err != nil {
-		return nil, nil, err
-	}
-	if gjson.GetBytes(data, "service_tier").Exists() {
-		return common.NewReplayableBodyReader(storage), nil, nil
-	}
-
-	data, err = ApplyOpenAIFastServiceTier(data, settings)
-	if err != nil {
-		return nil, nil, err
-	}
-	return NewOutboundJSONBody(data)
 }
