@@ -30,10 +30,8 @@ import {
 const translate = ((key: string) => key) as TFunction
 
 describe('invitation extension navigation', () => {
-  test('exposes one plugin entry for all invitation sections', () => {
-    const invitationItems = getExtensionNavItems(translate).filter((item) =>
-      item.url.startsWith('/system-settings/invitation/')
-    )
+  test('lists invitation management without the removed homepage settings entry', () => {
+    const invitationItems = getExtensionNavItems(translate)
 
     assert.deepEqual(invitationItems, [
       {

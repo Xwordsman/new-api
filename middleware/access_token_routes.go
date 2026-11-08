@@ -59,8 +59,6 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"POST /api/verify":                    accessTokenAnyRule,
 
 	// Compile-time extensions use RootAuth and remain browser-session only.
-	"GET /api/extensions/homepage/admin/settings":       accessTokenSessionRule,
-	"PUT /api/extensions/homepage/admin/settings":       accessTokenSessionRule,
 	"GET /api/extensions/invitation/admin/settings":     accessTokenSessionRule,
 	"PUT /api/extensions/invitation/admin/settings":     accessTokenSessionRule,
 	"GET /api/extensions/invitation/admin/codes":        accessTokenSessionRule,

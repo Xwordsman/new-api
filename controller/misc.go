@@ -44,11 +44,6 @@ func GetStatus(c *gin.Context) {
 	if err != nil {
 		common.SysError("failed to load invitation registration status: " + err.Error())
 	}
-	homepageAccessSettings, err := extensions.HomepageAccessSettings(model.DB)
-	if err != nil {
-		common.SysError("failed to load homepage access settings: " + err.Error())
-	}
-
 	cs := console_setting.GetConsoleSetting()
 	passkeySetting := system_setting.PasskeySettingsSnapshot()
 	common.OptionMapRWMutex.RLock()
@@ -100,7 +95,6 @@ func GetStatus(c *gin.Context) {
 		"password_login_enabled":          common.PasswordLoginEnabled,
 		"password_register_enabled":       common.PasswordRegisterEnabled,
 		"invitation_registration_enabled": invitationRegistrationEnabled,
-		"homepage_access":                 homepageAccessSettings,
 		"default_use_auto_group":          setting.DefaultUseAutoGroup,
 
 		"password_login_encryption_enabled": common.PasswordLoginEncryptionEnabled,

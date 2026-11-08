@@ -62,8 +62,6 @@ import { Route as AuthenticatedSystemSettingsBillingIndexRouteImport } from './r
 import { Route as AuthenticatedSystemSettingsBillingSectionRouteImport } from './routes/_authenticated/system-settings/billing/$section'
 import { Route as AuthenticatedSystemSettingsContentIndexRouteImport } from './routes/_authenticated/system-settings/content/index'
 import { Route as AuthenticatedSystemSettingsContentSectionRouteImport } from './routes/_authenticated/system-settings/content/$section'
-import { Route as AuthenticatedSystemSettingsHomepageIndexRouteImport } from './routes/_authenticated/system-settings/homepage/index'
-import { Route as AuthenticatedSystemSettingsHomepageSectionRouteImport } from './routes/_authenticated/system-settings/homepage/$section'
 import { Route as AuthenticatedSystemSettingsInvitationIndexRouteImport } from './routes/_authenticated/system-settings/invitation/index'
 import { Route as AuthenticatedSystemSettingsInvitationSectionRouteImport } from './routes/_authenticated/system-settings/invitation/$section'
 import { Route as AuthenticatedSystemSettingsModelsIndexRouteImport } from './routes/_authenticated/system-settings/models/index'
@@ -365,18 +363,6 @@ const AuthenticatedSystemSettingsContentSectionRoute =
     path: '/content/$section',
     getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
   } as any)
-const AuthenticatedSystemSettingsHomepageIndexRoute =
-  AuthenticatedSystemSettingsHomepageIndexRouteImport.update({
-    id: '/homepage/',
-    path: '/homepage/',
-    getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
-  } as any)
-const AuthenticatedSystemSettingsHomepageSectionRoute =
-  AuthenticatedSystemSettingsHomepageSectionRouteImport.update({
-    id: '/homepage/$section',
-    path: '/homepage/$section',
-    getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
-  } as any)
 const AuthenticatedSystemSettingsInvitationIndexRoute =
   AuthenticatedSystemSettingsInvitationIndexRouteImport.update({
     id: '/invitation/',
@@ -499,7 +485,6 @@ export interface FileRoutesByFullPath {
   '/system-settings/auth/$section': typeof AuthenticatedSystemSettingsAuthSectionRoute
   '/system-settings/billing/$section': typeof AuthenticatedSystemSettingsBillingSectionRoute
   '/system-settings/content/$section': typeof AuthenticatedSystemSettingsContentSectionRoute
-  '/system-settings/homepage/$section': typeof AuthenticatedSystemSettingsHomepageSectionRoute
   '/system-settings/invitation/$section': typeof AuthenticatedSystemSettingsInvitationSectionRoute
   '/system-settings/models/$section': typeof AuthenticatedSystemSettingsModelsSectionRoute
   '/system-settings/operations/$section': typeof AuthenticatedSystemSettingsOperationsSectionRoute
@@ -509,7 +494,6 @@ export interface FileRoutesByFullPath {
   '/system-settings/auth/': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/system-settings/billing/': typeof AuthenticatedSystemSettingsBillingIndexRoute
   '/system-settings/content/': typeof AuthenticatedSystemSettingsContentIndexRoute
-  '/system-settings/homepage/': typeof AuthenticatedSystemSettingsHomepageIndexRoute
   '/system-settings/invitation/': typeof AuthenticatedSystemSettingsInvitationIndexRoute
   '/system-settings/models/': typeof AuthenticatedSystemSettingsModelsIndexRoute
   '/system-settings/operations/': typeof AuthenticatedSystemSettingsOperationsIndexRoute
@@ -565,7 +549,6 @@ export interface FileRoutesByTo {
   '/system-settings/auth/$section': typeof AuthenticatedSystemSettingsAuthSectionRoute
   '/system-settings/billing/$section': typeof AuthenticatedSystemSettingsBillingSectionRoute
   '/system-settings/content/$section': typeof AuthenticatedSystemSettingsContentSectionRoute
-  '/system-settings/homepage/$section': typeof AuthenticatedSystemSettingsHomepageSectionRoute
   '/system-settings/invitation/$section': typeof AuthenticatedSystemSettingsInvitationSectionRoute
   '/system-settings/models/$section': typeof AuthenticatedSystemSettingsModelsSectionRoute
   '/system-settings/operations/$section': typeof AuthenticatedSystemSettingsOperationsSectionRoute
@@ -575,7 +558,6 @@ export interface FileRoutesByTo {
   '/system-settings/auth': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/system-settings/billing': typeof AuthenticatedSystemSettingsBillingIndexRoute
   '/system-settings/content': typeof AuthenticatedSystemSettingsContentIndexRoute
-  '/system-settings/homepage': typeof AuthenticatedSystemSettingsHomepageIndexRoute
   '/system-settings/invitation': typeof AuthenticatedSystemSettingsInvitationIndexRoute
   '/system-settings/models': typeof AuthenticatedSystemSettingsModelsIndexRoute
   '/system-settings/operations': typeof AuthenticatedSystemSettingsOperationsIndexRoute
@@ -635,7 +617,6 @@ export interface FileRoutesById {
   '/_authenticated/system-settings/auth/$section': typeof AuthenticatedSystemSettingsAuthSectionRoute
   '/_authenticated/system-settings/billing/$section': typeof AuthenticatedSystemSettingsBillingSectionRoute
   '/_authenticated/system-settings/content/$section': typeof AuthenticatedSystemSettingsContentSectionRoute
-  '/_authenticated/system-settings/homepage/$section': typeof AuthenticatedSystemSettingsHomepageSectionRoute
   '/_authenticated/system-settings/invitation/$section': typeof AuthenticatedSystemSettingsInvitationSectionRoute
   '/_authenticated/system-settings/models/$section': typeof AuthenticatedSystemSettingsModelsSectionRoute
   '/_authenticated/system-settings/operations/$section': typeof AuthenticatedSystemSettingsOperationsSectionRoute
@@ -645,7 +626,6 @@ export interface FileRoutesById {
   '/_authenticated/system-settings/auth/': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/_authenticated/system-settings/billing/': typeof AuthenticatedSystemSettingsBillingIndexRoute
   '/_authenticated/system-settings/content/': typeof AuthenticatedSystemSettingsContentIndexRoute
-  '/_authenticated/system-settings/homepage/': typeof AuthenticatedSystemSettingsHomepageIndexRoute
   '/_authenticated/system-settings/invitation/': typeof AuthenticatedSystemSettingsInvitationIndexRoute
   '/_authenticated/system-settings/models/': typeof AuthenticatedSystemSettingsModelsIndexRoute
   '/_authenticated/system-settings/operations/': typeof AuthenticatedSystemSettingsOperationsIndexRoute
@@ -704,7 +684,6 @@ export interface FileRouteTypes {
     | '/system-settings/auth/$section'
     | '/system-settings/billing/$section'
     | '/system-settings/content/$section'
-    | '/system-settings/homepage/$section'
     | '/system-settings/invitation/$section'
     | '/system-settings/models/$section'
     | '/system-settings/operations/$section'
@@ -714,7 +693,6 @@ export interface FileRouteTypes {
     | '/system-settings/auth/'
     | '/system-settings/billing/'
     | '/system-settings/content/'
-    | '/system-settings/homepage/'
     | '/system-settings/invitation/'
     | '/system-settings/models/'
     | '/system-settings/operations/'
@@ -770,7 +748,6 @@ export interface FileRouteTypes {
     | '/system-settings/auth/$section'
     | '/system-settings/billing/$section'
     | '/system-settings/content/$section'
-    | '/system-settings/homepage/$section'
     | '/system-settings/invitation/$section'
     | '/system-settings/models/$section'
     | '/system-settings/operations/$section'
@@ -780,7 +757,6 @@ export interface FileRouteTypes {
     | '/system-settings/auth'
     | '/system-settings/billing'
     | '/system-settings/content'
-    | '/system-settings/homepage'
     | '/system-settings/invitation'
     | '/system-settings/models'
     | '/system-settings/operations'
@@ -839,7 +815,6 @@ export interface FileRouteTypes {
     | '/_authenticated/system-settings/auth/$section'
     | '/_authenticated/system-settings/billing/$section'
     | '/_authenticated/system-settings/content/$section'
-    | '/_authenticated/system-settings/homepage/$section'
     | '/_authenticated/system-settings/invitation/$section'
     | '/_authenticated/system-settings/models/$section'
     | '/_authenticated/system-settings/operations/$section'
@@ -849,7 +824,6 @@ export interface FileRouteTypes {
     | '/_authenticated/system-settings/auth/'
     | '/_authenticated/system-settings/billing/'
     | '/_authenticated/system-settings/content/'
-    | '/_authenticated/system-settings/homepage/'
     | '/_authenticated/system-settings/invitation/'
     | '/_authenticated/system-settings/models/'
     | '/_authenticated/system-settings/operations/'
@@ -1250,20 +1224,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSystemSettingsContentSectionRouteImport
       parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
     }
-    '/_authenticated/system-settings/homepage/': {
-      id: '/_authenticated/system-settings/homepage/'
-      path: '/homepage'
-      fullPath: '/system-settings/homepage/'
-      preLoaderRoute: typeof AuthenticatedSystemSettingsHomepageIndexRouteImport
-      parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
-    }
-    '/_authenticated/system-settings/homepage/$section': {
-      id: '/_authenticated/system-settings/homepage/$section'
-      path: '/homepage/$section'
-      fullPath: '/system-settings/homepage/$section'
-      preLoaderRoute: typeof AuthenticatedSystemSettingsHomepageSectionRouteImport
-      parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
-    }
     '/_authenticated/system-settings/invitation/': {
       id: '/_authenticated/system-settings/invitation/'
       path: '/invitation'
@@ -1382,7 +1342,6 @@ interface AuthenticatedSystemSettingsRouteRouteChildren {
   AuthenticatedSystemSettingsAuthSectionRoute: typeof AuthenticatedSystemSettingsAuthSectionRoute
   AuthenticatedSystemSettingsBillingSectionRoute: typeof AuthenticatedSystemSettingsBillingSectionRoute
   AuthenticatedSystemSettingsContentSectionRoute: typeof AuthenticatedSystemSettingsContentSectionRoute
-  AuthenticatedSystemSettingsHomepageSectionRoute: typeof AuthenticatedSystemSettingsHomepageSectionRoute
   AuthenticatedSystemSettingsInvitationSectionRoute: typeof AuthenticatedSystemSettingsInvitationSectionRoute
   AuthenticatedSystemSettingsModelsSectionRoute: typeof AuthenticatedSystemSettingsModelsSectionRoute
   AuthenticatedSystemSettingsOperationsSectionRoute: typeof AuthenticatedSystemSettingsOperationsSectionRoute
@@ -1392,7 +1351,6 @@ interface AuthenticatedSystemSettingsRouteRouteChildren {
   AuthenticatedSystemSettingsAuthIndexRoute: typeof AuthenticatedSystemSettingsAuthIndexRoute
   AuthenticatedSystemSettingsBillingIndexRoute: typeof AuthenticatedSystemSettingsBillingIndexRoute
   AuthenticatedSystemSettingsContentIndexRoute: typeof AuthenticatedSystemSettingsContentIndexRoute
-  AuthenticatedSystemSettingsHomepageIndexRoute: typeof AuthenticatedSystemSettingsHomepageIndexRoute
   AuthenticatedSystemSettingsInvitationIndexRoute: typeof AuthenticatedSystemSettingsInvitationIndexRoute
   AuthenticatedSystemSettingsModelsIndexRoute: typeof AuthenticatedSystemSettingsModelsIndexRoute
   AuthenticatedSystemSettingsOperationsIndexRoute: typeof AuthenticatedSystemSettingsOperationsIndexRoute
@@ -1411,8 +1369,6 @@ const AuthenticatedSystemSettingsRouteRouteChildren: AuthenticatedSystemSettings
       AuthenticatedSystemSettingsBillingSectionRoute,
     AuthenticatedSystemSettingsContentSectionRoute:
       AuthenticatedSystemSettingsContentSectionRoute,
-    AuthenticatedSystemSettingsHomepageSectionRoute:
-      AuthenticatedSystemSettingsHomepageSectionRoute,
     AuthenticatedSystemSettingsInvitationSectionRoute:
       AuthenticatedSystemSettingsInvitationSectionRoute,
     AuthenticatedSystemSettingsModelsSectionRoute:
@@ -1431,8 +1387,6 @@ const AuthenticatedSystemSettingsRouteRouteChildren: AuthenticatedSystemSettings
       AuthenticatedSystemSettingsBillingIndexRoute,
     AuthenticatedSystemSettingsContentIndexRoute:
       AuthenticatedSystemSettingsContentIndexRoute,
-    AuthenticatedSystemSettingsHomepageIndexRoute:
-      AuthenticatedSystemSettingsHomepageIndexRoute,
     AuthenticatedSystemSettingsInvitationIndexRoute:
       AuthenticatedSystemSettingsInvitationIndexRoute,
     AuthenticatedSystemSettingsModelsIndexRoute:

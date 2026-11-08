@@ -23,10 +23,6 @@ import { PublicLayout } from '@/components/layout'
 import { Footer } from '@/components/layout/components/footer'
 import { RichContent } from '@/components/rich-content'
 import { useTheme } from '@/context/theme-provider'
-import { CommunityHomepage } from '@/extensions/homepage/community-homepage'
-import { HomepageReplacement } from '@/extensions/homepage/homepage-replacement'
-import { parseHomepageSettings } from '@/extensions/homepage/parse-settings'
-import { useStatus } from '@/hooks/use-status'
 import { isLikelyHtml } from '@/lib/content-format'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -40,8 +36,6 @@ export function Home() {
   const { auth } = useAuthStore()
   const isAuthenticated = !!auth.user
   const { content, isLoaded, isUrl } = useHomePageContent()
-  const { status, loading: statusLoading } = useStatus()
-  const homepageSettings = parseHomepageSettings(status?.homepage_access)
 
   const syncIframePreferences = useCallback(() => {
     try {
@@ -64,7 +58,7 @@ export function Home() {
     }
   }, [isUrl, syncIframePreferences])
 
-  if (!isLoaded || (statusLoading && !status)) {
+  if (!isLoaded) {
     return (
       <PublicLayout showMainContainer={false}>
         <main className='flex min-h-screen items-center justify-center'>
@@ -72,21 +66,6 @@ export function Home() {
         </main>
       </PublicLayout>
     )
-  }
-
-  if (homepageSettings?.enabled) {
-    if (homepageSettings.mode === 'community') {
-      return (
-        <PublicLayout showMainContainer={false}>
-          <CommunityHomepage
-            settings={homepageSettings}
-            status={status}
-            isAuthenticated={isAuthenticated}
-          />
-        </PublicLayout>
-      )
-    }
-    return <HomepageReplacement settings={homepageSettings} />
   }
 
   if (content) {

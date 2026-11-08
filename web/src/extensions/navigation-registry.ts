@@ -20,10 +20,6 @@ import type { TFunction } from 'i18next'
 
 const EXTENSION_NAV_ITEMS = [
   {
-    titleKey: 'Homepage Settings',
-    url: '/system-settings/homepage/settings',
-  },
-  {
     titleKey: 'Invitation Management',
     url: '/system-settings/invitation/settings',
     activeUrls: ['/system-settings/invitation/codes'],
