@@ -20,6 +20,50 @@ import type { TFunction } from 'i18next'
 
 const EXTENSION_NAV_ITEMS = [
   {
+    titleKey: 'Daily Check-in',
+    url: '/system-settings/checkin',
+  },
+  {
+    titleKey: 'Documentation center',
+    url: '/system-settings/documentation',
+  },
+  {
+    titleKey: 'Concurrency management',
+    url: '/system-settings/concurrency',
+  },
+  {
+    titleKey: 'Email templates',
+    url: '/system-settings/email-templates',
+  },
+  {
+    titleKey: 'Request protection',
+    url: '/system-settings/request-protection',
+  },
+  {
+    titleKey: 'Key price protection',
+    url: '/system-settings/key-price-protection',
+  },
+  {
+    titleKey: 'Registration protection',
+    url: '/system-settings/registration-risk',
+  },
+  {
+    titleKey: 'Community leaderboard',
+    url: '/system-settings/leaderboard',
+  },
+  {
+    titleKey: 'Model benchmark',
+    url: '/system-settings/benchmark',
+  },
+  {
+    titleKey: 'Channel monitor',
+    url: '/system-settings/channel-monitor',
+  },
+  {
+    titleKey: 'Referral program',
+    url: '/system-settings/referrals',
+  },
+  {
     titleKey: 'Invitation Management',
     url: '/system-settings/invitation/settings',
     activeUrls: ['/system-settings/invitation/codes'],

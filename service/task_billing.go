@@ -10,6 +10,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/extensions/leaderboard/record"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
@@ -263,6 +264,7 @@ func taskModelName(task *model.Task) string {
 func RefundTaskQuota(ctx context.Context, task *model.Task, reason string) bool {
 	quota := task.Quota
 	if quota == 0 {
+		recordTaskSavings(ctx, task, 0, true)
 		return true
 	}
 
@@ -271,6 +273,7 @@ func RefundTaskQuota(ctx context.Context, task *model.Task, reason string) bool 
 		logger.LogWarn(ctx, common.LogText("failed to refund the funding source, task %s: %s", task.TaskID, err.Error()))
 		return false
 	}
+	recordTaskSavings(ctx, task, 0, true)
 
 	// 2. 退还令牌额度
 	taskAdjustTokenQuota(ctx, task, -quota)
@@ -315,6 +318,7 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 	quotaDelta := actualQuota - preConsumedQuota
 
 	if quotaDelta == 0 {
+		recordTaskSavings(ctx, task, actualQuota, false)
 		logger.LogInfo(ctx, common.LogText("task %s pre-consumed quota matches the actual quota (%s, %s)",
 			task.TaskID, logger.LogQuota(actualQuota), reason.Error()))
 		return
@@ -333,6 +337,7 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 		logger.LogError(ctx, common.LogText("failed to adjust funding for the difference, task %s: %s", task.TaskID, err.Error()))
 		return
 	}
+	recordTaskSavings(ctx, task, actualQuota, false)
 
 	// 调整令牌额度
 	taskAdjustTokenQuota(ctx, task, quotaDelta)
@@ -414,6 +419,11 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 	} else {
 		finalGroupRatio = groupRatio
 	}
+	// Completion may happen long after a promotion expires. New tasks carry
+	// the price selected on submission; legacy tasks keep their old fallback.
+	if billing := task.PrivateData.BillingContext; billing != nil {
+		finalGroupRatio = billing.GroupRatio
+	}
 
 	// 计算 OtherRatios 乘积（视频折扣、时长等）
 	otherMultiplier := 1.0
@@ -423,6 +433,13 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 
 	// 计算实际应扣费额度: totalTokens * modelRatio * groupRatio * otherMultiplier（饱和转换，防止溢出成负数）
 	actualQuota, clamp := common.QuotaFromFloatChecked(float64(totalTokens) * modelRatio * finalGroupRatio * otherMultiplier)
+	if bc := task.PrivateData.BillingContext; bc != nil && bc.LeaderboardSavings.Discounted() {
+		standard, standardClamp := common.QuotaFromFloatChecked(float64(totalTokens) * modelRatio * bc.LeaderboardSavings.Standard * otherMultiplier)
+		bc.LeaderboardSavings.Capture(standard, standardClamp)
+		if clamp != nil {
+			bc.LeaderboardSavings.Capture(0, clamp)
+		}
+	}
 
 	reason := common.NewMessage("Recalculated from tokens: tokens {{tokens}}, model ratio {{model_ratio}}, group ratio {{group_ratio}}, other multiplier {{other_multiplier}}", map[string]any{
 		"tokens":           totalTokens,
@@ -432,6 +449,16 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 	})
 	RecalculateTaskQuota(ctx, task, actualQuota, reason, clamp)
 	return true
+}
+
+// recordTaskSavings uses submission provenance so polling, retries and refunds
+// revise the original receipt instead of creating a second leaderboard entry.
+func recordTaskSavings(ctx context.Context, task *model.Task, quota int, refund bool) {
+	bc, execution := task.PrivateData.BillingContext, task.PrivateData.Execution
+	if bc == nil || execution == nil {
+		return // Historical tasks have no frozen comparison price.
+	}
+	record.Settled(ctx, execution.RequestID, task.UserId, bc.LeaderboardSavings, quota, refund)
 }
 
 // EvaluateTaskCompletionUsage evaluates actual facts against the frozen task

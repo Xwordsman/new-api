@@ -72,3 +72,44 @@ test('keeps the current time when the time field is emptied', () => {
   expect(onChange).not.toHaveBeenCalled()
   expect(field).toHaveValue('20:30:45')
 })
+
+test('exposes field names and validation feedback and disables date, time and clearing while saving', () => {
+  const onChange = vi.fn()
+  const view = render(
+    <>
+      <p id='date-error'>Invalid date range</p>
+      <DateTimePicker
+        id='offer-end'
+        aria-label='Offer ends'
+        aria-describedby='date-error'
+        aria-invalid
+        value={new Date(2026, 9, 11, 8, 0, 0)}
+        onChange={onChange}
+        disabled
+      />
+    </>
+  )
+  expect(screen.getByRole('button', { name: 'Offer ends' })).toHaveAttribute(
+    'id',
+    'offer-end'
+  )
+  for (const control of [
+    screen.getByRole('button', { name: 'Offer ends' }),
+    screen.getByLabelText('Offer ends · Time'),
+  ]) {
+    expect(control).toBeDisabled()
+    expect(control).toHaveAttribute('aria-invalid', 'true')
+    expect(control).toHaveAccessibleDescription('Invalid date range')
+  }
+  expect(screen.getByRole('button', { name: 'Clear' })).toBeDisabled()
+  view.rerender(
+    <DateTimePicker
+      aria-label='Offer ends'
+      value={new Date(2026, 9, 11, 8, 0, 0)}
+      onChange={onChange}
+    />
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+  expect(onChange).toHaveBeenLastCalledWith(undefined)
+  expect(screen.getByLabelText('Offer ends · Time')).toBeDisabled()
+})

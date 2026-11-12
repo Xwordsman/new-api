@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/extensions/leaderboard/record"
 	"github.com/QuantumNous/new-api/logger"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/types"
@@ -14,6 +15,7 @@ import (
 
 const (
 	BillingSourceWallet       = "wallet"
+	BillingSourcePromotional  = "promotional"
 	BillingSourceSubscription = "subscription"
 )
 
@@ -85,7 +87,17 @@ func SettleBilling(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, actualQuo
 			))
 		}
 
-		if err := relayInfo.Billing.Settle(actualQuota); err != nil {
+		err := relayInfo.Billing.Settle(actualQuota)
+		fundingApplied := err == nil
+		if session, ok := relayInfo.Billing.(*BillingSession); ok {
+			session.mu.Lock()
+			fundingApplied = session.settled || session.fundingSettled
+			session.mu.Unlock()
+		}
+		if fundingApplied {
+			record.Settled(ctx, relayInfo.RequestId, relayInfo.UserId, relayInfo.LeaderboardSavings, actualQuota, false)
+		}
+		if err != nil {
 			return err
 		}
 
@@ -93,7 +105,7 @@ func SettleBilling(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, actualQuo
 		if actualQuota != 0 {
 			if relayInfo.BillingSource == BillingSourceSubscription {
 				checkAndSendSubscriptionQuotaNotify(relayInfo)
-			} else {
+			} else if relayInfo.BillingSource != BillingSourcePromotional {
 				checkAndSendQuotaNotify(relayInfo, actualQuota-preConsumed, preConsumed)
 			}
 		}
@@ -103,7 +115,12 @@ func SettleBilling(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, actualQuo
 	// 回退：无 BillingSession 时使用旧路径
 	quotaDelta := actualQuota - relayInfo.FinalPreConsumedQuota
 	if quotaDelta != 0 {
-		return PostConsumeQuota(relayInfo, quotaDelta, relayInfo.FinalPreConsumedQuota, true)
+		result, err := postConsumeQuotaWithResult(relayInfo, quotaDelta, relayInfo.FinalPreConsumedQuota, true)
+		if result.FundingApplied {
+			record.Settled(ctx, relayInfo.RequestId, relayInfo.UserId, relayInfo.LeaderboardSavings, actualQuota, false)
+		}
+		return err
 	}
+	record.Settled(ctx, relayInfo.RequestId, relayInfo.UserId, relayInfo.LeaderboardSavings, actualQuota, false)
 	return nil
 }

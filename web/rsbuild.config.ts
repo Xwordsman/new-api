@@ -17,9 +17,10 @@ export default defineConfig(({ envMode }) => {
 
   const isProd = envMode === 'production'
   const devProxy = Object.fromEntries(
-    (['/api', '/v1', '/mj', '/pg'] as const).map((key) => [
+    (['/api', '/v1', '/mj', '/pg', '/llms-full.txt'] as const).map((key) => [
       key,
-      { target: serverUrl, changeOrigin: true },
+      // Console CSRF checks compare Origin with Host; keep the browser's Host.
+      { target: serverUrl, changeOrigin: key !== '/api' },
     ])
   ) as Record<string, { target: string; changeOrigin: boolean }>
 

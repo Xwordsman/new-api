@@ -47,6 +47,7 @@ export function ModelPriceCell(props: {
   model: PricingModel
   options?: ModelPriceCellOptions
   showExpression?: boolean
+  compact?: boolean
 }) {
   const { t, i18n } = useTranslation()
   const currency = useSystemConfigStore((state) => state.config.currency)
@@ -232,6 +233,24 @@ export function ModelPriceCell(props: {
       ]
       caption = `${currencyLabel} / ${t('request')}`
     }
+  }
+  if (props.compact) {
+    return (
+      <span
+        className='inline-flex max-w-full flex-wrap items-baseline justify-end gap-1 font-mono text-xs tabular-nums'
+        title={caption}
+      >
+        {metrics.map((metric, index) => (
+          <span key={metric.label} title={`${metric.label}: ${metric.value}`}>
+            {index > 0 && <span className='text-muted-foreground mr-1'>/</span>}
+            {metric.value}
+          </span>
+        ))}
+        <span className='text-muted-foreground text-[10px]'>
+          {currencyLabel}
+        </span>
+      </span>
+    )
   }
   return (
     <span className='block w-full max-w-full min-w-0 space-y-1.5'>

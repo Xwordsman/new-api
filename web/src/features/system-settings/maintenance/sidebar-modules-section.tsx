@@ -98,6 +98,14 @@ export function SidebarModulesSection({
       },
     },
     console: {
+      benchmark: {
+        title: t('Model benchmark'),
+        description: t('Scheduled candy logic and SVG checks.'),
+      },
+      channel_monitor: {
+        title: t('Channel monitor'),
+        description: t('Published group health and effective multipliers.'),
+      },
       detail: {
         title: t('Dashboard'),
         description: t('Aggregated usage metrics and trend charts.'),
@@ -124,9 +132,25 @@ export function SidebarModulesSection({
       },
     },
     personal: {
+      checkin: {
+        title: t('Daily Check-in'),
+        description: t(
+          'View recharge qualification and claim daily check-in rewards.'
+        ),
+      },
+      leaderboard: {
+        title: t('Community leaderboard'),
+        description: t(
+          'Community activity, referral earnings, savings, and safety reminders.'
+        ),
+      },
       topup: {
         title: t('Wallet'),
         description: t('Top up balance and view billing history.'),
+      },
+      tickets: {
+        title: t('Ticket center'),
+        description: t('Submit support tickets and follow up on replies.'),
       },
       personal: {
         title: t('Profile'),

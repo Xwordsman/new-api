@@ -40,6 +40,14 @@ type testResult struct {
 	context     *gin.Context
 	localErr    error
 	newAPIError *types.NewAPIError
+	body        []byte
+	usage       *dto.Usage
+}
+
+type channelProbeOptions struct {
+	group     string
+	prompt    string
+	maxTokens uint
 }
 
 func normalizeChannelTestEndpoint(channel *model.Channel, endpointType string) string {
@@ -71,6 +79,10 @@ func resolveChannelTestUserID(c *gin.Context) (int, error) {
 }
 
 func testChannel(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool) testResult {
+	return executeChannelTest(ctx, channel, testUserID, testModel, endpointType, isStream, nil)
+}
+
+func executeChannelTest(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool, probe *channelProbeOptions) testResult {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -167,7 +179,13 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 	c.Set("channel", channel.Type)
 	c.Set("base_url", channel.GetBaseURL())
 	group, _ := model.GetUserGroup(testUserID, false)
+	if probe != nil {
+		group = probe.group
+	}
 	c.Set("group", group)
+	if probe != nil {
+		common.SetContextKey(c, constant.ContextKeyUsingGroup, group)
+	}
 
 	newAPIError := middleware.SetupContextForSelectedChannel(c, channel, testModel)
 	if newAPIError != nil {
@@ -229,6 +247,20 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 	}
 
 	request := buildTestRequest(testModel, endpointType, channel, isStream)
+	if probe != nil {
+		if helper.ExceedsMaxTokensLimit(&probe.maxTokens) {
+			return testResult{localErr: errors.New("invalid probe token limit")}
+		}
+		if relayFormat == types.RelayFormatOpenAIResponses {
+			input, err := common.Marshal([]dto.Message{{Role: "user", Content: probe.prompt}})
+			if err != nil {
+				return testResult{localErr: err}
+			}
+			request = &dto.OpenAIResponsesRequest{Model: testModel, Input: input, MaxOutputTokens: &probe.maxTokens, Stream: common.GetPointer(false)}
+		} else {
+			request = &dto.GeneralOpenAIRequest{Model: testModel, Messages: []dto.Message{{Role: "user", Content: probe.prompt}}, MaxCompletionTokens: &probe.maxTokens, Stream: common.GetPointer(false)}
+		}
+	}
 
 	info, err := relaycommon.GenRelayInfo(c, relayFormat, request, nil)
 
@@ -414,6 +446,7 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 	//	}
 	//}
 
+	probeBody := jsonData
 	if len(info.ParamOverride) > 0 {
 		jsonData, err = relaycommon.ApplyParamOverrideWithRelayInfo(jsonData, info)
 		if err != nil {
@@ -431,6 +464,28 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 			}
 		}
 	}
+	if probe != nil && len(info.ParamOverride) > 0 {
+		// Keep the measured prompt and resource limits fixed, after provider
+		// conversion. Other channel overrides (e.g. reasoning effort) still apply.
+		var original, overridden map[string]json.RawMessage
+		if err := common.Unmarshal(probeBody, &original); err != nil {
+			return testResult{localErr: err}
+		}
+		if err := common.Unmarshal(jsonData, &overridden); err != nil {
+			return testResult{localErr: err}
+		}
+		for _, key := range []string{"messages", "input", "prompt", "contents", "system", "systemInstruction", "instructions", "stream", "stream_options", "max_tokens", "max_completion_tokens", "max_output_tokens", "generationConfig", "generation_config", "n"} {
+			if value, ok := original[key]; ok {
+				overridden[key] = value
+			} else {
+				delete(overridden, key)
+			}
+		}
+		jsonData, err = common.Marshal(overridden)
+		if err != nil {
+			return testResult{localErr: err}
+		}
+	}
 
 	requestBody := bytes.NewBuffer(jsonData)
 	c.Request.Body = io.NopCloser(bytes.NewBuffer(jsonData))
@@ -445,6 +500,11 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 	var httpResp *http.Response
 	if resp != nil {
 		httpResp = resp.(*http.Response)
+		if probe != nil {
+			// Bound the entire upstream envelope before any provider decoder reads
+			// it. Model-generated documents must not exhaust gateway memory.
+			httpResp.Body = http.MaxBytesReader(c.Writer, httpResp.Body, 2<<20)
+		}
 		if httpResp.StatusCode != http.StatusOK {
 			err := service.RelayErrorHandler(c.Request.Context(), httpResp, true)
 			common.SysError(common.LogText(
@@ -516,11 +576,15 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 		Group:            info.UsingGroup,
 		Other:            other,
 	})
-	common.SysLog(common.LogText("testing channel #%d, response: \n%s", channel.Id, string(respBody)))
+	if probe == nil {
+		common.SysLog(common.LogText("testing channel #%d, response: \n%s", channel.Id, string(respBody)))
+	}
 	return testResult{
 		context:     c,
 		localErr:    nil,
 		newAPIError: nil,
+		body:        respBody,
+		usage:       usage,
 	}
 }
 

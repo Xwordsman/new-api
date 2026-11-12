@@ -48,7 +48,7 @@ export function EmptyState(props: EmptyStateProps) {
     <FadeIn>
       <Empty
         className={cn(
-          'min-h-[300px]',
+          'bg-card min-h-[300px]',
           props.bordered && 'border',
           props.className
         )}

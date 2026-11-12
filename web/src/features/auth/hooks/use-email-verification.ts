@@ -31,6 +31,7 @@ import { EMAIL_VERIFICATION_COUNTDOWN } from '../constants'
 interface UseEmailVerificationOptions {
   turnstileToken?: string
   validateTurnstile?: () => boolean
+  onSettled?: () => void
 }
 
 /**
@@ -62,8 +63,12 @@ export function useEmailVerification(options?: UseEmailVerificationOptions) {
     try {
       const res = await sendEmailVerification(email, options?.turnstileToken)
       if (res?.success) {
-        startCountdown()
-        toast.success(i18next.t('Verification email sent'))
+        startCountdown(res.data?.retry_after)
+        toast.success(
+          i18next.t(
+            'If this email is eligible, a verification code has been sent.'
+          )
+        )
         return true
       }
       handleServerError(
@@ -80,6 +85,7 @@ export function useEmailVerification(options?: UseEmailVerificationOptions) {
       return false
     } finally {
       setIsSending(false)
+      options?.onSettled?.()
     }
   }
 

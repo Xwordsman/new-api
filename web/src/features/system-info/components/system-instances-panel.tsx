@@ -283,7 +283,7 @@ function SystemInstancesList(props: SystemInstancesTableProps) {
               props.isDeletingInstance &&
               props.deletingNodeName === instance.node_name
             return (
-              <TableRow key={instance.node_name} className='hover:bg-muted/30'>
+              <TableRow key={instance.node_name}>
                 <TableCell className='px-4 py-2.5 align-middle'>
                   <div className='flex min-w-0 items-center gap-2'>
                     <span
@@ -630,11 +630,14 @@ export function SystemInstancesPanel() {
 
   return (
     <>
-      <section className='bg-card overflow-hidden rounded-lg border shadow-xs'>
+      <section
+        data-console-tone='info'
+        className='console-surface bg-card overflow-hidden rounded-lg border shadow-xs'
+      >
         <div className='flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5'>
           <div className='min-w-0'>
             <div className='flex items-center gap-2'>
-              <span className='bg-muted text-muted-foreground inline-flex size-7 items-center justify-center rounded-md'>
+              <span className='console-surface-icon inline-flex size-7 items-center justify-center rounded-md'>
                 <ServerCog className='size-4' aria-hidden='true' />
               </span>
               <div className='min-w-0'>

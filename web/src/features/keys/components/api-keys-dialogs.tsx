@@ -16,13 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { KeyPriceDialog } from '@/extensions/key-price/components/key-price-dialog'
+
 import { ApiKeysDeleteDialog } from './api-keys-delete-dialog'
 import { ApiKeysMutateDrawer } from './api-keys-mutate-drawer'
 import { useApiKeys } from './api-keys-provider'
 import { CCSwitchDialog } from './dialogs/cc-switch-dialog'
 
 export function ApiKeysDialogs() {
-  const { open, setOpen, currentRow, resolvedKey } = useApiKeys()
+  const { open, setOpen, currentRow, resolvedKey, triggerRefresh } =
+    useApiKeys()
 
   return (
     <>
@@ -32,6 +35,14 @@ export function ApiKeysDialogs() {
         currentRow={open === 'update' ? currentRow || undefined : undefined}
       />
       <ApiKeysDeleteDialog />
+      {open === 'price-protection' && currentRow && (
+        <KeyPriceDialog
+          tokenId={currentRow.id}
+          name={currentRow.name}
+          onClose={() => setOpen(null)}
+          onAccepted={triggerRefresh}
+        />
+      )}
       <CCSwitchDialog
         open={open === 'cc-switch'}
         onOpenChange={(isOpen) => !isOpen && setOpen(null)}

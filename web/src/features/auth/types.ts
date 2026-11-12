@@ -88,6 +88,15 @@ export interface ApiResponse<T = unknown> {
 // System Status
 // ============================================================================
 
+export interface ExtensionFeatures {
+  checkin?: boolean
+  documentation?: boolean
+  channel_monitor?: boolean
+  benchmark?: boolean
+  referrals?: boolean
+  leaderboard?: boolean
+}
+
 export interface SystemStatus {
   success?: boolean
   message?: string
@@ -95,6 +104,7 @@ export interface SystemStatus {
     version?: string
     system_name?: string
     logo?: string
+    docs_link?: string
     github_oauth?: boolean
     github_client_id?: string
     discord_oauth?: boolean
@@ -119,6 +129,8 @@ export interface SystemStatus {
     turnstile_check?: boolean
     turnstile_site_key?: string
     email_verification?: boolean
+    registration_email_verification?: boolean
+    registration_turnstile_check?: boolean
     self_use_mode_enabled?: boolean
     display_in_currency?: boolean
     display_token_stat_enabled?: boolean
@@ -136,6 +148,7 @@ export interface SystemStatus {
     password_login_encryption_enabled?: boolean
     password_register_enabled?: boolean
     invitation_registration_enabled?: boolean
+    extension_features?: ExtensionFeatures
     custom_oauth_providers?: CustomOAuthProviderInfo[]
     [key: string]: unknown
   }
@@ -143,6 +156,7 @@ export interface SystemStatus {
   version?: string
   system_name?: string
   logo?: string
+  docs_link?: string
   github_oauth?: boolean
   github_client_id?: string
   discord_oauth?: boolean
@@ -167,6 +181,8 @@ export interface SystemStatus {
   turnstile_check?: boolean
   turnstile_site_key?: string
   email_verification?: boolean
+  registration_email_verification?: boolean
+  registration_turnstile_check?: boolean
   self_use_mode_enabled?: boolean
   display_in_currency?: boolean
   display_token_stat_enabled?: boolean
@@ -184,6 +200,7 @@ export interface SystemStatus {
   password_login_encryption_enabled?: boolean
   password_register_enabled?: boolean
   invitation_registration_enabled?: boolean
+  extension_features?: ExtensionFeatures
   custom_oauth_providers?: CustomOAuthProviderInfo[]
   log_export_enabled?: boolean
   log_max_range_days?: number

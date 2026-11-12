@@ -303,9 +303,30 @@ function KeysPage() {
   )
 }
 
-async function renderKeysPage(status = 1, overrides: Partial<ApiKey> = {}) {
+async function renderKeysPage(
+  status = 1,
+  overrides: Partial<ApiKey> = {},
+  protection = { enabled: false, paused: false }
+) {
   let currentKey = { ...key, status, ...overrides }
   vi.mocked(api.get).mockImplementation(async (url) => {
+    if (url === '/api/extensions/key-price/status') {
+      return {
+        data: {
+          success: true,
+          data: {
+            settings: {
+              enabled: protection.enabled,
+              allow_opt_out: true,
+              legacy_mode: 'ignore',
+            },
+            states: [
+              { token_id: key.id, protected: true, paused: protection.paused },
+            ],
+          },
+        },
+      }
+    }
     if (url.startsWith('/api/token/')) {
       return {
         data: { success: true, data: { items: [currentKey], total: 1 } },
@@ -348,6 +369,27 @@ async function renderKeysPage(status = 1, overrides: Partial<ApiKey> = {}) {
   await screen.findByText(currentKey.name)
   return { post, put }
 }
+
+it('hides the protection badge and menu action when the plugin is disabled', async () => {
+  const { post } = await renderKeysPage()
+  await userEvent.click(screen.getByRole('button', { name: 'Open menu' }))
+  expect(
+    screen.queryByRole('menuitem', { name: 'Key price protection' })
+  ).not.toBeInTheDocument()
+  expect(screen.queryByText('Price protected')).not.toBeInTheDocument()
+  expect(post).not.toHaveBeenCalled()
+})
+
+it('shows a protection pause alongside the host status without retrieving the credential', async () => {
+  const { post } = await renderKeysPage(2, {}, { enabled: true, paused: true })
+  await screen.findByText('Price protection paused')
+  expect(screen.getByText('Disabled')).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Open menu' }))
+  await userEvent.click(
+    screen.getByRole('menuitem', { name: 'Key price protection' })
+  )
+  expect(post).not.toHaveBeenCalled()
+})
 
 it('combines creation and last use while keeping expiry, models and IP restrictions separate', async () => {
   await renderKeysPage()

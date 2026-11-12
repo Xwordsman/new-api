@@ -17,8 +17,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { useTranslation } from 'react-i18next'
 
-import { Sidebar, SidebarContent, SidebarRail } from '@/components/ui/sidebar'
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarRail,
+  SidebarTrigger,
+  useSidebar,
+} from '@/components/ui/sidebar'
 import { useLayout } from '@/context/layout-provider'
 import { useSidebarView } from '@/hooks/use-sidebar-view'
 import { MOTION_TRANSITION, MOTION_VARIANTS } from '@/lib/motion'
@@ -44,15 +52,23 @@ import { SidebarViewHeader } from './sidebar-view-header'
  * in the registry; this component requires no changes.
  */
 export function AppSidebar() {
+  const { t } = useTranslation()
   const { collapsible, variant } = useLayout()
+  const { isMobile, openMobile, open } = useSidebar()
   const { key, view, navGroups } = useSidebarView()
   const shouldReduce = useReducedMotion()
+  let menuLabel = open ? t('Collapse') : t('Expand')
+  if (isMobile) menuLabel = t('Close menu')
 
   return (
-    <Sidebar collapsible={collapsible} variant={variant}>
+    <Sidebar
+      collapsible={collapsible}
+      variant={variant}
+      className='app-sidebar'
+    >
       {view && <SidebarViewHeader view={view} />}
 
-      <SidebarContent className='py-2'>
+      <SidebarContent className='py-4'>
         <AnimatePresence mode='wait' initial={false}>
           <motion.div
             key={key}
@@ -71,7 +87,20 @@ export function AppSidebar() {
         </AnimatePresence>
       </SidebarContent>
 
-      <SidebarRail />
+      {collapsible !== 'none' && (
+        <SidebarFooter className='border-sidebar-border items-end border-t px-1.5 py-2 group-data-[collapsible=icon]:items-center'>
+          <SidebarTrigger
+            className='text-muted-foreground size-8'
+            aria-label={menuLabel}
+            title={menuLabel}
+            aria-expanded={isMobile ? openMobile : open}
+          />
+        </SidebarFooter>
+      )}
+      <SidebarRail
+        aria-label={t('Toggle navigation menu')}
+        title={t('Toggle navigation menu')}
+      />
     </Sidebar>
   )
 }

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
@@ -104,21 +103,10 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
 	textOutTokens := usage.OutputTokenDetails.TextTokens
 	audioInputTokens := usage.InputTokenDetails.AudioTokens
 	audioOutTokens := usage.OutputTokenDetails.AudioTokens
-	groupRatio := ratio_setting.GetGroupRatio(relayInfo.UsingGroup)
 	modelRatio, _, _ := ratio_setting.GetModelRatio(modelName)
-
-	autoGroup, exists := common.GetContextKey(ctx, constant.ContextKeyAutoGroup)
-	if exists {
-		groupRatio = ratio_setting.GetGroupRatio(autoGroup.(string))
-		logger.LogDebug(ctx, "final group ratio: %f", groupRatio)
-		relayInfo.UsingGroup = autoGroup.(string)
-	}
-
-	actualGroupRatio := groupRatio
-	userGroupRatio, ok := ratio_setting.GetGroupGroupRatio(relayInfo.UserGroup, relayInfo.UsingGroup)
-	if ok {
-		actualGroupRatio = userGroupRatio
-	}
+	// Realtime reservations and final settlement must use the same request
+	// price, including a public promotion that may have ended mid-stream.
+	actualGroupRatio := relayInfo.PriceData.GroupRatioInfo.GroupRatio
 
 	quotaInfo := QuotaInfo{
 		InputDetails: TokenDetails{
@@ -235,6 +223,24 @@ func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, mod
 		model.UpdateChannelUsedQuota(relayInfo.ChannelId, quota)
 	}
 
+	if basis := relayInfo.LeaderboardSavings; basis.Discounted() {
+		quotaInfo.GroupRatio = basis.Standard
+		standard, standardClamp := calculateAudioQuota(quotaInfo)
+		if tieredOk && relayInfo.TieredBillingSnapshot != nil {
+			beforeGroup := relayInfo.TieredBillingSnapshot.EstimatedQuotaBeforeGroup
+			if tieredRes != nil {
+				beforeGroup = tieredRes.ActualQuotaBeforeGroup
+			}
+			standard, standardClamp = common.QuotaRoundChecked(beforeGroup * basis.Standard)
+		}
+		if totalTokens == 0 {
+			standard = 0
+		}
+		basis.Capture(standard, standardClamp)
+		if relayInfo.QuotaClamp != nil {
+			basis.Capture(0, relayInfo.QuotaClamp)
+		}
+	}
 	if err := SettleBilling(ctx, relayInfo, quota); err != nil {
 		logger.LogError(ctx, common.LogText("error settling billing: %s", err.Error()))
 	}
@@ -374,6 +380,24 @@ func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, u
 		model.UpdateChannelUsedQuota(relayInfo.ChannelId, quota)
 	}
 
+	if basis := relayInfo.LeaderboardSavings; basis.Discounted() {
+		quotaInfo.GroupRatio = basis.Standard
+		standard, standardClamp := calculateAudioQuota(quotaInfo)
+		if tieredOk && relayInfo.TieredBillingSnapshot != nil {
+			beforeGroup := relayInfo.TieredBillingSnapshot.EstimatedQuotaBeforeGroup
+			if tieredRes != nil {
+				beforeGroup = tieredRes.ActualQuotaBeforeGroup
+			}
+			standard, standardClamp = common.QuotaRoundChecked(beforeGroup * basis.Standard)
+		}
+		if totalTokens == 0 && !fixedPriceBilling {
+			standard = 0
+		}
+		basis.Capture(standard, standardClamp)
+		if relayInfo.QuotaClamp != nil {
+			basis.Capture(0, relayInfo.QuotaClamp)
+		}
+	}
 	if err := SettleBilling(ctx, relayInfo, quota); err != nil {
 		logger.LogError(ctx, common.LogText("error settling billing: %s", err.Error()))
 	}

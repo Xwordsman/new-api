@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Info } from 'lucide-react'
+import { BadgeCheck, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
@@ -37,7 +37,13 @@ function SubscriptionsContent() {
   return (
     <>
       <SectionPageLayout fixedContent>
-        <SectionPageLayout.Title>
+        <SectionPageLayout.Title
+          icon={BadgeCheck}
+          eyebrow='SUBSCRIPTIONS'
+          description={t(
+            'Manage subscription plans, purchases and entitlements.'
+          )}
+        >
           {t('Subscription Management')}
         </SectionPageLayout.Title>
         <SectionPageLayout.Actions>

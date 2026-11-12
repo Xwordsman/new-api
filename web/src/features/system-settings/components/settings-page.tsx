@@ -17,11 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useParams } from '@tanstack/react-router'
+import { Settings } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { ErrorState } from '@/components/error-state'
 import { SectionPageLayout } from '@/components/layout'
+import { Card, CardContent } from '@/components/ui/card'
 
 import { useSystemOptions, getOptionValue } from '../hooks/use-system-options'
 import type { SystemOption } from '../types'
@@ -57,6 +59,7 @@ type SettingsPageFrameProps = {
 }
 
 function SettingsPageFrame(props: SettingsPageFrameProps) {
+  const { t } = useTranslation()
   const [actionsContainer, setActionsContainer] =
     useState<HTMLDivElement | null>(null)
   const [titleStatusContainer, setTitleStatusContainer] =
@@ -68,7 +71,13 @@ function SettingsPageFrame(props: SettingsPageFrameProps) {
       titleStatusContainer={titleStatusContainer}
     >
       <SectionPageLayout>
-        <SectionPageLayout.Title>
+        <SectionPageLayout.Title
+          icon={Settings}
+          eyebrow='SYSTEM SETTINGS'
+          description={t(
+            'Configure platform behavior and service preferences.'
+          )}
+        >
           <span className='inline-flex max-w-full min-w-0 items-center gap-2 align-middle'>
             <span className='truncate'>{props.title}</span>
             <span
@@ -84,9 +93,11 @@ function SettingsPageFrame(props: SettingsPageFrameProps) {
           />
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
-          <div className='flex h-full min-h-0 w-full flex-col gap-4'>
-            {props.children}
-          </div>
+          <Card className='w-full min-w-0 sm:py-6'>
+            <CardContent className='flex min-w-0 flex-col gap-4 sm:px-6'>
+              {props.children}
+            </CardContent>
+          </Card>
         </SectionPageLayout.Content>
       </SectionPageLayout>
     </SettingsPageProvider>

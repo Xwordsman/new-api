@@ -23,7 +23,14 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router'
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -106,7 +113,45 @@ async function renderOverview() {
   )
 }
 
-describe('overview setup guide', () => {
+describe('overview dashboard', () => {
+  it('presents the ambient header and responsive summary without losing metric labels or the wallet action', async () => {
+    await renderOverview()
+
+    const summary = await screen.findByRole('region', {
+      name: 'Usage at a glance',
+    })
+    expect(
+      within(summary).queryByText('Usage at a glance')
+    ).not.toBeInTheDocument()
+    expect(
+      within(summary).queryByText('Monitor balance, usage, and request volume')
+    ).not.toBeInTheDocument()
+    for (const name of [
+      'Credit remaining',
+      'Historical Usage',
+      'Request Count',
+    ]) {
+      expect(within(summary).getByText(name)).toBeVisible()
+    }
+    expect(within(summary).getByText('Last 24h usage')).toBeVisible()
+    expect(within(summary).getByText('Runway')).toBeVisible()
+    expect(within(summary).getByText('No recent usage')).toBeVisible()
+    expect(
+      within(summary).getByRole('button', { name: 'Wallet' })
+    ).toHaveAttribute('href', '/wallet')
+    expect(summary.querySelector('.grid')).toHaveClass(
+      'grid-cols-1',
+      'sm:grid-cols-2',
+      'xl:grid-cols-4'
+    )
+    expect(
+      screen
+        .getByRole('heading', { name: 'Overview', level: 1 })
+        .closest('header')
+        ?.querySelector('[data-slot="card"]')
+    ).toHaveClass('ring-0', 'border-0')
+  })
+
   it('shows usage first and only a header entry when setup is complete', async () => {
     await renderOverview()
 
@@ -114,7 +159,7 @@ describe('overview setup guide', () => {
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
     expect(
       screen.getAllByRole('heading').map((heading) => heading.textContent)
-    ).toEqual(['Overview', 'Usage at a glance'])
+    ).toEqual(['Overview'])
     expect(screen.queryByText('Setup guide complete')).not.toBeInTheDocument()
     expect(screen.queryByText('Setup progress: 3/3')).not.toBeInTheDocument()
     for (const name of ['API Keys', 'Channels', 'Usage Logs', 'Pricing']) {

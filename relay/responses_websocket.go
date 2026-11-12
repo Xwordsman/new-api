@@ -16,7 +16,6 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	appconstant "github.com/QuantumNous/new-api/constant"
 	appdto "github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/middleware"
 	appmodel "github.com/QuantumNous/new-api/model"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
@@ -220,8 +219,14 @@ func (s *responsesWSSession) runRequest(state *responsesWSCallState, message []b
 		s.clientWriteMu.Unlock()
 	}()
 	request := s.request.Clone(s.ctx)
-	request.Body = io.NopCloser(bytes.NewReader(message))
-	request.ContentLength = int64(len(message))
+	// Middleware can cache BodyStorage before the callback. Give it the same
+	// normalized payload that this create will actually forward and bill.
+	requestBody := create.Body
+	if parseErr != nil {
+		requestBody = message
+	}
+	request.Body = io.NopCloser(bytes.NewReader(requestBody))
+	request.ContentLength = int64(len(requestBody))
 	request.Header.Set("Content-Type", "application/json")
 	apiErr = s.runner(request, requestID, func(c *gin.Context) *types.NewAPIError {
 		if parseErr != nil {
@@ -239,6 +244,20 @@ func (s *responsesWSSession) runRequest(state *responsesWSCallState, message []b
 }
 
 func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState, create responsesWSCreateRequest) (apiErr *types.NewAPIError) {
+	// A generation can lose its capacity lease while the persistent session
+	// remains connected. Close both peers to interrupt blocked reads/writes,
+	// and join that close before the request middleware releases capacity.
+	ctx := c.Request.Context()
+	closed := make(chan struct{})
+	stopClose := context.AfterFunc(ctx, func() {
+		defer close(closed)
+		s.shutdown(websocket.CloseInternalServerErr, "request cancelled")
+	})
+	defer func() {
+		if !stopClose() {
+			<-closed
+		}
+	}()
 	policy := service.RequestPolicy(c)
 	modelName := create.Request.Model
 	started := time.Now()
@@ -289,6 +308,7 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 		if apiErr != nil {
 			return apiErr
 		}
+		service.MarkRequestProtectionForwarded(c, info)
 		if err := s.writeTarget(websocket.TextMessage, payload); err != nil {
 			state.closeCode = websocket.CloseInternalServerErr
 			return types.NewError(err, types.ErrorCodeBadResponse, types.ErrOptionWithSkipRetry())
@@ -312,6 +332,9 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 				billingPrepared = true
 			} else {
 				info.PriceData.GroupRatioInfo = helper.HandleGroupRatio(c, info)
+				if apiErr = service.CheckTokenGroupPrice(c, info, info.PriceData.GroupRatioInfo.GroupRatio); apiErr != nil {
+					return apiErr
+				}
 				if apiErr = service.PrepareTieredBillingForSelectedGroup(c, info); apiErr != nil {
 					return apiErr
 				}
@@ -327,6 +350,9 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 			adaptor.Init(info)
 			target, dialErr := relaychannel.DoWssRequest(adaptor, c, info, nil)
 			if dialErr != nil {
+				if ctx.Err() != nil {
+					return types.NewError(ctx.Err(), types.ErrorCodeDoRequestFailed, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+				}
 				apiErr = service.NormalizeViolationFeeError(types.NewError(dialErr, types.ErrorCodeDoRequestFailed))
 				service.ResetStatusCode(apiErr, c.GetString("status_code_mapping"))
 				info.LastError = apiErr
@@ -341,6 +367,7 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 			if !s.setTarget(target) {
 				return types.NewError(context.Canceled, types.ErrorCodeBadResponse, types.ErrOptionWithSkipRetry())
 			}
+			service.MarkRequestProtectionForwarded(c, info)
 			if err := s.writeTarget(websocket.TextMessage, payload); err != nil {
 				state.closeCode = websocket.CloseInternalServerErr
 				return types.NewError(err, types.ErrorCodeBadResponse, types.ErrOptionWithSkipRetry())
@@ -390,7 +417,11 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 		case incoming := <-state.inbox:
 			idle.Reset(timeout)
 			if incoming.err != nil {
-				info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonScannerErr, incoming.err)
+				if ctx.Err() != nil {
+					info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonClientGone, ctx.Err())
+				} else {
+					info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonScannerErr, incoming.err)
+				}
 				state.closeCode, state.closeReason = websocket.CloseInternalServerErr, "upstream connection closed"
 				ConsumeResponsesQuota(c, info, accumulator.Finish())
 				return nil
@@ -510,8 +541,8 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 			state.closeCode, state.closeReason = websocket.CloseInternalServerErr, "upstream response timed out"
 			ConsumeResponsesQuota(c, info, accumulator.Finish())
 			return nil
-		case <-s.ctx.Done():
-			info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonClientGone, s.ctx.Err())
+		case <-ctx.Done():
+			info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonClientGone, ctx.Err())
 			ConsumeResponsesQuota(c, info, accumulator.Finish())
 			return nil
 		}
@@ -611,7 +642,7 @@ func (s *responsesWSSession) restoreConnectionContext(c *gin.Context, model stri
 	policy := service.RequestPolicy(c)
 	policy.BeginAttempt(channel, s.lockedGroup)
 	policy.AddEvent(service.PolicyEvent{ChannelID: channel.Id, Decision: service.PolicyDecision{Action: "select", Reason: "pinned_channel", Source: "channel_constraint"}})
-	return nil
+	return middleware.ReserveChannelConcurrency(c, channel, s.lockedKey)
 }
 
 func buildResponsesWSCreatePayload(c *gin.Context, info *relaycommon.RelayInfo, req dto.OpenAIResponsesRequest, generate common.RawMessage, streamID string) ([]byte, *types.NewAPIError) {
@@ -942,20 +973,6 @@ func selectResponsesWSChannel(c *gin.Context, modelName string, retryParam *serv
 	}) {
 		constraints.AddFilter(appdto.ChannelFilter{Kind: appdto.FilterResponsesWebSocket})
 	}
-	channel, _, selectErr := service.SelectChannelForRequest(c, modelName, retryParam)
-	if selectErr != nil {
-		message := selectErr.Message
-		if selectErr.MessageID != "" {
-			message = i18n.T(c, selectErr.MessageID, selectErr.Params)
-		}
-		code := selectErr.Code
-		if code == "" {
-			code = types.ErrorCodeGetChannelFailed
-		}
-		return nil, types.NewErrorWithStatusCode(errors.New(message), code, selectErr.StatusCode, types.ErrOptionWithSkipRetry())
-	}
-	if err := middleware.SetupContextForSelectedChannel(c, channel, modelName); err != nil {
-		return nil, err
-	}
-	return channel, nil
+	channel, _, err := middleware.SelectAndSetupChannel(c, modelName, retryParam, nil)
+	return channel, err
 }

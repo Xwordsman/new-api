@@ -19,6 +19,10 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/controller"
 	"github.com/QuantumNous/new-api/extensions"
+	"github.com/QuantumNous/new-api/extensions/benchmark"
+	"github.com/QuantumNous/new-api/extensions/leaderboard"
+	"github.com/QuantumNous/new-api/extensions/registrationrisk"
+	"github.com/QuantumNous/new-api/extensions/requestprotection"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/middleware"
@@ -157,6 +161,10 @@ func main() {
 	// schedules and executes them. Master-only execution and the UpdateTask
 	// switch are enforced inside the runner and each handler's Enabled().
 	controller.RegisterScheduledSystemTasks()
+	benchmark.RegisterTasks(controller.RunBenchmarkProbe)
+	leaderboard.RegisterTasks()
+	registrationrisk.RegisterTasks()
+	requestprotection.RegisterTasks()
 	service.StartSystemTaskRunner()
 
 	if os.Getenv("BATCH_UPDATE_ENABLED") == "true" {
@@ -314,6 +322,7 @@ func InitResources() error {
 			return err
 		}
 	}
+	extensions.Initialize(model.DB)
 	if err = authz.Init(model.DB); err != nil {
 		common.FatalLog(common.LogText("failed to initialize authorization: %s", err.Error()))
 		return err

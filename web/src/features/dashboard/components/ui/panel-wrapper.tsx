@@ -16,14 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import type { IconBadgeTone } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
 interface PanelWrapperProps {
   title: ReactNode
+  tone?: IconBadgeTone
   description?: ReactNode
   loading?: boolean
   empty?: boolean
@@ -68,13 +70,13 @@ export function PanelWrapper(props: PanelWrapperProps) {
   const resolvedEmptyMessage = props.emptyMessage ?? t('No data available')
   const height = props.height ?? 'h-64'
   const frameClassName = cn(
-    'overflow-hidden rounded-2xl border bg-card shadow-xs',
+    'console-surface overflow-hidden rounded-2xl border bg-card shadow-xs',
     props.className
   )
 
   if (props.loading) {
     return (
-      <div className={frameClassName}>
+      <div data-console-tone={props.tone} className={frameClassName}>
         <PanelHeader title={props.title} description={props.description} />
         <div className={cn('p-4 sm:p-5', props.contentClassName)}>
           <Skeleton className={`w-full ${height}`} />
@@ -85,7 +87,7 @@ export function PanelWrapper(props: PanelWrapperProps) {
 
   if (props.empty) {
     return (
-      <div className={frameClassName}>
+      <div data-console-tone={props.tone} className={frameClassName}>
         <PanelHeader title={props.title} description={props.description} />
         <div
           className={cn(
@@ -101,7 +103,7 @@ export function PanelWrapper(props: PanelWrapperProps) {
   }
 
   return (
-    <div className={frameClassName}>
+    <div data-console-tone={props.tone} className={frameClassName}>
       <PanelHeader
         title={props.title}
         description={props.description}

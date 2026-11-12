@@ -18,122 +18,85 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import {
+  StaticDataTable,
+  type StaticDataTableColumn,
+} from '@/components/data-table'
 import { getLobeIcon } from '@/lib/lobe-icon'
 
-import { formatTokens } from '../lib/format'
+import { formatShare, formatTokens } from '../lib/format'
 import type { ModelRanking } from '../types'
 import { ModelLink, VendorLink } from './entity-links'
 import { GrowthText } from './growth-text'
 
 type ModelLeaderboardProps = {
   rows: ModelRanking[]
-  /** Density variant. `compact` is used inside per-category sections; the
-   * default fits the larger overall "Top Models" section. */
-  variant?: 'default' | 'compact'
-  /** Optional cap (rows beyond this are dropped). */
-  limit?: number
 }
 
-/**
- * Two-column model leaderboard list: "rank · model
- * (with vendor below) · tokens (with growth below)" rendering. Splits
- * `rows` evenly between the two columns so the visual rhythm matches a
- * single ranked list rather than two independent lists.
- *
- * Both the model name and vendor name are clickable: model jumps to
- * `/pricing/{modelName}` and vendor jumps to `/pricing?vendor={vendor}`.
- */
 export function ModelLeaderboard(props: ModelLeaderboardProps) {
-  const limited = props.limit ? props.rows.slice(0, props.limit) : props.rows
-  const half = Math.ceil(limited.length / 2)
-  const left = limited.slice(0, half)
-  const right = limited.slice(half)
-  const variant = props.variant ?? 'default'
-
-  if (limited.length === 0) {
-    return null
-  }
-
-  return (
-    <div className='grid grid-cols-1 gap-x-8 md:grid-cols-2'>
-      <ModelList rows={left} variant={variant} />
-      {right.length > 0 && <ModelList rows={right} variant={variant} />}
-    </div>
-  )
-}
-
-function ModelList(props: {
-  rows: ModelRanking[]
-  variant: 'default' | 'compact'
-}) {
   const { t } = useTranslation()
-  const compact = props.variant === 'compact'
-  return (
-    <ul>
-      {props.rows.map((row) => (
-        <li
-          key={row.model_name}
-          className={
-            compact
-              ? 'flex items-center gap-3 py-2'
-              : 'flex items-center gap-3 py-2.5'
-          }
-        >
-          <span className='text-muted-foreground/80 w-6 shrink-0 text-right font-mono text-xs tabular-nums'>
-            {row.rank}.
+  const columns: StaticDataTableColumn<ModelRanking>[] = [
+    {
+      id: 'rank',
+      header: <span aria-label={t('Rank')}>#</span>,
+      className: 'rankings-rank-column',
+      cell: (row) => (
+        <span className='rankings-table-rank' data-rank={row.rank}>
+          {row.rank}
+        </span>
+      ),
+    },
+    {
+      id: 'model',
+      header: t('Model'),
+      cell: (row) => (
+        <div className='rankings-table-model'>
+          <span className='rankings-table-brand' aria-hidden>
+            {getLobeIcon(row.vendor_icon, 24)}
           </span>
-          <span className='shrink-0'>
-            {getLobeIcon(row.vendor_icon, compact ? 20 : 22)}
-          </span>
-          <div className='min-w-0 flex-1'>
+          <div className='min-w-0'>
             <ModelLink
               modelName={row.model_name}
-              className={
-                compact
-                  ? 'text-foreground block truncate font-mono text-xs font-medium'
-                  : 'text-foreground block truncate font-mono text-sm font-medium'
-              }
-            >
-              {row.model_name}
-            </ModelLink>
-            <p
-              className={
-                compact
-                  ? 'text-muted-foreground/80 truncate text-[11px] italic'
-                  : 'text-muted-foreground/80 truncate text-xs italic'
-              }
-            >
-              by{' '}
-              <VendorLink vendor={row.vendor}>
-                {row.vendor.toLowerCase()}
-              </VendorLink>
-            </p>
-          </div>
-          <div className='shrink-0 text-right'>
-            <div
-              className={
-                compact
-                  ? 'text-foreground font-mono text-xs font-semibold tabular-nums'
-                  : 'text-foreground font-mono text-sm font-semibold tabular-nums'
-              }
-            >
-              {formatTokens(row.total_tokens)}
-              {!compact && (
-                <>
-                  {' '}
-                  <span className='text-muted-foreground/80 font-normal'>
-                    {t('tokens')}
-                  </span>
-                </>
-              )}
-            </div>
-            <GrowthText
-              value={row.growth_pct}
-              className={compact ? 'text-[10px]' : 'text-[11px]'}
+              className='rankings-table-name'
             />
+            <VendorLink vendor={row.vendor} className='rankings-table-vendor' />
           </div>
-        </li>
-      ))}
-    </ul>
+        </div>
+      ),
+    },
+    {
+      id: 'tokens',
+      header: t('Token volume'),
+      className: 'rankings-volume-column',
+      cellClassName: 'text-right',
+      cell: (row) => (
+        <div className='rankings-table-volume'>
+          <strong>{formatTokens(row.total_tokens)}</strong>
+          <span className='rankings-table-share'>{formatShare(row.share)}</span>
+          <GrowthText
+            value={row.growth_pct}
+            className='rankings-mobile-growth'
+          />
+        </div>
+      ),
+    },
+    {
+      id: 'growth',
+      header: t('Growth'),
+      className: 'rankings-growth-column',
+      cellClassName: 'rankings-growth-column',
+      cell: (row) => <GrowthText value={row.growth_pct} />,
+    },
+  ]
+
+  return (
+    <StaticDataTable
+      columns={columns}
+      data={props.rows}
+      getRowKey={(row) => row.model_name}
+      className='rounded-none border-0'
+      tableClassName='rankings-table'
+      tableProps={{ typography: 'content', 'aria-label': t('LLM Leaderboard') }}
+    />
   )
 }

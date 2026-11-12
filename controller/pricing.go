@@ -2,10 +2,12 @@ package controller
 
 import (
 	"maps"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/groupdiscount"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
@@ -55,6 +57,11 @@ func GetPricing(c *gin.Context) {
 		}
 	}
 
+	for name, factor := range groupdiscount.Default.Capture(time.Now()) {
+		if ratio, exists := groupRatio[name]; exists {
+			groupRatio[name] = ratio * factor
+		}
+	}
 	usableGroup = service.GetUserUsableGroups(group)
 	pricing = filterPricingByUsableGroups(pricing, usableGroup)
 	// check groupRatio contains usableGroup

@@ -10,6 +10,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/extensions/leaderboard/record"
 	openaichannel "github.com/QuantumNous/new-api/relay/channel/openai"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
@@ -133,6 +134,26 @@ func TestRecalcQuotaFromRatiosRejectsAllInvalidAdjustedRatios(t *testing.T) {
 	require.False(t, ok)
 	assert.Equal(t, 0, quota)
 	assert.True(t, info.PriceData.HasOtherRatio("duration"))
+}
+
+func TestRecalcQuotaFromRatiosPreservesPublicBaselineRounding(t *testing.T) {
+	info := &relaycommon.RelayInfo{
+		PriceData:          hosttypes.PriceData{Quota: 55},
+		LeaderboardSavings: &record.SavingsBasis{Standard: 1, Effective: 0.5},
+	}
+	info.PriceData.AddOtherRatio("duration", 1.1)
+	info.LeaderboardSavings.Capture(111, nil)
+
+	quota, ok := recalcQuotaFromRatios(info, map[string]float64{"duration": 2})
+
+	require.True(t, ok)
+	assert.Equal(t, 99, quota)
+	// Both prices adjust the already-truncated reservation. Rebuilding the
+	// original public price would incorrectly produce 202 instead of 201.
+	assert.Equal(t, int64(102), info.LeaderboardSavings.Savings(quota))
+	_, ok = recalcQuotaFromRatios(info, map[string]float64{"duration": -1})
+	assert.False(t, ok)
+	assert.Equal(t, int64(102), info.LeaderboardSavings.Savings(quota))
 }
 
 func TestTextRequestViaResponsesConvertsClaudeDirectly(t *testing.T) {

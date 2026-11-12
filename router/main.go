@@ -7,13 +7,16 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/extensions"
 	"github.com/QuantumNous/new-api/middleware"
 
+	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 )
 
 func SetRouter(router *gin.Engine, assets WebAssets) {
 	SetApiRouter(router)
+	router.GET("/llms-full.txt", middleware.RouteTag("api"), gzip.Gzip(gzip.DefaultCompression), middleware.GlobalAPIRateLimit(), middleware.DisableCache(), extensions.ExportDocumentation)
 	SetDashboardRouter(router)
 	SetRelayRouter(router)
 	SetTaskPluginProtocolRouter(router)

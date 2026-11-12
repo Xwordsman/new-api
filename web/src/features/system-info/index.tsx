@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Server } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
@@ -29,7 +30,13 @@ export function SystemInfo() {
 
   return (
     <SectionPageLayout>
-      <SectionPageLayout.Title>
+      <SectionPageLayout.Title
+        icon={Server}
+        eyebrow='SYSTEM INFO'
+        description={t(
+          'View system health, runtime details and service information.'
+        )}
+      >
         <span className='inline-flex min-w-0 items-center gap-2'>
           <span className='truncate'>{t('System Info')}</span>
           <Badge variant='outline' className='shrink-0'>

@@ -5,10 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/extensions"
+	"github.com/QuantumNous/new-api/extensions/registrationrisk"
+	"github.com/QuantumNous/new-api/extensions/registrationrisk/guard"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/middleware"
@@ -40,9 +45,33 @@ func TestStatus(c *gin.Context) {
 }
 
 func GetStatus(c *gin.Context) {
-	invitationRegistrationEnabled, err := extensions.InvitationRegistrationEnabled(model.DB)
+	invitationRegistrationEnabled := false
+	// Public site configuration must remain available during a protection-storage
+	// outage. Registration endpoints still require a successful server-side check.
+	riskSettings := guard.Defaults()
+	if model.DB != nil {
+		var err error
+		invitationRegistrationEnabled, err = extensions.InvitationRegistrationEnabled(model.DB)
+		if err != nil {
+			common.SysError("failed to load invitation registration status: " + err.Error())
+		}
+		loaded, riskErr := guard.GetSettings(model.DB.WithContext(c.Request.Context()))
+		if riskErr != nil {
+			common.SysError("failed to load registration protection status: " + riskErr.Error())
+		} else {
+			riskSettings = loaded
+			if _, err := registrationrisk.Device(c); err != nil {
+				common.SysError("failed to initialize registration browser signal: " + err.Error())
+			}
+		}
+	}
+	extensionDB := model.DB
+	if extensionDB != nil {
+		extensionDB = extensionDB.WithContext(c.Request.Context())
+	}
+	extensionFeatures, err := extensions.FeatureStatus(extensionDB)
 	if err != nil {
-		common.SysError("failed to load invitation registration status: " + err.Error())
+		common.SysError("failed to load extension feature status: " + err.Error())
 	}
 	cs := console_setting.GetConsoleSetting()
 	passkeySetting := system_setting.PasskeySettingsSnapshot()
@@ -52,30 +81,32 @@ func GetStatus(c *gin.Context) {
 	legalSetting := system_setting.GetLegalSettings()
 
 	data := gin.H{
-		"version":                     common.Version,
-		"start_time":                  common.StartTime,
-		"email_verification":          common.EmailVerificationEnabled,
-		"github_oauth":                common.GitHubOAuthEnabled,
-		"github_client_id":            common.GitHubClientId,
-		"discord_oauth":               system_setting.GetDiscordSettings().Enabled,
-		"discord_client_id":           system_setting.GetDiscordSettings().ClientId,
-		"linuxdo_oauth":               common.LinuxDOOAuthEnabled,
-		"linuxdo_client_id":           common.LinuxDOClientId,
-		"linuxdo_minimum_trust_level": common.LinuxDOMinimumTrustLevel,
-		"telegram_oauth":              common.TelegramOAuthEnabled,
-		"telegram_oauth_configured":   oauth.TelegramConfigurationError() == nil,
-		"telegram_bot_name":           common.TelegramBotName,
-		"theme":                       "default",
-		"system_name":                 common.SystemName,
-		"logo":                        common.Logo,
-		"footer_html":                 common.Footer,
-		"wechat_qrcode":               common.WeChatAccountQRCodeImageURL,
-		"wechat_login":                common.WeChatAuthEnabled,
-		"server_address":              system_setting.ServerAddress,
-		"turnstile_check":             common.TurnstileCheckEnabled,
-		"turnstile_site_key":          common.TurnstileSiteKey,
-		"docs_link":                   operation_setting.GetGeneralSetting().DocsLink,
-		"quota_per_unit":              common.QuotaPerUnit,
+		"version":                         common.Version,
+		"start_time":                      common.StartTime,
+		"email_verification":              common.EmailVerificationEnabled,
+		"registration_email_verification": common.EmailVerificationEnabled || riskSettings.RequireEmail,
+		"registration_turnstile_check":    common.TurnstileCheckEnabled || riskSettings.Mode == "enforce" && riskSettings.Captcha,
+		"github_oauth":                    common.GitHubOAuthEnabled,
+		"github_client_id":                common.GitHubClientId,
+		"discord_oauth":                   system_setting.GetDiscordSettings().Enabled,
+		"discord_client_id":               system_setting.GetDiscordSettings().ClientId,
+		"linuxdo_oauth":                   common.LinuxDOOAuthEnabled,
+		"linuxdo_client_id":               common.LinuxDOClientId,
+		"linuxdo_minimum_trust_level":     common.LinuxDOMinimumTrustLevel,
+		"telegram_oauth":                  common.TelegramOAuthEnabled,
+		"telegram_oauth_configured":       oauth.TelegramConfigurationError() == nil,
+		"telegram_bot_name":               common.TelegramBotName,
+		"theme":                           "default",
+		"system_name":                     common.SystemName,
+		"logo":                            common.Logo,
+		"footer_html":                     common.Footer,
+		"wechat_qrcode":                   common.WeChatAccountQRCodeImageURL,
+		"wechat_login":                    common.WeChatAuthEnabled,
+		"server_address":                  system_setting.ServerAddress,
+		"turnstile_check":                 common.TurnstileCheckEnabled,
+		"turnstile_site_key":              common.TurnstileSiteKey,
+		"docs_link":                       operation_setting.GetGeneralSetting().DocsLink,
+		"quota_per_unit":                  common.QuotaPerUnit,
 		// 兼容旧前端：保留 display_in_currency，同时提供新的 quota_display_type
 		"display_in_currency":             operation_setting.IsCurrencyDisplay(),
 		"quota_display_type":              operation_setting.GetQuotaDisplayType(),
@@ -112,6 +143,7 @@ func GetStatus(c *gin.Context) {
 		// 模块管理配置
 		"HeaderNavModules":    common.OptionMap["HeaderNavModules"],
 		"SidebarModulesAdmin": common.OptionMap["SidebarModulesAdmin"],
+		"extension_features":  extensionFeatures,
 
 		"oidc_enabled":                system_setting.GetOIDCSettings().Enabled,
 		"oidc_client_id":              system_setting.GetOIDCSettings().ClientId,
@@ -127,7 +159,7 @@ func GetStatus(c *gin.Context) {
 		"setup":                       constant.Setup,
 		"user_agreement_enabled":      legalSetting.UserAgreement != "",
 		"privacy_policy_enabled":      legalSetting.PrivacyPolicy != "",
-		"checkin_enabled":             operation_setting.GetCheckinSetting().Enabled,
+		"checkin_enabled":             extensionFeatures["checkin"],
 		"log_export_enabled":          operation_setting.GetLogSetting().UserExportEnabled,
 		"log_max_range_days":          operation_setting.GetLogSetting().MaxRangeDays,
 		"quota_remind_enabled":        common.QuotaRemindEnabled,
@@ -228,32 +260,38 @@ func SendEmailVerification(c *gin.Context) {
 		return
 	}
 
-	if model.IsEmailAlreadyTaken(email) {
-		common.ApiErrorT(c, "Email address is already in use")
+	if !common.RegisterEnabled || !common.PasswordRegisterEnabled {
+		common.ApiErrorT(c, "Registration cannot be completed. Please try later or contact support.")
 		return
 	}
-	code := common.GenerateVerificationCode(6)
-	common.RegisterVerificationCodeWithKey(email, code, common.EmailVerificationPurpose)
-	// The address may not belong to an account yet, so the mail follows the
-	// request language.
-	systemName := map[string]any{"SystemName": common.SystemName}
-	subject := i18n.T(c, i18n.MsgEmailVerificationSubject, systemName)
-	content := fmt.Sprintf("<p>%s</p>"+
-		"<p>%s</p>"+
-		"<p>%s</p>",
-		i18n.T(c, i18n.MsgEmailVerificationGreeting, systemName),
-		i18n.T(c, i18n.MsgEmailVerificationCode, map[string]any{"Code": code}),
-		i18n.T(c, i18n.MsgEmailVerificationValidity, map[string]any{"Minutes": common.VerificationValidMinutes}))
-	err = common.SendEmail(subject, email, content)
+	decision, err := registrationrisk.Evaluate(c, "email", "password", email, 0, false)
 	if err != nil {
-		common.ApiError(c, err)
+		common.ApiErrorT(c, "Registration cannot be completed. Please try later or contact support.")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-	})
-	return
+	code, err := guard.IssueCode(model.DB.WithContext(c.Request.Context()), email, time.Now())
+	if err != nil {
+		common.ApiErrorT(c, "Registration cannot be completed. Please try later or contact support.")
+		return
+	}
+	// The response and challenge work are identical for registered addresses.
+	// Sending happens outside the response to avoid an account-enumeration oracle.
+	if !model.IsEmailAlreadyTaken(email) {
+		systemName := map[string]any{"SystemName": common.SystemName}
+		subject := i18n.T(c, i18n.MsgEmailVerificationSubject, systemName)
+		content := fmt.Sprintf("<p>%s</p><p>%s</p><p>%s</p>", i18n.T(c, i18n.MsgEmailVerificationGreeting, systemName), i18n.T(c, i18n.MsgEmailVerificationCode, map[string]any{"Code": code}), i18n.T(c, i18n.MsgEmailVerificationValidity, map[string]any{"Minutes": float64(decision.Settings.CodeTTLSeconds) / 60}))
+		templateData := common.EmailTemplateData{Type: common.EmailTemplateVerification, Language: i18n.StatedLang(c), Variables: map[string]string{
+			"verification_code":  code,
+			"expires_in_minutes": strconv.FormatFloat(float64(decision.Settings.CodeTTLSeconds)/60, 'f', -1, 64),
+			"message":            i18n.T(c, i18n.MsgEmailVerificationGreeting, systemName),
+		}}
+		go func() {
+			if err := common.SendEmailWithTemplate(subject, email, content, templateData); err != nil {
+				common.SysError("registration verification email delivery failed")
+			}
+		}()
+	}
+	common.ApiSuccess(c, gin.H{"retry_after": decision.Settings.ResendSeconds})
 }
 
 func SendPasswordResetEmail(c *gin.Context) {
@@ -265,7 +303,7 @@ func SendPasswordResetEmail(c *gin.Context) {
 	if user, err := model.GetUniqueUserByEmail(email); err == nil {
 		code := common.GenerateVerificationCode(0)
 		common.RegisterVerificationCodeWithKey(email, code, common.PasswordResetPurpose)
-		link := fmt.Sprintf("%s/user/reset?email=%s&token=%s", system_setting.ServerAddress, email, code)
+		link := system_setting.ServerAddress + "/user/reset?" + url.Values{"email": {email}, "token": {code}}.Encode()
 		lang := user.GetSetting().Language
 		if lang == "" {
 			lang = i18n.StatedLang(c)
@@ -281,7 +319,10 @@ func SendPasswordResetEmail(c *gin.Context) {
 			i18n.Translate(lang, i18n.MsgEmailPasswordResetLink, linkParams),
 			i18n.Translate(lang, i18n.MsgEmailPasswordResetLinkFallback, linkParams),
 			i18n.Translate(lang, i18n.MsgEmailPasswordResetValidity, map[string]any{"Minutes": common.VerificationValidMinutes}))
-		err := common.SendEmail(subject, email, content)
+		err := common.SendEmailWithTemplate(subject, email, content, common.EmailTemplateData{
+			Type: common.EmailTemplatePasswordReset, Language: lang,
+			Variables: map[string]string{"reset_url": link, "expires_in_minutes": strconv.Itoa(common.VerificationValidMinutes)},
+		})
 		if err != nil {
 			logger.LogError(c.Request.Context(), common.LogText("failed to send password reset email to %s: %s", email, err.Error()))
 		}

@@ -27,6 +27,7 @@ import {
   Copy,
   Link,
   Loader2,
+  ShieldCheck,
 } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -220,6 +221,17 @@ export function DataTableRowActions<TData>({
         contentClassName='w-[200px]'
         modal={false}
       >
+        {apiKey.price_protection?.enabled && (
+          <DropdownMenuItem
+            onClick={() => {
+              setCurrentRow(apiKey)
+              setOpen('price-protection')
+            }}
+          >
+            <ShieldCheck aria-hidden />
+            {t('Key price protection')}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem
           disabled={isRealKeyLoading}
           onClick={async () => {

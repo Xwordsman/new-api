@@ -1125,7 +1125,9 @@ func TestOAuthBindIgnoresLegacyGitHubUsernames(t *testing.T) {
 }
 
 func TestOAuthRegistrationPersistsInviter(t *testing.T) {
-	db, dialect := openTaskDialectDatabase(t, &model.User{}, &model.Log{})
+	setupSecurityEnrollmentTest(t)
+	db, dialect := model.DB, common.MainDatabaseType()
+	require.NoError(t, db.AutoMigrate(&model.Log{}))
 	oldDB, oldLogDB := model.DB, model.LOG_DB
 	oldMain, oldLog := common.MainDatabaseType(), common.LogDatabaseType()
 	oldRedis, oldRegister := common.RedisEnabled, common.RegisterEnabled
@@ -1150,6 +1152,7 @@ func TestOAuthRegistrationPersistsInviter(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+			ctx.Request = httptest.NewRequest(http.MethodGet, "/api/oauth/github", nil)
 			provider := &oauth.GitHubProvider{}
 			identity := &oauth.OAuthUser{ProviderUserID: "inviter-test-" + tc.name, Username: "oauth-" + tc.name}
 			created, _, err := findOrCreateOAuthUser(ctx, provider, identity, &oauth.OAuthToken{}, tc.code)

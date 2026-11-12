@@ -1,0 +1,186 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+import { ChevronDown, ChevronUp, Layers, Tag } from 'lucide-react'
+import { useId, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { TableCell, TableRow } from '@/components/ui/table'
+import { toIntlLocale } from '@/i18n/languages'
+import { formatNumber } from '@/lib/format'
+import { cn } from '@/lib/utils'
+
+import type { MonitorGroup } from '../types'
+import { GroupDetails } from './group-details'
+import { GroupRatio } from './group-ratio'
+import { HistoryStrip } from './history-strip'
+import { MonitorStatusBadge } from './monitor-status'
+
+export function GroupRow(props: {
+  group: MonitorGroup
+  search: string
+  updatedAt: number
+}) {
+  const { t, i18n } = useTranslation()
+  const [expanded, setExpanded] = useState(false)
+  const id = useId()
+  const group = props.group
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
+  const discounted = group.offer.active && group.ratio < group.base_ratio
+  const enabledCount = group.models.filter((model) => model.enabled).length
+  return (
+    <>
+      <TableRow
+        className={cn(
+          'h-16.5 cursor-pointer',
+          expanded &&
+            'bg-(--table-row-hover) shadow-[inset_2px_0_0_var(--primary)]'
+        )}
+        onClick={(event) => {
+          const target = event.target
+          if (
+            !(target instanceof Element) ||
+            !event.currentTarget.contains(target)
+          ) {
+            return
+          }
+          if (target.closest('button, a, input, select, [role="button"]')) {
+            return
+          }
+          setExpanded((value) => !value)
+        }}
+      >
+        <TableCell className='py-3 pl-4.5'>
+          <div className='flex min-w-0 items-center gap-2.5'>
+            <span className='bg-background flex size-8.5 shrink-0 items-center justify-center rounded-[calc(var(--radius)*0.4)] border shadow-xs'>
+              <Layers className='text-muted-foreground size-4' aria-hidden />
+            </span>
+            <div className='min-w-0'>
+              <div className='flex items-center gap-2'>
+                <Button
+                  variant='link'
+                  className='text-foreground h-auto min-w-0 shrink justify-start p-0 text-left text-[13px] font-semibold'
+                  title={group.display_name || group.group}
+                  aria-label={t('Details for {{group}}', {
+                    group: group.display_name || group.group,
+                  })}
+                  aria-expanded={expanded}
+                  aria-controls={id}
+                  onClick={() => setExpanded((value) => !value)}
+                >
+                  <span className='truncate'>
+                    {group.display_name || group.group}
+                  </span>
+                </Button>
+                {(group.badge || (discounted && group.offer.label)) && (
+                  <Badge
+                    variant='outline'
+                    className='max-w-20 shrink-0 truncate rounded-[calc(var(--radius)*0.2)] border-sky-500/25 bg-sky-500/5 px-1 py-0 text-[10px] leading-4 font-normal text-sky-600 dark:text-sky-400'
+                  >
+                    <Tag className='mr-1 size-2.5' aria-hidden />
+                    {group.badge || group.offer.label}
+                  </Badge>
+                )}
+              </div>
+              <p
+                className='text-muted-foreground mt-1 truncate font-mono text-[11px]'
+                title={group.description || group.group}
+              >
+                {group.group} ·{' '}
+                {t('{{count}} enabled models', { count: enabledCount })} ·{' '}
+                {t('Real requests')}
+              </p>
+            </div>
+          </div>
+        </TableCell>
+        <TableCell>
+          <GroupRatio group={group} />
+        </TableCell>
+        <TableCell>
+          <MonitorStatusBadge status={group.status} />
+        </TableCell>
+        <TableCell>
+          <div className='flex w-full flex-nowrap items-center gap-2'>
+            <HistoryStrip
+              buckets={group.timeline}
+              className='h-5 w-full min-w-0 flex-1'
+            />
+            <span className='w-13 shrink-0 text-right font-mono text-xs tabular-nums'>
+              {group.success_rate == null
+                ? '—'
+                : `${formatNumber(group.success_rate, locale)}%`}
+            </span>
+          </div>
+          {group.sample_limited && (
+            <span className='text-warning text-[10px]'>
+              {t('Recent sample')}
+            </span>
+          )}
+        </TableCell>
+        <TableCell className='text-right font-mono text-xs tabular-nums'>
+          {group.ttft_seconds == null
+            ? '—'
+            : `${formatNumber(group.ttft_seconds, locale)}s`}
+        </TableCell>
+        <TableCell className='text-right font-mono text-xs tabular-nums'>
+          {group.tokens_per_second == null
+            ? '—'
+            : `${formatNumber(group.tokens_per_second, locale)}`}
+          <span className='text-muted-foreground text-[9px]'>
+            {group.tokens_per_second != null && 't/s'}
+          </span>
+        </TableCell>
+        <TableCell className='text-right font-mono text-xs tabular-nums'>
+          {group.cache_hit_rate == null
+            ? '—'
+            : `${formatNumber(group.cache_hit_rate, locale)}%`}
+        </TableCell>
+        <TableCell className='px-0'>
+          <Button
+            variant='ghost'
+            size='icon-xs'
+            aria-label={t('Models in {{group}}', {
+              group: group.display_name || group.group,
+            })}
+            aria-expanded={expanded}
+            aria-controls={id}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
+          </Button>
+        </TableCell>
+      </TableRow>
+      {expanded && (
+        <TableRow
+          id={id}
+          className='bg-(--table-row-hover) shadow-[inset_2px_0_0_var(--primary)]'
+        >
+          <TableCell colSpan={8} className='px-4.5 pt-1 pb-5 whitespace-normal'>
+            <GroupDetails
+              group={group}
+              search={props.search}
+              updatedAt={props.updatedAt}
+            />
+          </TableCell>
+        </TableRow>
+      )}
+    </>
+  )
+}

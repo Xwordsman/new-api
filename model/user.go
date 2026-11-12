@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/extensions/registrationrisk/guard"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -244,9 +246,10 @@ func generateDefaultSidebarConfigForRole(userRole int) string {
 
 	// 个人中心区域 - 所有用户都可以访问
 	defaultConfig["personal"] = map[string]any{
-		"enabled":  true,
-		"topup":    true,
-		"personal": true,
+		"enabled":     true,
+		"topup":       true,
+		"leaderboard": true,
+		"personal":    true,
 	}
 
 	// 管理员区域 - 根据角色决定
@@ -585,6 +588,9 @@ func inviteUser(inviterId int) error {
 }
 
 func (user *User) TransferAffQuotaToQuota(quota int) error {
+	if ReferralTransferHook != nil {
+		return ReferralTransferHook(user.Id, quota)
+	}
 	// 检查quota是否小于最小额度
 	if float64(quota) < common.QuotaPerUnit {
 		return common.NewMessage("Minimum transfer quota is {{min}}!", map[string]any{"min": logger.FormatQuota(common.QuotaFromFloat(common.QuotaPerUnit))})
@@ -679,6 +685,9 @@ func (user *User) Insert(inviterId int) error {
 				return err
 			}
 			user.Quota = common.QuotaForNewUser
+			if guard.OverrideSignupQuota(tx) {
+				user.Quota = 0
+			}
 			user.AffCode = common.GetRandomString(4)
 
 			// 初始化用户设置，包括默认的边栏配置
@@ -688,7 +697,16 @@ func (user *User) Insert(inviterId int) error {
 				user.SetSetting(defaultSetting)
 			}
 
-			return tx.Create(user).Error
+			user.InviterId = inviterId
+			if err := tx.Create(user).Error; err != nil {
+				return err
+			}
+			if ReferralRegistrationHook != nil {
+				if err := ReferralRegistrationHook(tx, user.Id, inviterId, user.CreatedAt); err != nil {
+					return err
+				}
+			}
+			return guard.AfterSignup(tx, user.Id, time.Now())
 		})
 	}); err != nil {
 		return err
@@ -714,10 +732,10 @@ func (user *User) finishInsert(inviterId int) {
 		}
 	}
 
-	if common.QuotaForNewUser > 0 {
-		RecordLog(user.Id, LogTypeSystem, common.NewMessage("New user sign-up bonus {{quota}}", map[string]any{"quota": logger.FormatQuota(common.QuotaForNewUser)}))
+	if user.Quota > 0 {
+		RecordLog(user.Id, LogTypeSystem, common.NewMessage("New user sign-up bonus {{quota}}", map[string]any{"quota": logger.FormatQuota(user.Quota)}))
 	}
-	if inviterId != 0 && operation_setting.IsPaymentComplianceConfirmed() {
+	if ReferralRegistrationHook == nil && inviterId != 0 && operation_setting.IsPaymentComplianceConfirmed() {
 		if common.QuotaForInvitee > 0 {
 			_ = IncreaseUserQuota(user.Id, common.QuotaForInvitee, true)
 			RecordLog(user.Id, LogTypeSystem, common.NewMessage("Invitation code bonus {{quota}}", map[string]any{"quota": logger.FormatQuota(common.QuotaForInvitee)}))
@@ -743,6 +761,9 @@ func (user *User) InsertWithTx(tx *gorm.DB, inviterId int) error {
 			return err
 		}
 		user.Quota = common.QuotaForNewUser
+		if guard.OverrideSignupQuota(tx) {
+			user.Quota = 0
+		}
 		user.AffCode = common.GetRandomString(4)
 
 		// 初始化用户设置
@@ -751,7 +772,16 @@ func (user *User) InsertWithTx(tx *gorm.DB, inviterId int) error {
 			user.SetSetting(defaultSetting)
 		}
 
-		return tx.Create(user).Error
+		user.InviterId = inviterId
+		if err := tx.Create(user).Error; err != nil {
+			return err
+		}
+		if ReferralRegistrationHook != nil {
+			if err := ReferralRegistrationHook(tx, user.Id, inviterId, user.CreatedAt); err != nil {
+				return err
+			}
+		}
+		return guard.AfterSignup(tx, user.Id, time.Now())
 	})
 }
 
@@ -771,10 +801,10 @@ func (user *User) FinalizeOAuthUserCreation(inviterId int) {
 		}
 	}
 
-	if common.QuotaForNewUser > 0 {
-		RecordLog(user.Id, LogTypeSystem, common.NewMessage("New user sign-up bonus {{quota}}", map[string]any{"quota": logger.FormatQuota(common.QuotaForNewUser)}))
+	if user.Quota > 0 {
+		RecordLog(user.Id, LogTypeSystem, common.NewMessage("New user sign-up bonus {{quota}}", map[string]any{"quota": logger.FormatQuota(user.Quota)}))
 	}
-	if inviterId != 0 && operation_setting.IsPaymentComplianceConfirmed() {
+	if ReferralRegistrationHook == nil && inviterId != 0 && operation_setting.IsPaymentComplianceConfirmed() {
 		if common.QuotaForInvitee > 0 {
 			_ = IncreaseUserQuota(user.Id, common.QuotaForInvitee, true)
 			RecordLog(user.Id, LogTypeSystem, common.NewMessage("Invitation code bonus {{quota}}", map[string]any{"quota": logger.FormatQuota(common.QuotaForInvitee)}))

@@ -85,6 +85,9 @@ func GetOptions(c *gin.Context) {
 	optionValues := make(map[string]string)
 	common.OptionMapRWMutex.Lock()
 	for k, v := range common.OptionMap {
+		if k == "DocumentationCenterSettings" || strings.HasPrefix(k, "checkin_setting.") {
+			continue
+		}
 		if k == "theme.frontend" || k == "billing_setting.billing_mode" || k == "billing_setting.billing_expr" || k == "ResendKeyConfigured" {
 			continue
 		}
@@ -188,6 +191,10 @@ func UpdateOption(c *gin.Context) {
 	err := common.DecodeJson(c.Request.Body, &option)
 	if err != nil {
 		common.ApiErrorStatus(c, http.StatusBadRequest, common.NewMessage("Invalid parameters"))
+		return
+	}
+	if strings.HasPrefix(option.Key, "checkin_setting.") {
+		common.ApiErrorT(c, "Check-in settings are managed by the check-in extension")
 		return
 	}
 	switch option.Value.(type) {

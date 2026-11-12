@@ -710,6 +710,13 @@ func settleTaskBillingOnComplete(ctx context.Context, adaptor TaskPollingAdaptor
 		}
 		bc.TieredSnapshot.UsageFacts = usageFacts
 		bc.TieredSnapshot.EstimatedTier = result.MatchedTier
+		if basis := bc.LeaderboardSavings; basis.Discounted() {
+			standard, clamp := common.QuotaRoundChecked(result.ActualQuotaBeforeGroup * basis.Standard)
+			basis.Capture(standard, clamp)
+			if result.Clamp != nil {
+				basis.Capture(0, result.Clamp)
+			}
+		}
 		RecalculateTaskQuota(ctx, task, result.ActualQuotaAfterGroup, common.NewMessage("Settled by the task usage expression"), result.Clamp)
 		return true
 	}
@@ -720,6 +727,11 @@ func settleTaskBillingOnComplete(ctx context.Context, adaptor TaskPollingAdaptor
 	}
 	// 优先让 adaptor 决定最终额度。
 	if actualQuota := adaptor.AdjustBillingOnComplete(task, taskResult); actualQuota > 0 {
+		if bc := task.PrivateData.BillingContext; bc != nil && bc.LeaderboardSavings != nil {
+			// This adaptor supplies a final charge, not usage. Use only the
+			// frozen rate comparison, never submission's quantity estimate.
+			bc.LeaderboardSavings.StandardQuota = nil
+		}
 		RecalculateTaskQuota(ctx, task, actualQuota, common.NewMessage("Adjusted by the channel adaptor"))
 		return true
 	}

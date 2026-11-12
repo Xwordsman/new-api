@@ -62,6 +62,8 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
   console: {
     enabled: true,
     detail: true,
+    channel_monitor: true,
+    benchmark: true,
     token: true,
     log: true,
     audit: true,
@@ -71,6 +73,9 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
   personal: {
     enabled: true,
     topup: true,
+    checkin: true,
+    tickets: true,
+    leaderboard: true,
     personal: true,
     security: true,
   },

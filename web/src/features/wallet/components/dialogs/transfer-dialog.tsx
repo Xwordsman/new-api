@@ -40,6 +40,9 @@ interface TransferDialogProps {
   onConfirm: (amount: number) => Promise<boolean>
   availableQuota: number
   transferring: boolean
+  minimumQuota?: number
+  initialQuota?: number
+  lockedQuota?: number
 }
 
 export function TransferDialog({
@@ -48,29 +51,38 @@ export function TransferDialog({
   onConfirm,
   availableQuota,
   transferring,
+  minimumQuota: suppliedMinimum,
+  initialQuota,
+  lockedQuota,
 }: TransferDialogProps) {
   const { t } = useTranslation()
   const currencyConfig = useSystemConfigStore((state) => state.config.currency)
-  const minimumQuota = Math.ceil(
-    currencyConfig.quotaPerUnit > 0
-      ? currencyConfig.quotaPerUnit
-      : DEFAULT_CURRENCY_CONFIG.quotaPerUnit
-  )
+  const minimumQuota =
+    suppliedMinimum ??
+    Math.ceil(
+      currencyConfig.quotaPerUnit > 0
+        ? currencyConfig.quotaPerUnit
+        : DEFAULT_CURRENCY_CONFIG.quotaPerUnit
+    )
   const minimumAmount = quotaUnitsToDollars(minimumQuota)
   const maximumAmount = quotaUnitsToDollars(availableQuota)
   const [amount, setAmount] = useState(minimumAmount)
-  const transferQuota = parseQuotaFromDollars(amount)
+  const transferQuota = lockedQuota ?? parseQuotaFromDollars(amount)
   const canTransfer =
     Number.isFinite(amount) &&
     transferQuota >= minimumQuota &&
-    transferQuota <= availableQuota
+    (lockedQuota !== undefined || transferQuota <= availableQuota)
 
   useEffect(() => {
     if (open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setAmount(minimumAmount)
+      setAmount(
+        initialQuota === undefined
+          ? minimumAmount
+          : quotaUnitsToDollars(initialQuota)
+      )
     }
-  }, [minimumAmount, open])
+  }, [minimumAmount, open, initialQuota])
 
   const handleConfirm = async () => {
     if (!canTransfer) return
@@ -131,7 +143,12 @@ export function TransferDialog({
           <Input
             id='transfer-amount'
             type='number'
-            value={amount}
+            disabled={transferring || lockedQuota !== undefined}
+            value={
+              lockedQuota === undefined
+                ? amount
+                : quotaUnitsToDollars(lockedQuota)
+            }
             onChange={(e) => setAmount(Number(e.target.value))}
             min={minimumAmount}
             max={maximumAmount}
@@ -141,6 +158,13 @@ export function TransferDialog({
           <p className='text-muted-foreground text-xs'>
             {t('Minimum:')} {formatQuota(minimumQuota)}
           </p>
+          {lockedQuota !== undefined && !transferring && (
+            <p role='status' className='text-muted-foreground text-xs'>
+              {t(
+                'The previous transfer response was lost. Retry to confirm the same transfer safely.'
+              )}
+            </p>
+          )}
         </div>
       </div>
     </Dialog>

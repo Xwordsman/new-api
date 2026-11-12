@@ -19,10 +19,14 @@ For commercial licensing, please contact support@quantumnous.com
 import {
   Activity,
   Box,
+  BrainCircuit,
+  CalendarCheck,
   ClipboardList,
   CreditCard,
   FileText,
   FlaskConical,
+  Gift,
+  Headset,
   Key,
   LayoutDashboard,
   ListTodo,
@@ -33,6 +37,7 @@ import {
   Settings,
   ShieldCheck,
   Ticket,
+  Trophy,
   User,
   Users,
   Wallet,
@@ -84,6 +89,16 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             icon: LayoutDashboard,
           },
           {
+            title: t('Channel monitor'),
+            url: '/channel-monitor',
+            icon: Radio,
+          },
+          {
+            title: t('Model benchmark'),
+            url: '/benchmark',
+            icon: BrainCircuit,
+          },
+          {
             title: t('API Keys'),
             url: '/keys',
             icon: Key,
@@ -115,6 +130,26 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             title: t('Wallet'),
             url: '/wallet',
             icon: Wallet,
+          },
+          {
+            title: t('Daily Check-in'),
+            url: '/checkin',
+            icon: CalendarCheck,
+          },
+          {
+            title: t('Referral program'),
+            url: '/referrals',
+            icon: Gift,
+          },
+          {
+            title: t('Ticket center'),
+            url: '/tickets',
+            icon: Headset,
+          },
+          {
+            title: t('Community leaderboard'),
+            url: '/leaderboard',
+            icon: Trophy,
           },
           {
             title: t('Profile'),

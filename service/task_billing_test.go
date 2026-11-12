@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/extensions/leaderboard/record"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
@@ -1809,4 +1810,47 @@ func TestSettle_TokenRecalcFallsBackToCompletionTokens(t *testing.T) {
 			assert.Equal(t, testCase.wantQuota, task.Quota)
 		})
 	}
+}
+
+func TestLeaderboardTaskCorrectionAndRefundReviseOriginalReceipt(t *testing.T) {
+	truncate(t)
+	require.NoError(t, record.Migrate(model.DB))
+	record.Configure(model.DB, record.Policy{Enabled: true, Savings: true})
+	t.Cleanup(func() {
+		record.Configure(nil, record.Policy{})
+		require.NoError(t, model.DB.Where("user_id = ?", 151).Delete(&record.Saving{}).Error)
+		require.NoError(t, model.DB.Where("user_id = ?", 151).Delete(&record.Receipt{}).Error)
+	})
+	seedUser(t, 151, 900)
+	seedToken(t, 151, 151, "leaderboard-task-token", 900)
+	seedChannel(t, 151)
+	seedChargedAccounting(t, 151, 151, 151, 100, 1)
+	task := makeTask(151, 151, 100, 151, BillingSourceWallet, 0)
+	task.PrivateData.Execution = &model.TaskExecutionSnapshot{RequestID: "leaderboard-original-task"}
+	task.PrivateData.BillingContext.GroupRatio = 0.5
+	task.PrivateData.BillingContext.LeaderboardSavings = &record.SavingsBasis{Standard: 1, Effective: 0.5}
+	require.NoError(t, model.DB.Create(task).Error)
+	var loaded model.Task
+	require.NoError(t, model.DB.First(&loaded, task.ID).Error)
+	require.NotNil(t, loaded.PrivateData.BillingContext.LeaderboardSavings)
+	ctx := context.Background()
+	recordTaskSavings(ctx, &loaded, 100, false)
+	RecalculateTaskQuota(ctx, &loaded, 60, common.NewMessage("Task settlement correction"))
+	RecalculateTaskQuota(ctx, &loaded, 60, common.NewMessage("Task settlement retry"))
+	var rows []record.Receipt
+	require.NoError(t, model.DB.Where("user_id = ?", 151).Find(&rows).Error)
+	require.Len(t, rows, 1)
+	assert.Equal(t, int64(60), rows[0].Savings)
+	assert.True(t, RefundTaskQuota(ctx, &loaded, "task failed"))
+	require.NoError(t, model.DB.Where("user_id = ?", 151).Find(&rows).Error)
+	require.Len(t, rows, 1)
+	assert.Zero(t, rows[0].Savings)
+	var user model.User
+	require.NoError(t, model.DB.First(&user, 151).Error)
+	assert.Equal(t, 1000, user.Quota)
+	assert.Zero(t, user.UsedQuota)
+	var entries []record.Saving
+	require.NoError(t, model.DB.Where("user_id = ?", 151).Order("version").Find(&entries).Error)
+	require.Len(t, entries, 3)
+	assert.Equal(t, []int64{100, -40, -60}, []int64{entries[0].Amount, entries[1].Amount, entries[2].Amount})
 }

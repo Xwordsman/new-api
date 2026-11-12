@@ -26,7 +26,12 @@ import { useTheme } from '@/context/theme-provider'
 import { isLikelyHtml } from '@/lib/content-format'
 import { useAuthStore } from '@/stores/auth-store'
 
-import { CTA, Features, Hero, HowItWorks, Stats } from './components'
+import { Comparison } from './components/sections/comparison'
+import { CTA } from './components/sections/cta'
+import { FAQ } from './components/sections/faq'
+import { Features } from './components/sections/features'
+import { Hero } from './components/sections/hero'
+import { HowItWorks } from './components/sections/how-it-works'
 import { useHomePageContent } from './hooks'
 
 export function Home() {
@@ -122,11 +127,14 @@ export function Home() {
 
   return (
     <PublicLayout showMainContainer={false}>
-      <Hero isAuthenticated={isAuthenticated} />
-      <Stats />
-      <Features />
-      <HowItWorks />
-      <CTA isAuthenticated={isAuthenticated} />
+      <main className='home-page'>
+        <Hero isAuthenticated={isAuthenticated} />
+        <Features />
+        <Comparison />
+        <HowItWorks />
+        <FAQ />
+        <CTA isAuthenticated={isAuthenticated} />
+      </main>
       <Footer />
     </PublicLayout>
   )

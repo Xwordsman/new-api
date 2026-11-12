@@ -100,6 +100,36 @@ const model: PricingModel = {
 }
 const clients: QueryClient[] = []
 
+it('keeps discounted compact token and request prices consistent with their units', () => {
+  const tokenModel: PricingModel = {
+    id: 2,
+    model_name: 'public-token',
+    quota_type: 0,
+    model_ratio: 1,
+    completion_ratio: 2,
+    enable_groups: ['public'],
+    group_ratio: { public: 0.24 },
+  }
+  const view = render(
+    <ModelPriceCell
+      model={tokenModel}
+      compact
+      options={{ selectedGroup: 'public', tokenUnit: 'M' }}
+    />
+  )
+  expect(screen.getByTitle('USD / 1M tokens')).toHaveTextContent('0.48/0.96USD')
+  expect(screen.getByTitle('Input: 0.48')).toBeVisible()
+  expect(screen.getByTitle('Output: 0.96')).toBeVisible()
+  view.rerender(
+    <ModelPriceCell
+      model={{ ...tokenModel, quota_type: 1, model_price: 0.25 }}
+      compact
+      options={{ selectedGroup: 'public' }}
+    />
+  )
+  expect(screen.getByTitle('USD / request')).toHaveTextContent('0.06USD')
+})
+
 it('shows nested task conditions and prices in detail and group tables without ambiguous log matches', () => {
   vi.spyOn(api, 'get').mockResolvedValue({ data: { data: { groups: [] } } })
   const client = new QueryClient({

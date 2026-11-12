@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import type { TFunction } from 'i18next'
 import { Bell, Megaphone } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { RichContent } from '@/components/rich-content'
@@ -62,6 +63,7 @@ interface NotificationPopoverProps {
   announcements: AnnouncementItem[]
   loading: boolean
   className?: string
+  additionalTabs?: { value: string; label: ReactNode; content: ReactNode }[]
 }
 
 /**
@@ -300,8 +302,13 @@ export function NotificationPopover({
   announcements,
   loading,
   className,
+  additionalTabs,
 }: NotificationPopoverProps) {
   const { t } = useTranslation()
+  const [additionalTab, setAdditionalTab] = useState<string | null>(null)
+  const selectedExtraTab = additionalTabs?.find(
+    (tab) => tab.value === additionalTab
+  )
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger
@@ -331,30 +338,55 @@ export function NotificationPopover({
         className='w-[min(26rem,calc(100vw-1rem))] gap-3 p-3'
       >
         <PopoverHeader className='gap-1 px-1'>
-          <PopoverTitle>{t('System Announcements')}</PopoverTitle>
+          <PopoverTitle>
+            {additionalTabs?.length
+              ? t('Notifications')
+              : t('System Announcements')}
+          </PopoverTitle>
           <p className='text-muted-foreground text-xs'>
             {t('Latest platform updates and notices')}
           </p>
         </PopoverHeader>
 
         <Tabs
-          value={activeTab}
-          onValueChange={onTabChange as (value: string) => void}
+          value={selectedExtraTab?.value ?? activeTab}
+          onValueChange={(value) => {
+            if (value === 'notice' || value === 'announcements') {
+              setAdditionalTab(null)
+              onTabChange(value)
+            } else if (additionalTabs?.some((tab) => tab.value === value)) {
+              setAdditionalTab(value)
+            }
+          }}
         >
-          <TabsList className='grid w-full grid-cols-2'>
-            <TabsTrigger value='notice' className='gap-1.5'>
+          <TabsList className='flex w-full'>
+            <TabsTrigger value='notice' className='flex-1 gap-1.5'>
               <Bell className='size-3.5' />
               {t('Notice')}
             </TabsTrigger>
-            <TabsTrigger value='announcements' className='gap-1.5'>
+            <TabsTrigger value='announcements' className='flex-1 gap-1.5'>
               <Megaphone className='size-3.5' />
               {t('Timeline')}
             </TabsTrigger>
+            {additionalTabs?.map((tab) => (
+              <TabsTrigger
+                key={tab.value}
+                value={tab.value}
+                className='flex-1 gap-1.5'
+              >
+                {tab.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
           <TabsContent value='notice' className='mt-2'>
             <NoticeContent notice={notice} loading={loading} t={t} />
           </TabsContent>
+          {additionalTabs?.map((tab) => (
+            <TabsContent key={tab.value} value={tab.value} className='mt-2'>
+              {tab.content}
+            </TabsContent>
+          ))}
 
           <TabsContent value='announcements' className='mt-2'>
             <AnnouncementsContent

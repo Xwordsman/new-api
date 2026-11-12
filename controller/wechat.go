@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/extensions"
+	"github.com/QuantumNous/new-api/extensions/registrationrisk"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
@@ -87,10 +89,19 @@ func WeChatAuth(c *gin.Context) {
 			user.Role = common.RoleCommonUser
 			user.Status = common.UserStatusEnabled
 
-			if err := user.Insert(0); err != nil {
-				common.ApiError(c, err)
+			decision, riskErr := registrationrisk.Evaluate(c, "register", "wechat", "", 0, false)
+			if riskErr != nil {
+				common.ApiErrorT(c, "Registration cannot be completed. Please try later or contact support.")
 				return
 			}
+			if err := model.DB.Transaction(func(tx *gorm.DB) error {
+				return user.InsertWithTx(registrationrisk.SignupContext(extensions.ReferralSignupContext(tx, c.ClientIP(), c.Request.UserAgent()), decision), 0)
+			}); err != nil {
+				common.SysError("WeChat registration transaction failed")
+				common.ApiErrorT(c, "Registration cannot be completed. Please try later or contact support.")
+				return
+			}
+			user.FinishInsert(0)
 		} else {
 			common.ApiErrorT(c, "New user registration has been disabled by administrator")
 			return

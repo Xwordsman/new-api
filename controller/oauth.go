@@ -10,6 +10,9 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/extensions"
+	"github.com/QuantumNous/new-api/extensions/registrationrisk"
+	"github.com/QuantumNous/new-api/extensions/registrationrisk/guard"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
@@ -314,6 +317,10 @@ func handleOAuthLogin(c *gin.Context, provider oauth.Provider, oauthUser *oauth.
 	}
 	user, migration, err := findOrCreateOAuthUser(c, provider, oauthUser, token, payload.AffiliateCode)
 	if err != nil {
+		if errors.Is(err, guard.ErrDenied) {
+			common.ApiError(c, guard.ErrDenied)
+			return
+		}
 		if errors.Is(err, model.ErrEmailAlreadyTaken) {
 			common.ApiErrorT(c, "Email address is already in use")
 			return
@@ -518,12 +525,28 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 	}
 	user.InviterId = inviterId
 
+	verified := false
+	if checker, ok := provider.(oauth.VerifiedEmailProvider); ok && user.Email != "" {
+		emails, verifyErr := checker.GetVerifiedEmails(c.Request.Context(), token)
+		if verifyErr == nil {
+			for _, email := range emails {
+				if model.NormalizeEmail(email) == user.Email {
+					verified = true
+					break
+				}
+			}
+		}
+	}
+	decision, riskErr := registrationrisk.Evaluate(c, "register", provider.GetName(), user.Email, inviterId, verified)
+	if riskErr != nil {
+		return nil, nil, riskErr
+	}
 	// Use transaction to ensure user creation and OAuth binding are atomic
 	if genericProvider, ok := provider.(*oauth.GenericOAuthProvider); ok {
 		// Custom provider: create user and binding in a transaction
 		err := model.DB.Transaction(func(tx *gorm.DB) error {
 			// Create user
-			if err := user.InsertWithTx(tx, inviterId); err != nil {
+			if err := user.InsertWithTx(registrationrisk.SignupContext(extensions.ReferralSignupContext(tx, c.ClientIP(), c.Request.UserAgent()), decision), inviterId); err != nil {
 				return err
 			}
 
@@ -549,7 +572,7 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 		// Built-in provider: create user and update provider ID in a transaction
 		err := model.DB.Transaction(func(tx *gorm.DB) error {
 			// Create user
-			if err := user.InsertWithTx(tx, inviterId); err != nil {
+			if err := user.InsertWithTx(registrationrisk.SignupContext(extensions.ReferralSignupContext(tx, c.ClientIP(), c.Request.UserAgent()), decision), inviterId); err != nil {
 				return err
 			}
 

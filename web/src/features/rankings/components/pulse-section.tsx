@@ -24,6 +24,15 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { EmptyState } from '@/components/empty-state'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+} from '@/components/ui/card'
+import { toIntlLocale } from '@/i18n/languages'
+import { formatNumber } from '@/lib/format'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 
@@ -42,14 +51,17 @@ export function PulseSection(props: PulseSectionProps) {
   const { t } = useTranslation()
 
   return (
-    <section className='grid grid-cols-1 gap-4 lg:grid-cols-2'>
+    <section className='rankings-pulse'>
       <PulseCard
         title={t('Trending up')}
         description={t('Models climbing the leaderboard')}
-        icon={<TrendingUp className='size-4 text-emerald-500' />}
+        icon={<TrendingUp className='text-success size-4' aria-hidden />}
       >
         {props.movers.length === 0 ? (
-          <PulseEmpty label={t('No notable climbers right now')} />
+          <EmptyState
+            title={t('No notable climbers right now')}
+            className='rankings-compact-state'
+          />
         ) : (
           <ul>
             {props.movers.map((row) => (
@@ -62,10 +74,13 @@ export function PulseSection(props: PulseSectionProps) {
       <PulseCard
         title={t('Trending down')}
         description={t('Models losing positions')}
-        icon={<TrendingDown className='size-4 text-rose-500' />}
+        icon={<TrendingDown className='text-destructive size-4' aria-hidden />}
       >
         {props.droppers.length === 0 ? (
-          <PulseEmpty label={t('No notable drops right now')} />
+          <EmptyState
+            title={t('No notable drops right now')}
+            className='rankings-compact-state'
+          />
         ) : (
           <ul>
             {props.droppers.map((row) => (
@@ -85,61 +100,57 @@ function PulseCard(props: {
   children: React.ReactNode
 }) {
   return (
-    <div className='bg-card overflow-hidden rounded-lg border'>
-      <header className='border-b px-4 py-3'>
-        <h3 className='text-foreground inline-flex items-center gap-2 text-sm font-semibold'>
-          {props.icon}
-          {props.title}
-        </h3>
-        <p className='text-muted-foreground/80 mt-0.5 text-xs'>
-          {props.description}
-        </p>
-      </header>
-      <div className='py-1'>{props.children}</div>
-    </div>
-  )
-}
-
-function PulseEmpty(props: { label: string }) {
-  return (
-    <div className='text-muted-foreground/80 px-4 py-6 text-center text-xs'>
-      {props.label}
-    </div>
+    <Card className='rankings-panel'>
+      <CardHeader className='rankings-panel-header'>
+        <div className='rankings-panel-title'>
+          <span className='rankings-panel-icon'>{props.icon}</span>
+          <h3>{props.title}</h3>
+        </div>
+        <CardDescription>{props.description}</CardDescription>
+      </CardHeader>
+      <CardContent className='rankings-pulse-content'>
+        {props.children}
+      </CardContent>
+    </Card>
   )
 }
 
 function MoverRow(props: { row: RankingMover; intent: 'up' | 'down' }) {
+  const { t, i18n } = useTranslation()
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
+
   return (
-    <li className='flex items-center gap-3 px-4 py-2'>
-      <span className='shrink-0'>{getLobeIcon(props.row.vendor_icon, 20)}</span>
+    <li className='rankings-mover-row'>
+      <span className='rankings-table-brand' aria-hidden>
+        {getLobeIcon(props.row.vendor_icon, 24)}
+      </span>
       <div className='min-w-0 flex-1'>
         <ModelLink
           modelName={props.row.model_name}
-          className='text-foreground block truncate font-mono text-xs font-medium'
+          className='rankings-table-name'
         >
           {props.row.model_name}
         </ModelLink>
-        <p className='text-muted-foreground/80 truncate text-[11px]'>
+        <p className='rankings-table-vendor'>
           #{props.row.current_rank} ·{' '}
-          <VendorLink vendor={props.row.vendor}>
-            {props.row.vendor.toLowerCase()}
-          </VendorLink>
+          <VendorLink vendor={props.row.vendor}>{props.row.vendor}</VendorLink>
         </p>
       </div>
       <span
         className={cn(
-          'inline-flex shrink-0 items-center gap-0.5 font-mono text-xs font-semibold tabular-nums',
-          props.intent === 'up'
-            ? 'text-emerald-600 dark:text-emerald-400'
-            : 'text-rose-600 dark:text-rose-400'
+          'rankings-rank-change',
+          props.intent === 'up' ? 'text-success' : 'text-destructive'
         )}
+        aria-label={t('Rank change: {{change}}', {
+          change: props.row.rank_delta,
+        })}
       >
         {props.intent === 'up' ? (
-          <ArrowUpRight className='size-3' />
+          <ArrowUpRight className='size-3.5' aria-hidden />
         ) : (
-          <ArrowDownRight className='size-3' />
+          <ArrowDownRight className='size-3.5' aria-hidden />
         )}
-        {Math.abs(props.row.rank_delta)}
+        {formatNumber(Math.abs(props.row.rank_delta), locale)}
       </span>
     </li>
   )

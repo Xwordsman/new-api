@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { StatCardValue } from '@/components/stat-card-value'
 import { IconBadge } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getUserQuotaDates } from '@/features/dashboard/api'
@@ -33,6 +34,7 @@ import type {
   DashboardFilters,
 } from '@/features/dashboard/types'
 import { toIntlLocale } from '@/i18n/languages'
+import { getCurrencyDisplay } from '@/lib/currency'
 import { formatCompactNumber, formatNumber, formatQuota } from '@/lib/format'
 import { computeTimeRange } from '@/lib/time'
 import { cn } from '@/lib/utils'
@@ -60,6 +62,8 @@ function formatStatNumber(value: number, locale: Intl.LocalesArgument) {
 
 export function LogStatCards(props: LogStatCardsProps) {
   const { i18n } = useTranslation()
+  const { meta } = getCurrencyDisplay()
+  const currencySymbol = meta.kind === 'tokens' ? undefined : meta.symbol
   const statCardsConfig = useModelStatCardsConfig()
   const user = useAuthStore((state) => state.auth.user)
   const isAdmin = !!(user?.role && user.role >= 10)
@@ -144,7 +148,7 @@ export function LogStatCards(props: LogStatCardsProps) {
   })
 
   return (
-    <div className='overflow-hidden rounded-lg border'>
+    <div className='bg-card overflow-hidden rounded-lg border'>
       <div className='divide-border/60 grid min-w-0 grid-cols-2 divide-x sm:grid-cols-3 lg:grid-cols-7'>
         {items.map((it, idx) => {
           const Icon = it.icon
@@ -152,16 +156,17 @@ export function LogStatCards(props: LogStatCardsProps) {
           if (loading) {
             valueContent = (
               <div className='mt-1 flex flex-col gap-1 sm:mt-2 sm:gap-1.5'>
-                <Skeleton className='h-5 w-16 sm:h-7 sm:w-20' />
+                <Skeleton className='h-9 w-16 sm:h-10.5 sm:w-20' />
                 <Skeleton className='hidden h-3.5 w-28 md:block' />
               </div>
             )
           } else if (error) {
             valueContent = (
               <>
-                <div className='text-muted-foreground mt-1 font-mono text-base leading-tight font-bold tracking-tight tabular-nums sm:mt-2 sm:text-2xl sm:leading-normal'>
-                  --
-                </div>
+                <StatCardValue
+                  value='--'
+                  className='text-muted-foreground mt-1 sm:mt-2'
+                />
                 <div className='text-muted-foreground/40 mt-1 hidden text-xs md:block'>
                   {it.desc}
                 </div>
@@ -170,12 +175,14 @@ export function LogStatCards(props: LogStatCardsProps) {
           } else {
             valueContent = (
               <>
-                <div
-                  className='text-foreground mt-1 max-w-full truncate font-mono text-base leading-tight font-bold tracking-tight tabular-nums sm:mt-2 sm:text-2xl sm:leading-normal'
+                <StatCardValue
+                  value={it.value}
+                  currencySymbol={
+                    it.key === 'quota' ? currencySymbol : undefined
+                  }
+                  className='mt-1 max-w-full truncate sm:mt-2'
                   title={it.fullValue}
-                >
-                  {it.value}
-                </div>
+                />
                 <div className='text-muted-foreground/60 mt-1 hidden text-xs md:block'>
                   {it.desc}
                 </div>
@@ -189,8 +196,9 @@ export function LogStatCards(props: LogStatCardsProps) {
               role='group'
               aria-label={it.title}
               aria-busy={loading}
+              data-console-tone={it.iconTone}
               className={cn(
-                'min-w-0 px-2.5 py-1.5 sm:px-3 sm:py-4 xl:px-4',
+                'console-surface console-metric min-w-0 px-2.5 py-1.5 sm:px-3 sm:py-4 xl:px-4',
                 idx === items.length - 1 &&
                   items.length % 2 !== 0 &&
                   'col-span-2 sm:col-span-1'

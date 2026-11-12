@@ -112,7 +112,7 @@ export function SystemTasksTable(props: SystemTasksTableProps) {
         {props.tasks.map((task) => {
           const progress = getProgress(task)
           return (
-            <TableRow key={task.task_id} className='hover:bg-muted/30'>
+            <TableRow key={task.task_id}>
               <TableCell className='px-4 py-3 align-middle'>
                 <div className='space-y-0.5'>
                   <div className='font-medium'>

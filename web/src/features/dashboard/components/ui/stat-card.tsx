@@ -19,7 +19,12 @@ For commercial licensing, please contact support@quantumnous.com
 import type { LucideIcon } from 'lucide-react'
 import { useId, type ReactNode } from 'react'
 
-import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
+import { StatCardValue } from '@/components/stat-card-value'
+import {
+  IconBadge,
+  type IconBadgeSize,
+  type IconBadgeTone,
+} from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
@@ -41,6 +46,7 @@ export interface StatCardDetail {
 interface StatCardProps {
   title: string
   value: string | number
+  currencySymbol?: string
   description: string
   icon: LucideIcon
   sparkline?: number[]
@@ -51,6 +57,8 @@ interface StatCardProps {
   error?: boolean
   action?: ReactNode
   iconTone?: IconBadgeTone
+  iconSize?: IconBadgeSize
+  className?: string
   compactMobile?: boolean
 }
 
@@ -118,7 +126,7 @@ function buildLineSparkline(values?: number[]) {
     const x =
       sanitized.length === 1
         ? width / 2
-        : (index / (sanitized.length - 1)) * width
+        : padding + (index / (sanitized.length - 1)) * (width - padding * 2)
     let normalized = 0
     if (range > 0) {
       normalized = (value - min) / range
@@ -127,11 +135,16 @@ function buildLineSparkline(values?: number[]) {
     }
     const y = height - padding - normalized * (height - padding * 2)
 
-    return { x, y }
+    return { x: Number(x.toFixed(1)), y: Number(y.toFixed(1)) }
   })
 
   const linePath = points
-    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+    .map((point, index) => {
+      const previousPoint = points[index - 1]
+      if (!previousPoint) return `M ${point.x} ${point.y}`
+      const controlX = Number(((previousPoint.x + point.x) / 2).toFixed(1))
+      return `C ${controlX} ${previousPoint.y} ${controlX} ${point.y} ${point.x} ${point.y}`
+    })
     .join(' ')
   const firstPoint = points.at(0)
   const lastPoint = points.at(-1)
@@ -245,7 +258,7 @@ export function StatCard(props: StatCardProps) {
           props.compactMobile ? 'gap-1' : 'gap-1.5'
         )}
       >
-        <Skeleton className='h-5 w-16 sm:h-7 sm:w-24' />
+        <Skeleton className='h-10 w-32 sm:h-12 sm:w-40' />
         <Skeleton
           className={cn(
             'h-3 w-24 sm:h-3.5 sm:w-32',
@@ -257,9 +270,7 @@ export function StatCard(props: StatCardProps) {
   } else if (props.error) {
     valueContent = (
       <div className='flex flex-col gap-1'>
-        <div className='text-muted-foreground mt-0.5 font-mono text-base font-bold tracking-tight break-all tabular-nums sm:text-2xl'>
-          --
-        </div>
+        <StatCardValue value='--' className='text-muted-foreground mt-0.5' />
         <p
           className={cn(
             'text-muted-foreground/60 line-clamp-1 text-[11px] sm:text-xs',
@@ -273,9 +284,10 @@ export function StatCard(props: StatCardProps) {
   } else {
     valueContent = (
       <div className='flex flex-col gap-1'>
-        <div className='text-foreground font-mono text-base font-semibold tracking-tight break-all tabular-nums sm:text-2xl'>
-          {props.value}
-        </div>
+        <StatCardValue
+          value={props.value}
+          currencySymbol={props.currencySymbol}
+        />
         <p
           className={cn(
             'text-muted-foreground/60 line-clamp-1 text-[11px] leading-relaxed sm:text-xs',
@@ -301,14 +313,15 @@ export function StatCard(props: StatCardProps) {
     <div
       className={cn(
         'group flex flex-col justify-between sm:min-h-32 sm:gap-3',
-        props.compactMobile ? 'gap-1' : 'gap-1.5'
+        props.compactMobile ? 'gap-1' : 'gap-1.5',
+        props.className
       )}
     >
       <div className='flex items-start justify-between gap-1'>
         <div className='text-muted-foreground flex items-center gap-1 text-[11px] font-medium sm:gap-2 sm:text-xs'>
           <IconBadge
             tone={iconTone}
-            size='stat'
+            size={props.iconSize ?? 'stat'}
             className={cn(
               props.compactMobile &&
                 'size-4 rounded-sm [&>svg]:size-2.5 sm:size-7 sm:rounded-md sm:[&>svg]:size-3.5'

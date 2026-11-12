@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Ticket } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
@@ -30,7 +31,13 @@ export function Redemptions() {
   return (
     <RedemptionsProvider>
       <SectionPageLayout fixedContent>
-        <SectionPageLayout.Title>
+        <SectionPageLayout.Title
+          icon={Ticket}
+          eyebrow='REDEMPTION CODES'
+          description={t(
+            'Create and manage codes for adding credit to wallets.'
+          )}
+        >
           {t('Redemption Codes')}
         </SectionPageLayout.Title>
         <SectionPageLayout.Actions>

@@ -2,6 +2,7 @@ package openai
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
@@ -11,7 +12,6 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
 
-	"github.com/bytedance/gopkg/util/gopool"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
@@ -34,8 +34,9 @@ func OpenaiRealtimeHandler(c *gin.Context, info *relaycommon.RelayInfo) (*types.
 	usage := &dto.RealtimeUsage{}
 	localUsage := &dto.RealtimeUsage{}
 	sumUsage := &dto.RealtimeUsage{}
+	var readers sync.WaitGroup
 
-	gopool.Go(func() {
+	readers.Go(func() {
 		defer func() {
 			if r := recover(); r != nil {
 				errChan <- fmt.Errorf("panic in client reader: %v", r)
@@ -43,7 +44,7 @@ func OpenaiRealtimeHandler(c *gin.Context, info *relaycommon.RelayInfo) (*types.
 		}()
 		for {
 			select {
-			case <-c.Done():
+			case <-c.Request.Context().Done():
 				return
 			default:
 				_, message, err := clientConn.ReadMessage()
@@ -95,7 +96,7 @@ func OpenaiRealtimeHandler(c *gin.Context, info *relaycommon.RelayInfo) (*types.
 		}
 	})
 
-	gopool.Go(func() {
+	readers.Go(func() {
 		defer func() {
 			if r := recover(); r != nil {
 				errChan <- fmt.Errorf("panic in target reader: %v", r)
@@ -103,7 +104,7 @@ func OpenaiRealtimeHandler(c *gin.Context, info *relaycommon.RelayInfo) (*types.
 		}()
 		for {
 			select {
-			case <-c.Done():
+			case <-c.Request.Context().Done():
 				return
 			default:
 				_, message, err := targetConn.ReadMessage()
@@ -207,8 +208,13 @@ func OpenaiRealtimeHandler(c *gin.Context, info *relaycommon.RelayInfo) (*types.
 	case err := <-errChan:
 		//return service.OpenAIErrorWrapper(err, "realtime_error", http.StatusInternalServerError), nil
 		logger.LogError(c, common.LogText("realtime error: %s", err.Error()))
-	case <-c.Done():
+	case <-c.Request.Context().Done():
 	}
+	// Closing the sockets interrupts readers and blocked writes. Join both
+	// before settlement and before the caller releases its capacity lease.
+	_ = clientConn.Close()
+	_ = targetConn.Close()
+	readers.Wait()
 
 	if usage.TotalTokens != 0 {
 		_ = preConsumeUsage(c, info, usage, sumUsage)

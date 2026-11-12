@@ -7,6 +7,7 @@ import (
 	"html"
 	"math/big"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -185,7 +186,12 @@ func sendEmailBindingCodes(lang string, state model.EmailBindingState, codes ema
 		i18n.Translate(lang, i18n.MsgEmailBindingNewIntro),
 		i18n.Translate(lang, i18n.MsgEmailBindingCode, map[string]any{"Code": html.EscapeString(codes.New)}),
 		i18n.Translate(lang, i18n.MsgEmailBindingNewValidity, minutes))
-	if err := common.SendEmail(subject, state.Email, content); err != nil {
+	data := common.EmailTemplateData{Type: common.EmailTemplateEmailBinding, Language: lang, Variables: map[string]string{
+		"verification_code":  codes.New,
+		"expires_in_minutes": strconv.Itoa(int(model.EmailBindingTTL / time.Minute)),
+		"message":            i18n.Translate(lang, i18n.MsgEmailBindingNewIntro),
+	}}
+	if err := common.SendEmailWithTemplate(subject, state.Email, content, data); err != nil {
 		return err
 	}
 	if codes.Old != "" {
@@ -193,7 +199,9 @@ func sendEmailBindingCodes(lang string, state model.EmailBindingState, codes ema
 			i18n.Translate(lang, i18n.MsgEmailBindingOldIntro),
 			i18n.Translate(lang, i18n.MsgEmailBindingCode, map[string]any{"Code": html.EscapeString(codes.Old)}),
 			i18n.Translate(lang, i18n.MsgEmailBindingOldValidity, minutes))
-		return common.SendEmail(subject, state.CurrentEmail, content)
+		data.Variables["verification_code"] = codes.Old
+		data.Variables["message"] = i18n.Translate(lang, i18n.MsgEmailBindingOldIntro)
+		return common.SendEmailWithTemplate(subject, state.CurrentEmail, content, data)
 	}
 	return nil
 }

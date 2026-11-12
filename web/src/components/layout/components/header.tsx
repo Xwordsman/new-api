@@ -16,23 +16,41 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { SidebarTrigger } from '@/components/ui/sidebar'
+import { useTranslation } from 'react-i18next'
+
+import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar'
+import { useLayout } from '@/context/layout-provider'
 import { cn } from '@/lib/utils'
 
 type HeaderProps = React.HTMLAttributes<HTMLElement>
 
 export function Header({ className, children, ...props }: HeaderProps) {
+  const { t } = useTranslation()
+  const { collapsible } = useLayout()
+  const { isMobile, openMobile, open } = useSidebar()
+  const showMenuTrigger =
+    collapsible !== 'none' && (isMobile || collapsible === 'offcanvas')
+  let menuLabel = t('Toggle navigation menu')
+  if (isMobile) menuLabel = openMobile ? t('Close menu') : t('Open menu')
+
   return (
     <header
       className={cn(
-        'sticky top-0 z-40 h-[var(--app-header-height,3rem)] w-full shrink-0 bg-transparent',
+        'bg-card sticky top-0 z-40 h-[var(--app-header-height)] w-full shrink-0 border-b',
         className
       )}
       {...props}
     >
-      <div className='flex h-full items-center gap-1.5 px-2 sm:gap-2 sm:px-3'>
-        <SidebarTrigger variant='ghost' className='size-8' />
+      <div className='flex h-full items-center gap-1 px-4 sm:gap-3 sm:px-6 lg:px-8'>
         {children}
+        {showMenuTrigger && (
+          <SidebarTrigger
+            className='text-muted-foreground size-8'
+            aria-label={menuLabel}
+            title={menuLabel}
+            aria-expanded={isMobile ? openMobile : open}
+          />
+        )}
       </div>
     </header>
   )

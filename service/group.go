@@ -2,11 +2,13 @@ package service
 
 import (
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/groupdiscount"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 )
@@ -127,8 +129,11 @@ func GetGroupsEnabledModels(groups []string) []string {
 // group 需要获取倍率的分组
 func GetUserGroupRatio(userGroup, group string) float64 {
 	ratio, ok := ratio_setting.GetGroupGroupRatio(userGroup, group)
-	if ok {
-		return ratio
+	if !ok {
+		ratio = ratio_setting.GetGroupRatio(group)
 	}
-	return ratio_setting.GetGroupRatio(group)
+	if factor, ok := groupdiscount.Default.Capture(time.Now())[group]; ok {
+		ratio *= factor
+	}
+	return ratio
 }

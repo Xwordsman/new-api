@@ -1,0 +1,27 @@
+.documentation-hero {
+  background: linear-gradient(
+    120deg,
+    color-mix(in oklch, var(--primary) 11%, var(--background)),
+    color-mix(in oklch, var(--primary) 3%, var(--background)) 58%,
+    var(--background)
+  );
+}
+
+.documentation-hero::after {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  inset: 0 0 0 45%;
+  border-radius: inherit;
+  opacity: 0.35;
+  background-image: radial-gradient(
+    color-mix(in oklch, var(--primary) 40%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 12px 12px;
+  mask-image: linear-gradient(90deg, transparent, black);
+}
+
+.documentation-prose [data-slot='button'] {
+  text-decoration: none;
+}

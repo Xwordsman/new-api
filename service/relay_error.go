@@ -5,6 +5,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/extensions/leaderboard/record"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -64,6 +65,17 @@ func ProcessChannelError(c *gin.Context, channelError types.ChannelError, err *t
 	if err == nil {
 		return
 	}
+	if err.GetErrorType() == types.ErrorTypeOpenAIError {
+		if upstream, ok := err.RelayError.(types.OpenAIError); ok {
+			code, _ := upstream.Code.(string)
+			RecordRequestProtectionSafety(c, relayInfo, code)
+			requestID := c.GetString(common.RequestIdKey)
+			if relayInfo != nil && relayInfo.RequestId != "" {
+				requestID = relayInfo.RequestId
+			}
+			record.SafetyWarning(c, requestID, c.GetInt("id"), c.GetString("original_model"), code, upstream.Type)
+		}
+	}
 	upstreamURLs := common.UpstreamAddresses(c)
 	logger.LogError(c, common.LogText("channel error (channel #%d, status code: %d): %s", channelError.ChannelId, err.StatusCode, common.LocalLogPreview(err.MaskSensitiveErrorWithStatusCode(upstreamURLs...))))
 	if ShouldDisableChannel(err) && channelError.AutoBan {
@@ -79,6 +91,11 @@ func ProcessChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		modelName := c.GetString("original_model")
 		tokenId := c.GetInt("token_id")
 		userGroup := c.GetString("group")
+		if relayInfo != nil && relayInfo.UsingGroup != "" {
+			userGroup = relayInfo.UsingGroup
+		} else if selectedGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup); selectedGroup != "" {
+			userGroup = selectedGroup
+		}
 		other := model.NewLogOther()
 		if c.Request != nil && c.Request.URL != nil {
 			other.SetPublic("request_path", c.Request.URL.Path)

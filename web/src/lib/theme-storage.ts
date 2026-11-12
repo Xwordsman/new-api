@@ -20,7 +20,8 @@ export const THEME_STORAGE_KEYS = {
   mode: 'newapi:theme:v1:mode',
   preset: 'newapi:theme:v1:preset',
   font: 'newapi:theme:v1:font',
-  radius: 'newapi:theme:v1:radius',
+  // Retire saved Auto/custom radii so existing browsers use the 0.3rem default.
+  radius: 'newapi:theme:v2:radius',
   scale: 'newapi:theme:v1:scale',
   contentLayout: 'newapi:theme:v1:content-layout',
 } as const

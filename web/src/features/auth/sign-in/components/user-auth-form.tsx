@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link } from '@tanstack/react-router'
-import { Loader2, LogIn, KeyRound } from 'lucide-react'
+import { ArrowRight, Loader2, KeyRound } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -301,14 +301,19 @@ export function UserAuthForm({
 
   const alternativeLoginMethods = (
     <>
+      {passwordLoginEnabled && (
+        <div className='auth-divider'>
+          <span>{t('Or continue with')}</span>
+        </div>
+      )}
       {passkeyLoginEnabled && (
-        <div className='mt-2 space-y-1'>
+        <div className='space-y-2'>
           <Button
             type='button'
             variant='outline'
             disabled={passkeyButtonDisabled}
             onClick={handlePasskeyLogin}
-            className='h-11 w-full justify-center gap-2 rounded-lg'
+            className='auth-provider-button h-11 w-full justify-center gap-2 rounded-lg'
           >
             {isPasskeyLoading ? (
               <Loader2 className='h-4 w-4 animate-spin' />
@@ -338,6 +343,8 @@ export function UserAuthForm({
         disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
         onWeChatLogin={hasWeChatLogin ? handleOpenWeChatDialog : undefined}
         isWeChatLoading={isWeChatSubmitting}
+        layout='grid'
+        showDivider={false}
       />
     </>
   )
@@ -346,11 +353,9 @@ export function UserAuthForm({
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(onSubmit)}
-        className={cn('grid gap-4', className)}
+        className={cn('auth-form grid gap-4', className)}
         {...props}
       >
-        {hasAlternativeLogin && alternativeLoginMethods}
-
         {passwordLoginEnabled && (
           <>
             {/* Username Field */}
@@ -363,6 +368,9 @@ export function UserAuthForm({
                   <FormControl>
                     <Input
                       placeholder={t('Enter your username or email')}
+                      autoComplete='username'
+                      autoCapitalize='none'
+                      spellCheck={false}
                       {...field}
                     />
                   </FormControl>
@@ -381,29 +389,20 @@ export function UserAuthForm({
                   <FormControl>
                     <PasswordInput
                       placeholder={t('Enter password')}
+                      autoComplete='current-password'
                       {...field}
                     />
                   </FormControl>
                   <FormMessage />
                   <Link
                     to='/forgot-password'
-                    className='text-muted-foreground absolute end-0 -top-0.5 z-10 text-sm font-medium hover:opacity-75'
+                    className='auth-forgot-link absolute end-0 -top-0.5 z-10 text-sm font-medium'
                   >
                     {t('Forgot password?')}
                   </Link>
                 </FormItem>
               )}
             />
-
-            {/* Submit Button */}
-            <Button
-              type='submit'
-              className='mt-2 w-full justify-center gap-2'
-              disabled={isLoading}
-            >
-              {isLoading ? <Loader2 className='animate-spin' /> : <LogIn />}
-              {t('Sign in')}
-            </Button>
 
             {/* Turnstile */}
             {isTurnstileEnabled && (
@@ -423,10 +422,22 @@ export function UserAuthForm({
           status={status}
           checked={agreedToLegal}
           onCheckedChange={setAgreedToLegal}
-          className='mt-1'
+          variant='plain'
         />
 
-        {!hasAlternativeLogin && alternativeLoginMethods}
+        {passwordLoginEnabled && (
+          <Button
+            type='submit'
+            className='auth-submit w-full justify-center gap-2'
+            disabled={isLoading}
+          >
+            {isLoading && <Loader2 className='animate-spin' />}
+            {t('Sign in')}
+            {!isLoading && <ArrowRight aria-hidden='true' />}
+          </Button>
+        )}
+
+        {hasAlternativeLogin && alternativeLoginMethods}
       </form>
 
       {hasWeChatLogin && (

@@ -29,6 +29,12 @@ For commercial licensing, please contact support@quantumnous.com
 
 @import './theme.css';
 @import './theme-presets.css';
+@import './gateway.css';
+@import './home.css';
+@import './pricing.css';
+@import './rankings.css';
+@import './documentation.css';
+@import './auth.css';
 
 @layer base {
   :root {
@@ -559,19 +565,24 @@ For commercial licensing, please contact support@quantumnous.com
 
 /* Micro-interactions — Vercel-style subtle hover/active feedback */
 @media (prefers-reduced-motion: no-preference) {
-  [data-slot='card']:not([data-card-hover='false']) {
+  [data-slot='card']:not([data-card-hover='false']):not(.console-page *) {
     transition:
       transform 150ms ease,
       box-shadow 150ms ease;
   }
 
   @media (min-width: 641px) {
-    [data-slot='card']:not([data-card-hover='false']):hover {
+    [data-slot='card']:not([data-card-hover='false']):not(
+        .console-page *
+      ):hover {
       transform: translateY(-1px);
       box-shadow: 0 4px 12px rgb(0 0 0 / 0.06);
     }
 
-    .dark [data-slot='card']:not([data-card-hover='false']):hover {
+    .dark
+      [data-slot='card']:not([data-card-hover='false']):not(
+        .console-page *
+      ):hover {
       box-shadow: 0 4px 12px rgb(0 0 0 / 0.3);
     }
   }

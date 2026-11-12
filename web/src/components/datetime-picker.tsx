@@ -43,7 +43,16 @@ const calendarLocales = {
   vi,
 } as const
 
-interface DateTimePickerProps {
+interface DateTimePickerProps extends Pick<
+  React.ComponentProps<'button'>,
+  | 'id'
+  | 'disabled'
+  | 'aria-label'
+  | 'aria-describedby'
+  | 'aria-invalid'
+  | 'onBlur'
+  | 'ref'
+> {
   value?: Date
   onChange?: (date: Date | undefined) => void
   placeholder?: string
@@ -55,6 +64,13 @@ export function DateTimePicker({
   onChange,
   placeholder,
   className,
+  id,
+  disabled,
+  'aria-label': ariaLabel,
+  'aria-describedby': ariaDescribedBy,
+  'aria-invalid': ariaInvalid,
+  onBlur,
+  ref,
 }: DateTimePickerProps) {
   const { t, i18n } = useTranslation()
   const placeholderText = placeholder ?? t('Select date')
@@ -122,6 +138,13 @@ export function DateTimePicker({
         <PopoverTrigger
           render={
             <Button
+              id={id}
+              aria-label={ariaLabel}
+              aria-describedby={ariaDescribedBy}
+              aria-invalid={ariaInvalid}
+              onBlur={onBlur}
+              ref={ref}
+              disabled={disabled}
               variant='outline'
               className={cn(
                 'flex-1 justify-between font-normal',
@@ -151,10 +174,12 @@ export function DateTimePicker({
         type='time'
         step={1}
         value={time}
-        aria-label={t('Time')}
+        aria-label={ariaLabel ? `${ariaLabel} · ${t('Time')}` : t('Time')}
+        aria-describedby={ariaDescribedBy}
+        aria-invalid={ariaInvalid}
         onChange={handleTimeChange}
         className='w-32 appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none'
-        disabled={!date}
+        disabled={disabled || !date}
       />
       {date && (
         <Button
@@ -163,7 +188,8 @@ export function DateTimePicker({
           size='icon'
           onClick={handleClear}
           className='shrink-0'
-          aria-label='Clear'
+          aria-label={t('Clear')}
+          disabled={disabled}
         >
           <span aria-hidden='true'>✕</span>
         </Button>

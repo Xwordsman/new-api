@@ -19,12 +19,14 @@ For commercial licensing, please contact support@quantumnous.com
 import { Activity, BarChart3, WalletCards } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { StatCardValue } from '@/components/stat-card-value'
 import { StatusBadge } from '@/components/status-badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Card, CardContent } from '@/components/ui/card'
 import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
+import { getCurrencyDisplay } from '@/lib/currency'
 import { formatCompactNumber, formatQuota } from '@/lib/format'
 import { getRoleLabel } from '@/lib/roles'
 
@@ -42,6 +44,8 @@ interface ProfileHeaderProps {
 
 export function ProfileHeader({ profile, loading }: ProfileHeaderProps) {
   const { t } = useTranslation()
+  const { meta } = getCurrencyDisplay()
+  const currencySymbol = meta.kind === 'tokens' ? undefined : meta.symbol
 
   if (loading) {
     return (
@@ -65,9 +69,12 @@ export function ProfileHeader({ profile, loading }: ProfileHeaderProps) {
         <div className='border-t'>
           <div className='divide-border/60 grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0'>
             {['balance', 'usage', 'requests'].map((key) => (
-              <div key={key} className='px-4 py-3.5 sm:px-5 sm:py-4'>
+              <div
+                key={key}
+                className='console-surface console-metric px-4 py-3.5 sm:px-5 sm:py-4'
+              >
                 <Skeleton className='h-3.5 w-20' />
-                <Skeleton className='mt-2 h-7 w-28' />
+                <Skeleton className='mt-2 h-9 w-28 sm:h-10.5' />
                 <Skeleton className='mt-1.5 h-3.5 w-24' />
               </div>
             ))}
@@ -87,6 +94,7 @@ export function ProfileHeader({ profile, loading }: ProfileHeaderProps) {
   const stats: {
     label: string
     value: string
+    currencySymbol?: string
     description: string
     icon: typeof WalletCards
     tone: IconBadgeTone
@@ -94,6 +102,7 @@ export function ProfileHeader({ profile, loading }: ProfileHeaderProps) {
     {
       label: t('Current Balance'),
       value: formatQuota(profile.quota),
+      currencySymbol,
       description: t('Remaining quota'),
       icon: WalletCards,
       tone: 'success',
@@ -101,6 +110,7 @@ export function ProfileHeader({ profile, loading }: ProfileHeaderProps) {
     {
       label: t('Total Usage'),
       value: formatQuota(profile.used_quota),
+      currencySymbol,
       description: t('Total consumed quota'),
       icon: BarChart3,
       tone: 'info',
@@ -129,9 +139,9 @@ export function ProfileHeader({ profile, loading }: ProfileHeaderProps) {
 
           <div className='min-w-0 flex-1 space-y-1.5 sm:space-y-3'>
             <div className='flex min-w-0 items-center gap-2'>
-              <h1 className='truncate text-xl font-semibold tracking-tight sm:text-2xl'>
+              <h2 className='truncate text-xl font-semibold tracking-tight sm:text-2xl'>
                 {displayName}
-              </h1>
+              </h2>
               <StatusBadge
                 label={roleLabel}
                 variant='neutral'
@@ -165,7 +175,11 @@ export function ProfileHeader({ profile, loading }: ProfileHeaderProps) {
       <div className='border-t'>
         <div className='divide-border/60 grid grid-cols-3 divide-x'>
           {stats.map((item) => (
-            <div key={item.label} className='min-w-0 px-3 py-3 sm:px-5 sm:py-4'>
+            <div
+              key={item.label}
+              data-console-tone={item.tone}
+              className='console-surface console-metric min-w-0 px-3 py-3 sm:px-5 sm:py-4'
+            >
               <div className='flex items-center gap-2'>
                 <IconBadge tone={item.tone} size='stat'>
                   <item.icon />
@@ -175,9 +189,11 @@ export function ProfileHeader({ profile, loading }: ProfileHeaderProps) {
                 </div>
               </div>
 
-              <div className='text-foreground mt-1.5 truncate font-mono text-lg font-bold tracking-tight tabular-nums sm:mt-2 sm:text-2xl'>
-                {item.value}
-              </div>
+              <StatCardValue
+                value={item.value}
+                currencySymbol={item.currencySymbol}
+                className='mt-1.5 sm:mt-2'
+              />
               <div className='text-muted-foreground/60 mt-1 hidden text-xs md:block'>
                 {item.description}
               </div>

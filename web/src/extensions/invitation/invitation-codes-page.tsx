@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  Ticket,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -259,7 +260,13 @@ export function InvitationCodesPage() {
   return (
     <>
       <SectionPageLayout>
-        <SectionPageLayout.Title>
+        <SectionPageLayout.Title
+          icon={Ticket}
+          eyebrow='INVITATION CODES'
+          description={t(
+            'Create invitation codes and track how they are used.'
+          )}
+        >
           {t('Code Management')}
         </SectionPageLayout.Title>
         <SectionPageLayout.Actions>

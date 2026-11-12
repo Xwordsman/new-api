@@ -17,16 +17,23 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { VChart } from '@visactor/react-vchart'
-import { BarChart3, Trophy } from 'lucide-react'
+import { BarChart3 } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { EmptyState } from '@/components/empty-state'
+import { LoadingState } from '@/components/loading-state'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+} from '@/components/ui/card'
 import { useChartTheme } from '@/lib/use-chart-theme'
 import { VCHART_OPTION } from '@/lib/vchart'
 
 import { formatTokens } from '../lib/format'
 import type { ModelHistorySeries, ModelRanking, RankingPeriod } from '../types'
-import { ModelLeaderboard } from './model-leaderboard'
 
 const PERIOD_DESCRIPTIONS: Record<RankingPeriod, string> = {
   today: 'Hourly token usage by model across the last 24 hours',
@@ -36,6 +43,18 @@ const PERIOD_DESCRIPTIONS: Record<RankingPeriod, string> = {
 }
 
 const TOOLTIP_MAX_ROWS = 10
+const MODEL_PALETTE = [
+  '#8b5cf6',
+  '#c4b5fd',
+  '#3b82f6',
+  '#a5b4fc',
+  '#14b8a6',
+  '#99f6e4',
+  '#f59e0b',
+  '#fcd34d',
+  '#ec4899',
+  '#f9a8d4',
+]
 
 type ModelsSectionProps = {
   history: ModelHistorySeries
@@ -43,11 +62,6 @@ type ModelsSectionProps = {
   period: RankingPeriod
 }
 
-/**
- * Combined "Top Models" card: a stacked bar chart showing token usage by
- * model over time, paired below with a two-column LLM Leaderboard. The
- * chart anchors the eye while the leaderboard provides the detailed key.
- */
 export function ModelsSection(props: ModelsSectionProps) {
   const { t } = useTranslation()
   const { resolvedTheme, themeReady } = useChartTheme()
@@ -85,6 +99,7 @@ export function ModelsSection(props: ModelsSectionProps) {
       xField: 'label',
       yField: 'tokens',
       seriesField: 'model',
+      color: MODEL_PALETTE,
       stack: true,
       legends: { visible: false },
       axes: [
@@ -164,69 +179,51 @@ export function ModelsSection(props: ModelsSectionProps) {
   }, [chartGridColor, chartTextColor, orderedPoints, t])
 
   return (
-    <section className='bg-card overflow-hidden rounded-lg border'>
-      {/* Chart block ----------------------------------------------------- */}
-      <header className='flex items-start justify-between gap-4 px-5 py-4'>
-        <div className='min-w-0 flex-1'>
-          <h2 className='text-foreground inline-flex items-center gap-2 text-base font-semibold'>
-            <BarChart3 className='text-primary size-4' />
-            {t('Top Models')}
-          </h2>
-          <p className='text-muted-foreground mt-1 text-sm'>
-            {t(PERIOD_DESCRIPTIONS[props.period])}
-          </p>
-        </div>
-        <div className='shrink-0 text-right'>
-          <div className='text-foreground font-mono text-2xl font-semibold tabular-nums'>
-            {formatTokens(totalTokens)}
+    <Card className='rankings-panel'>
+      <CardHeader className='rankings-panel-header'>
+        <div className='rankings-chart-heading'>
+          <div className='rankings-panel-title'>
+            <span className='rankings-panel-icon'>
+              <BarChart3 className='size-4' aria-hidden />
+            </span>
+            <h3>{t('Top Models')}</h3>
           </div>
-          <div className='text-muted-foreground/80 text-[10px] font-medium tracking-widest uppercase'>
-            {t('tokens')}
-          </div>
+          <span className='rankings-chart-total'>
+            {formatTokens(totalTokens)} <small>{t('tokens')}</small>
+          </span>
         </div>
-      </header>
-
-      <div className='px-5 pb-5'>
-        <div className='h-60 sm:h-72'>
-          {themeReady && spec ? (
-            <VChart
-              key={`models-history-${resolvedTheme}-${props.period}`}
-              spec={{
-                ...spec,
-                theme: resolvedTheme === 'dark' ? 'dark' : 'light',
-                background: 'transparent',
-              }}
-              option={VCHART_OPTION}
-            />
-          ) : (
-            <div className='text-muted-foreground/80 flex h-full items-center justify-center text-xs'>
-              {t('No history data available')}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Leaderboard block ----------------------------------------------- */}
-      <div className='border-t'>
-        <header className='px-5 pt-4 pb-2'>
-          <h3 className='text-foreground inline-flex items-center gap-2 text-sm font-semibold'>
-            <Trophy className='size-3.5 text-amber-500' />
-            {t('LLM Leaderboard')}
-          </h3>
-          <p className='text-muted-foreground/80 mt-0.5 text-xs'>
-            {t('Compare the most popular models on the platform')}
-          </p>
-        </header>
-        {props.rows.length === 0 ? (
-          <div className='text-muted-foreground/80 px-5 py-8 text-center text-sm'>
-            {t('No models match the selected filters')}
+        <CardDescription>
+          {t(PERIOD_DESCRIPTIONS[props.period])}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className='rankings-chart-content'>
+        {spec ? (
+          <div
+            className='rankings-chart'
+            role='img'
+            aria-label={t('Top Models')}
+          >
+            {themeReady ? (
+              <VChart
+                key={`models-history-${resolvedTheme}-${props.period}`}
+                spec={{
+                  ...spec,
+                  theme: resolvedTheme === 'dark' ? 'dark' : 'light',
+                  background: 'transparent',
+                }}
+                option={VCHART_OPTION}
+              />
+            ) : (
+              <LoadingState />
+            )}
           </div>
         ) : (
-          <div className='px-5 pt-1 pb-4'>
-            <ModelLeaderboard rows={props.rows} />
-          </div>
+          <EmptyState
+            title={t('No history data available')}
+            className='rankings-compact-state'
+          />
         )}
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   )
 }

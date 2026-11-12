@@ -16,20 +16,23 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Link } from '@tanstack/react-router'
+import { Link, useLocation } from '@tanstack/react-router'
 import { Menu } from 'lucide-react'
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
-import { type TopNavLink } from '../types'
+import { checkIsActive } from '../lib/url-utils'
+import type { TopNavLink } from '../types'
 
 type TopNavProps = React.HTMLAttributes<HTMLElement> & {
   links: TopNavLink[]
@@ -40,16 +43,21 @@ type TopNavProps = React.HTMLAttributes<HTMLElement> & {
  * 在大屏幕显示水平导航，在小屏幕显示下拉菜单
  */
 export function TopNav({ className, links, ...props }: TopNavProps) {
+  const { t } = useTranslation()
+  const href = useLocation({ select: (location) => location.href })
   // 规范化链接，确保所有可选属性都有默认值
   const normalizedLinks = useMemo(
     () =>
       links.map((link) => ({
-        isActive: false,
         disabled: false,
         external: false,
         ...link,
+        isActive:
+          link.isActive ??
+          (!link.external &&
+            checkIsActive(href, { title: link.title, url: link.href }, true)),
       })),
-    [links]
+    [href, links]
   )
 
   return (
@@ -58,38 +66,46 @@ export function TopNav({ className, links, ...props }: TopNavProps) {
       <div className='lg:hidden'>
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger
-            render={<Button size='icon' variant='outline' className='size-7' />}
+            render={
+              <Button
+                size='icon'
+                variant='ghost'
+                className='size-8'
+                aria-label={t('Toggle navigation menu')}
+              />
+            }
           >
             <Menu />
           </DropdownMenuTrigger>
           <DropdownMenuContent side='bottom' align='start'>
-            {normalizedLinks.map(
-              ({ title, href, isActive, disabled, external }) => (
-                <DropdownMenuItem
-                  key={`${title}-${href}`}
-                  render={
-                    external ? (
-                      <a
-                        href={href}
-                        target='_blank'
-                        rel='noopener noreferrer'
-                        className={!isActive ? 'text-muted-foreground' : ''}
-                      >
-                        {title}
-                      </a>
-                    ) : (
-                      <Link
-                        to={href}
-                        className={!isActive ? 'text-muted-foreground' : ''}
-                        disabled={disabled}
-                      >
-                        {title}
-                      </Link>
-                    )
-                  }
-                ></DropdownMenuItem>
-              )
-            )}
+            <DropdownMenuGroup>
+              {normalizedLinks.map(
+                ({ title, href, isActive, disabled, external }) => (
+                  <DropdownMenuItem
+                    key={`${title}-${href}`}
+                    disabled={disabled}
+                    render={
+                      external ? (
+                        <a
+                          href={href}
+                          target='_blank'
+                          rel='noopener noreferrer'
+                          className={!isActive ? 'text-muted-foreground' : ''}
+                        />
+                      ) : (
+                        <Link
+                          to={href}
+                          className={!isActive ? 'text-muted-foreground' : ''}
+                          disabled={disabled}
+                        />
+                      )
+                    }
+                  >
+                    {title}
+                  </DropdownMenuItem>
+                )
+              )}
+            </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -97,7 +113,7 @@ export function TopNav({ className, links, ...props }: TopNavProps) {
       {/* 桌面端水平导航 */}
       <nav
         className={cn(
-          'hidden items-center space-x-4 lg:flex lg:space-x-4 xl:space-x-6',
+          'hidden h-[var(--app-header-height)] items-stretch gap-5 lg:flex xl:gap-7',
           className
         )}
         {...props}
@@ -109,7 +125,15 @@ export function TopNav({ className, links, ...props }: TopNavProps) {
               href={href}
               target='_blank'
               rel='noopener noreferrer'
-              className={`hover:text-primary text-sm font-medium transition-colors ${isActive ? '' : 'text-muted-foreground'}`}
+              aria-disabled={disabled || undefined}
+              tabIndex={disabled ? -1 : undefined}
+              onClick={disabled ? (event) => event.preventDefault() : undefined}
+              className={cn(
+                'hover:text-foreground inline-flex items-center border-b-2 border-transparent text-sm font-medium transition-colors',
+                isActive
+                  ? 'text-primary border-primary'
+                  : 'text-muted-foreground'
+              )}
             >
               {title}
             </a>
@@ -118,7 +142,13 @@ export function TopNav({ className, links, ...props }: TopNavProps) {
               key={`${title}-${href}`}
               to={href}
               disabled={disabled}
-              className={`hover:text-primary text-sm font-medium transition-colors ${isActive ? '' : 'text-muted-foreground'}`}
+              aria-current={isActive ? 'page' : undefined}
+              className={cn(
+                'hover:text-foreground inline-flex items-center border-b-2 border-transparent text-sm font-medium transition-colors',
+                isActive
+                  ? 'text-primary border-primary'
+                  : 'text-muted-foreground'
+              )}
             >
               {title}
             </Link>

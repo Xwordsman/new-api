@@ -42,6 +42,7 @@ For commercial licensing, please contact support@quantumnous.com
 import * as React from 'react'
 
 import { PageFooterPortal } from '@/components/layout/components/page-footer'
+import { Card } from '@/components/ui/card'
 import { useMediaQuery } from '@/hooks'
 import { cn } from '@/lib/utils'
 
@@ -342,11 +343,10 @@ export function DataTablePage<TData>(props: DataTablePageProps<TData>) {
 
   return (
     <>
-      <div
+      <Card
         className={cn(
-          props.fixedHeight !== false
-            ? 'flex h-full min-h-0 flex-col gap-2.5 sm:gap-3'
-            : 'space-y-2.5 sm:space-y-3',
+          'min-w-0 gap-2.5 p-4 sm:gap-3 sm:p-5',
+          props.fixedHeight !== false && 'h-full min-h-0',
           props.className
         )}
       >
@@ -354,7 +354,7 @@ export function DataTablePage<TData>(props: DataTablePageProps<TData>) {
         {mobileNode}
         {desktopNode}
         {props.afterTable}
-      </div>
+      </Card>
 
       {/* Bulk actions are typically a fixed-position toolbar; let the consumer
           handle its own visibility, we just gate it to non-mobile. */}

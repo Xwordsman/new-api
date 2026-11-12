@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 
 import { StatusBadge } from '@/components/status-badge'
 import { Checkbox } from '@/components/ui/checkbox'
+import { KeyPriceStatus } from '@/extensions/key-price/components/key-price-status'
 import { useMediaQuery } from '@/hooks'
 import { toIntlLocale } from '@/i18n/languages'
 import { getUserGroups } from '@/lib/api'
@@ -120,12 +121,15 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
             API_KEY_STATUSES[row.getValue('status') as number]
           if (!statusConfig) return null
           return (
-            <StatusBadge
-              label={t(statusConfig.label)}
-              variant={statusConfig.variant}
-              copyable={false}
-              className='-ml-1.5'
-            />
+            <div className='flex flex-col items-start gap-1'>
+              <StatusBadge
+                label={t(statusConfig.label)}
+                variant={statusConfig.variant}
+                copyable={false}
+                className='-ml-1.5'
+              />
+              <KeyPriceStatus apiKey={row.original} />
+            </div>
           )
         },
         filterFn: (row, id, value) => value.includes(String(row.getValue(id))),

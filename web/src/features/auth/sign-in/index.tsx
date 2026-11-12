@@ -31,33 +31,26 @@ export function SignIn() {
   const { status } = useStatus()
 
   return (
-    <AuthLayout>
-      <div className='w-full space-y-8'>
-        <div className='space-y-2'>
-          <h2 className='text-center text-2xl font-semibold tracking-tight sm:text-left'>
-            {t('Sign in')}
-          </h2>
-          {!status?.self_use_mode_enabled &&
-            status?.register_enabled !== false && (
-              <p className='text-muted-foreground text-left text-sm sm:text-base'>
-                {t("Don't have an account?")}{' '}
-                <Link
-                  to='/sign-up'
-                  className='hover:text-primary font-medium underline underline-offset-4'
-                >
-                  {t('Sign up')}
-                </Link>
-                .
-              </p>
-            )}
+    <AuthLayout variant='split'>
+      <div className='auth-content'>
+        <div className='auth-heading'>
+          <h1>{t('Welcome back')}</h1>
+          <p>{t('Sign in to your account and pick up where you left off.')}</p>
         </div>
 
         <UserAuthForm redirectTo={redirect} />
 
+        {!status?.self_use_mode_enabled &&
+          status?.register_enabled !== false && (
+            <p className='auth-account-link'>
+              {t('New here?')} <Link to='/sign-up'>{t('Sign up')}</Link>
+            </p>
+          )}
+
         <TermsFooter
           variant='sign-in'
           status={status}
-          className='text-center'
+          className='auth-terms-footer'
         />
       </div>
     </AuthLayout>

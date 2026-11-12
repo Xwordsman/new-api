@@ -16,11 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { BarChart3, Boxes, Network, TrendingUp } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { toIntlLocale } from '@/i18n/languages'
+import { formatNumber } from '@/lib/format'
 
-import type { RankingPeriod } from '../types'
+import { formatTokens } from '../lib/format'
+import type { RankingPeriod, RankingsSnapshot } from '../types'
 
 const PERIODS: { id: RankingPeriod; labelKey: string }[] = [
   { id: 'today', labelKey: 'Today' },
@@ -30,64 +35,92 @@ const PERIODS: { id: RankingPeriod; labelKey: string }[] = [
 ]
 
 type RankingsHeroProps = {
+  snapshot?: RankingsSnapshot
+  pending?: boolean
   period: RankingPeriod
   onPeriodChange: (period: RankingPeriod) => void
 }
 
-/**
- * Hero strip for the rankings page. Intentionally minimal — title +
- * subtitle + period tabs only.
- */
 export function RankingsHero(props: RankingsHeroProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
+  const totalTokens =
+    props.snapshot?.models.reduce(
+      (total, model) => total + model.total_tokens,
+      0
+    ) ?? 0
+  const stats = [
+    {
+      label: t('Token volume'),
+      value: formatTokens(totalTokens),
+      icon: BarChart3,
+    },
+    {
+      label: t('Ranked models'),
+      value: formatNumber(props.snapshot?.models.length ?? 0, locale),
+      icon: Boxes,
+    },
+    {
+      label: t('Model providers'),
+      value: formatNumber(props.snapshot?.vendors.length ?? 0, locale),
+      icon: Network,
+    },
+  ]
 
   return (
-    <section className='space-y-5'>
-      <div className='space-y-2'>
-        <h1 className='text-[clamp(1.75rem,4vw,2.5rem)] leading-[1.15] font-bold tracking-tight'>
-          {t('Rankings')}
-        </h1>
-        <p className='text-muted-foreground/80 max-w-2xl text-sm'>
-          {t(
-            'Discover the most-used models and rising vendors on the platform, updated from live usage data.'
-          )}
-        </p>
+    <>
+      <header className='rankings-hero'>
+        <div className='rankings-hero-dots' aria-hidden />
+        <div className='rankings-container'>
+          <Badge variant='outline' className='rankings-eyebrow'>
+            <TrendingUp className='size-3.5' aria-hidden />
+            {t('Rankings')}
+          </Badge>
+          <h1>
+            {t("See what's trending.")}
+            <em>{t('Discover your next model.')}</em>
+          </h1>
+          <p className='rankings-hero-description'>
+            {t(
+              'Discover the most-used models and rising vendors on the platform, updated from live usage data.'
+            )}
+          </p>
+          <dl className='rankings-hero-stats' aria-busy={props.pending}>
+            {stats.map((stat) => (
+              <div key={stat.label}>
+                <stat.icon aria-hidden />
+                <dd>{props.pending ? '—' : stat.value}</dd>
+                <dt>{stat.label}</dt>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </header>
+      <div className='rankings-container rankings-toolbar'>
+        <div>
+          <p className='rankings-section-label'>{t('Usage rankings')}</p>
+          <h2>{t('The pulse of AI models')}</h2>
+          <p className='rankings-toolbar-description'>
+            {t('Ranked by token usage, not model quality.')}
+          </p>
+        </div>
+        <ToggleGroup
+          value={[props.period]}
+          onValueChange={(values) => {
+            const next = PERIODS.find((period) => period.id === values[0])
+            if (next) props.onPeriodChange(next.id)
+          }}
+          aria-label={t('Period')}
+          className='rankings-period-select'
+          spacing={1}
+        >
+          {PERIODS.map((period) => (
+            <ToggleGroupItem key={period.id} value={period.id}>
+              {t(period.labelKey)}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
       </div>
-
-      {/* Underline tabs for period — clean and unobtrusive. */}
-      <div
-        role='tablist'
-        aria-label={t('Period')}
-        className='border-border/60 flex items-center border-b'
-      >
-        {PERIODS.map((p) => {
-          const isActive = props.period === p.id
-          return (
-            <button
-              key={p.id}
-              role='tab'
-              type='button'
-              aria-selected={isActive}
-              onClick={() => props.onPeriodChange(p.id)}
-              className={cn(
-                'focus-visible:ring-ring/40 relative -mb-px rounded-sm px-3 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none',
-                isActive
-                  ? 'text-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              {t(p.labelKey)}
-              <span
-                aria-hidden
-                className={cn(
-                  'bg-foreground absolute inset-x-3 -bottom-px h-[2px] rounded-full transition-opacity',
-                  isActive ? 'opacity-100' : 'opacity-0'
-                )}
-              />
-            </button>
-          )
-        })}
-      </div>
-    </section>
+    </>
   )
 }

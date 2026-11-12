@@ -25,6 +25,7 @@ import {
   PricingToolbar,
   type PricingToolbarProps,
 } from '../components/pricing-toolbar'
+import { SearchBar } from '../components/search-bar'
 import { filterByQuotaType } from '../lib/filters'
 import type { PricingModel } from '../types'
 
@@ -62,6 +63,49 @@ function toolbarProps(): PricingToolbarProps {
 }
 
 describe('pricing controls', () => {
+  it('focuses catalog search with Ctrl+K, clears the query, and blurs with Escape', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    const onClear = vi.fn()
+    const { rerender } = render(
+      <SearchBar value='' onChange={onChange} onClear={onClear} />
+    )
+    await user.keyboard('{Control>}k{/Control}')
+    const search = screen.getByRole('textbox', { name: 'Search models' })
+    expect(search).toHaveFocus()
+    await user.type(search, 'g')
+    expect(onChange).toHaveBeenLastCalledWith('g')
+    rerender(<SearchBar value='g' onChange={onChange} onClear={onClear} />)
+    await user.click(screen.getByRole('button', { name: 'Clear search' }))
+    expect(onClear).toHaveBeenCalledOnce()
+    await user.keyboard('{Control>}k{/Control}{Escape}')
+    expect(search).not.toHaveFocus()
+  })
+
+  it('shows group ratios and counts each model only once in its group', async () => {
+    const props = toolbarProps()
+    const model: PricingModel = {
+      id: 1,
+      model_name: 'group-model',
+      quota_type: 0,
+      model_ratio: 1,
+      completion_ratio: 1,
+      enable_groups: ['premium', 'premium'],
+    }
+    const user = userEvent.setup()
+    const { rerender } = render(<PricingSidebar {...props} models={[model]} />)
+    const premium = screen.getByRole('button', { name: /^premium\s*×3\s*1$/ })
+    await user.click(premium)
+    expect(props.onGroupChange).toHaveBeenCalledWith('premium')
+    rerender(
+      <PricingSidebar {...props} models={[model]} groupFilter='premium' />
+    )
+    expect(premium).toHaveAttribute('aria-pressed', 'true')
+    expect(
+      screen.getByRole('button', { name: /^default\s*×1\s*0$/ })
+    ).toHaveAttribute('aria-pressed', 'false')
+  })
+
   it.each<{
     name: string
     pricing: Partial<PricingModel>

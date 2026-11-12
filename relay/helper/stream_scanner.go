@@ -13,6 +13,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/extensions/leaderboard/record"
 	"github.com/QuantumNous/new-api/logger"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/service"
@@ -259,6 +260,12 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 		}()
 		for data := range dataChan {
 			sr.reset()
+			requestID := info.RequestId
+			if requestID == "" {
+				requestID = c.GetString(common.RequestIdKey)
+			}
+			record.ObserveSafetyEvent(c.Request.Context(), requestID, c.GetInt("id"), c.GetString("original_model"), data)
+			service.ObserveRequestProtectionSafety(c, info, data)
 			func() {
 				writeMutex.Lock()
 				defer writeMutex.Unlock()

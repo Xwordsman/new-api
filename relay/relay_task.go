@@ -251,6 +251,11 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	//    不沿用上一次尝试的表达式快照。
 	info.OriginModelName = modelName
 	info.TieredBillingSnapshot = nil
+	if apiErr := service.CheckRequestProtection(c, info); apiErr != nil {
+		taskErr := service.TaskErrorFromAPIError(apiErr)
+		taskErr.LocalError, taskErr.NoRetry = true, true
+		return nil, taskErr
+	}
 	var priceData types.PriceData
 	var err error
 	pluginKey := c.GetString("task_plugin_key")
@@ -297,6 +302,10 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 		noteTaskQuotaClamp(info, clamp)
 		priceData = types.PriceData{Quota: quota, QuotaToPreConsume: quota, GroupRatioInfo: groupRatioInfo}
 		info.TieredBillingSnapshot = &billingexpr.BillingSnapshot{BillingMode: billing_setting.BillingModeTieredExpr, ModelName: modelName, ExprString: exprStr, ExprHash: billingexpr.ExprHashString(exprStr), GroupRatio: groupRatioInfo.GroupRatio, EstimatedQuotaBeforeGroup: cost * common.QuotaPerUnit, EstimatedQuotaAfterGroup: quota, EstimatedTier: trace.MatchedTier, QuotaPerUnit: common.QuotaPerUnit, ExprVersion: billingexpr.ExprVersion(exprStr), TaskUsageBilling: true, UsageFacts: facts}
+		if basis := info.LeaderboardSavings; basis.Discounted() {
+			standard, standardClamp := common.QuotaRoundChecked(cost * common.QuotaPerUnit * basis.Standard)
+			basis.Capture(standard, standardClamp)
+		}
 	} else {
 		priceData, err = helper.ModelPriceHelperPerCall(c, info)
 		if err != nil {
@@ -304,6 +313,11 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 		}
 	}
 	info.PriceData = priceData
+	if apiErr := service.CheckTokenGroupPrice(c, info, priceData.GroupRatioInfo.GroupRatio); apiErr != nil {
+		taskErr := service.TaskErrorFromAPIError(apiErr)
+		taskErr.LocalError, taskErr.NoRetry = true, true
+		return nil, taskErr
+	}
 
 	// 5. 计费估算：让适配器根据用户请求提供 OtherRatios（时长、分辨率等）
 	//    必须在 ModelPriceHelperPerCall 之后调用（它会重建 PriceData）。
@@ -332,6 +346,17 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 		info.PriceData.Quota = quota
 		noteTaskQuotaClamp(info, clamp)
 	}
+	if basis := info.LeaderboardSavings; basis.Discounted() && info.TieredBillingSnapshot == nil {
+		beforeGroup := info.PriceData.ModelPrice * common.QuotaPerUnit
+		if !info.PriceData.UsePrice {
+			beforeGroup = info.PriceData.ModelRatio / 2 * common.QuotaPerUnit
+		}
+		standard, clamp := common.QuotaFromFloatChecked(beforeGroup * basis.Standard)
+		if clamp == nil && !common.StringsContains(constant.TaskPricePatches, modelName) {
+			standard, clamp = common.QuotaFromFloatChecked(info.PriceData.ApplyOtherRatiosToFloat(float64(standard)))
+		}
+		basis.Capture(standard, clamp)
+	}
 
 	// 7. 预扣费：首次尝试创建计费会话；重试时会话已存在，换到更贵的渠道要在
 	//    发起上游请求前补足预扣，余额不足就不发请求。
@@ -349,6 +374,7 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	}
 
 	// 9. 发送请求
+	service.MarkRequestProtectionForwarded(c, info)
 	resp, err := adaptor.DoRequest(c, info, requestBody)
 	if err != nil {
 		return nil, service.TaskErrorWrapper(err, "do_request_failed", http.StatusInternalServerError, common.UpstreamAddresses(c)...)
@@ -378,6 +404,7 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	finalQuota := info.PriceData.Quota
 	if parsed.Immediate != nil && parsed.Immediate.Status == model.TaskStatusFailure {
 		finalQuota = 0
+		info.LeaderboardSavings.Capture(0, nil)
 	} else if snap := info.TieredBillingSnapshot; snap != nil {
 		if parsed.Immediate != nil && parsed.Immediate.Status == model.TaskStatusSuccess && len(parsed.Immediate.UsageFacts) > 0 {
 			settlement, facts, err := service.EvaluateTaskCompletionUsage(snap, parsed.Immediate.UsageFacts)
@@ -385,6 +412,10 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 				logger.LogWarn(c, common.LogText("task immediate usage settlement failed; retaining reserved quota: %v", err))
 			} else {
 				finalQuota = settlement.ActualQuotaAfterGroup
+				if basis := info.LeaderboardSavings; basis.Discounted() {
+					standard, clamp := common.QuotaRoundChecked(settlement.ActualQuotaBeforeGroup * basis.Standard)
+					basis.Capture(standard, clamp)
+				}
 				snap.UsageFacts = facts
 				snap.EstimatedTier = settlement.MatchedTier
 				noteTaskQuotaClamp(info, settlement.Clamp)
@@ -402,6 +433,9 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	}
 
 	info.PriceData.Quota = finalQuota
+	if info.QuotaClamp != nil {
+		info.LeaderboardSavings.Capture(0, info.QuotaClamp)
+	}
 
 	return &TaskSubmitResult{
 		UpstreamTaskID: parsed.UpstreamTaskID,
@@ -427,6 +461,13 @@ func recalcQuotaFromRatios(info *relaycommon.RelayInfo, ratios map[string]float6
 	result := priceData.ApplyOtherRatiosToFloat(baseQuota)
 	quota, clamp := common.QuotaFromFloatChecked(result)
 	noteTaskQuotaClamp(info, clamp)
+	if basis := info.LeaderboardSavings; basis.Discounted() && basis.StandardQuota != nil {
+		// The host adjusts the rounded reservation, rather than rebuilding the
+		// model price. Mirror that sequence for the public-rate comparison.
+		standardBase := info.PriceData.RemoveOtherRatiosFromFloat(float64(*basis.StandardQuota))
+		standard, standardClamp := common.QuotaFromFloatChecked(priceData.ApplyOtherRatiosToFloat(standardBase))
+		basis.Capture(standard, standardClamp)
+	}
 	return quota, true
 }
 

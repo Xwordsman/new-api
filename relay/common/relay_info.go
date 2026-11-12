@@ -10,6 +10,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/extensions/leaderboard/record"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relaykit/dto"
@@ -139,9 +140,11 @@ type RelayInfo struct {
 	// Billing 是计费会话，封装了预扣费/结算/退款的统一生命周期。
 	// 初始免费组可为 nil；若 auto 重试切换到付费组，会在发送前创建。
 	Billing BillingSettler
-	// BillingSource indicates whether this request is billed from wallet quota or subscription.
-	// "" or "wallet" => wallet; "subscription" => subscription
+	// BillingSource identifies wallet, subscription, or isolated promotional funding.
 	BillingSource string
+	// Finalized promotional requests expose both shares for reconciliation.
+	PromotionalConsumed int
+	PromotionalWalletConsumed int
 	// SubscriptionId is the user_subscriptions.id used when BillingSource == "subscription"
 	SubscriptionId int
 	// SubscriptionPreConsumed is the amount pre-consumed on subscription item (quota units or 1)
@@ -165,6 +168,11 @@ type RelayInfo struct {
 	ParamOverrideAudit                    []string
 
 	PriceData hosttypes.PriceData
+	// Non-nil captures all public promotion factors at the request's first
+	// pricing pass, including for groups selected by later Auto retries.
+	GroupDiscounts map[string]float64
+	// LeaderboardSavings is observational; it must never change the charge.
+	LeaderboardSavings *record.SavingsBasis
 
 	// QuotaClamp is set (non-nil) when a quota conversion saturated at the
 	// supported single-request bound (or NaN fallback) while computing this request's charge.

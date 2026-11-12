@@ -66,12 +66,18 @@ afterEach(() => {
   useAuthStore.getState().auth.reset()
 })
 
-function sidebarFor(admin?: object, user?: object, canConfigure = true) {
+function sidebarFor(
+  admin?: object,
+  user?: object,
+  canConfigure = true,
+  features?: Record<string, boolean>
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
   client.setQueryData(['status'], {
     SidebarModulesAdmin: admin ? JSON.stringify(admin) : '',
+    extension_features: features,
   })
   useAuthStore.getState().auth.setUser({
     id: 1,
@@ -91,8 +97,118 @@ function sidebarFor(admin?: object, user?: object, canConfigure = true) {
     () => useSidebarConfig(useSidebarData().navGroups),
     { wrapper: Wrapper }
   )
-  return result
+  return { ...result, client }
 }
+
+const extensionEntries = [
+  ['checkin', 'Daily Check-in'],
+  ['channel_monitor', 'Channel monitor'],
+  ['benchmark', 'Model benchmark'],
+  ['referrals', 'Referral program'],
+  ['leaderboard', 'Community leaderboard'],
+] as const
+
+const allFeaturesEnabled = {
+  checkin: true,
+  channel_monitor: true,
+  benchmark: true,
+  referrals: true,
+  leaderboard: true,
+}
+
+describe('extension sidebar visibility', () => {
+  it.each(extensionEntries)(
+    'hides disabled %s even when sidebar preferences allow it',
+    (feature, title) => {
+      const { result } = sidebarFor(undefined, undefined, false, {
+        ...allFeaturesEnabled,
+        [feature]: false,
+      })
+      const titles = result.current
+        .flatMap((group) => group.items)
+        .map((item) => item.title)
+
+      expect(titles).not.toContain(title)
+      for (const [otherFeature, otherTitle] of extensionEntries) {
+        if (otherFeature !== feature) expect(titles).toContain(otherTitle)
+      }
+      expect(titles).toContain('API Keys')
+    }
+  )
+
+  it('keeps unavailable extension status hidden without hiding standard or ticket entries', () => {
+    const { result } = sidebarFor()
+    const titles = result.current
+      .flatMap((group) => group.items)
+      .map((item) => item.title)
+
+    for (const [, title] of extensionEntries) {
+      expect(titles).not.toContain(title)
+    }
+    expect(titles).toContain('Ticket center')
+    expect(titles).toContain('API Keys')
+  })
+
+  it.each([
+    ['console', 'channel_monitor', 'Channel monitor'],
+    ['console', 'benchmark', 'Model benchmark'],
+    ['personal', 'referrals', 'Referral program'],
+    ['personal', 'checkin', 'Daily Check-in'],
+    ['personal', 'tickets', 'Ticket center'],
+    ['personal', 'leaderboard', 'Community leaderboard'],
+  ])(
+    'keeps enabled %s.%s hidden when the administrator disables its menu',
+    (section, feature, title) => {
+      const { result } = sidebarFor(
+        { [section]: { enabled: true, [feature]: false } },
+        { [section]: { enabled: true, [feature]: true } },
+        true,
+        allFeaturesEnabled
+      )
+      expect(
+        result.current.flatMap((group) => group.items).map((item) => item.title)
+      ).not.toContain(title)
+    }
+  )
+
+  it('updates extension entries when refreshed status changes without remounting', async () => {
+    const { result, client } = sidebarFor(
+      undefined,
+      { personal: { enabled: true, leaderboard: false } },
+      true,
+      allFeaturesEnabled
+    )
+    expect(
+      result.current.flatMap((group) => group.items).map((item) => item.title)
+    ).toContain('Referral program')
+
+    await act(async () => {
+      client.setQueryData(['status'], {
+        extension_features: { ...allFeaturesEnabled, referrals: false },
+      })
+    })
+    await waitFor(() =>
+      expect(
+        result.current.flatMap((group) => group.items).map((item) => item.title)
+      ).not.toContain('Referral program')
+    )
+
+    await act(async () => {
+      client.setQueryData(['status'], {
+        extension_features: allFeaturesEnabled,
+      })
+    })
+    await waitFor(() =>
+      expect(
+        result.current.flatMap((group) => group.items).map((item) => item.title)
+      ).toContain('Referral program')
+    )
+    expect(
+      result.current.flatMap((group) => group.items).map((item) => item.title)
+    ).not.toContain('Community leaderboard')
+    client.clear()
+  })
+})
 
 describe('security sidebar visibility', () => {
   it('old configurations show Security & Access immediately after Profile and keep API Keys', () => {
@@ -104,7 +220,7 @@ describe('security sidebar visibility', () => {
       result.current
         .find((group) => group.id === 'personal')
         ?.items.map((item) => item.title)
-    ).toEqual(['Wallet', 'Profile', 'Security & Access'])
+    ).toEqual(['Wallet', 'Ticket center', 'Profile', 'Security & Access'])
     expect(
       result.current
         .flatMap((group) => group.items)

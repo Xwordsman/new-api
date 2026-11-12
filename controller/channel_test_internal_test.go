@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -17,6 +19,7 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -492,4 +495,150 @@ func TestTestAllChannelsRejectsExistingActiveTask(t *testing.T) {
 	require.Equal(t, http.StatusConflict, recorder.Code)
 	require.Contains(t, recorder.Body.String(), existing.TaskID)
 	require.Contains(t, recorder.Body.String(), "A channel test task is already running or queued")
+}
+
+func TestBenchmarkProbeUsesGroupRoutingAndPreservesPromptLimitsAndWallet(t *testing.T) {
+	previousDB, previousLogDB := model.DB, model.LOG_DB
+	previousMainType, previousLogType := common.MainDatabaseType(), common.LogDatabaseType()
+	previousRedis, previousMemory := common.RedisEnabled, common.MemoryCacheEnabled
+	previousLogging, previousExport := common.LogConsumeEnabled, common.DataExportEnabled
+	previousGroups := ratio_setting.GroupRatio2JSONString()
+	previousModels := ratio_setting.ModelRatio2JSONString()
+	t.Cleanup(func() {
+		model.DB, model.LOG_DB = previousDB, previousLogDB
+		common.SetDatabaseTypes(previousMainType, previousLogType)
+		common.RedisEnabled, common.MemoryCacheEnabled = previousRedis, previousMemory
+		common.LogConsumeEnabled, common.DataExportEnabled = previousLogging, previousExport
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(previousGroups))
+		require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(previousModels))
+	})
+	db := setupModelListControllerTestDB(t)
+	require.NoError(t, db.AutoMigrate(&model.Log{}))
+	common.MemoryCacheEnabled, common.LogConsumeEnabled, common.DataExportEnabled = false, true, false
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"benchmark":1}`))
+	require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(`{"gpt-benchmark":1,"gpt-benchmark-codex":1}`))
+	service.InitHttpClient()
+	root := model.User{Username: "benchmark-root", Password: "unusable", Role: common.RoleRootUser, Status: common.UserStatusEnabled, Group: "default", Quota: 123456}
+	require.NoError(t, db.Create(&root).Error)
+
+	for _, protocol := range []string{"chat", "responses"} {
+		t.Run(protocol, func(t *testing.T) {
+			modelName := "gpt-benchmark"
+			if protocol == "responses" {
+				modelName += "-codex"
+			}
+			type capturedRequest struct {
+				path, body, authorization string
+			}
+			requests := make(chan capturedRequest, 1)
+			var incomplete atomic.Bool
+			var waitForCancel atomic.Bool
+			started := make(chan struct{}, 1)
+			release := make(chan struct{})
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				if waitForCancel.Load() {
+					started <- struct{}{}
+					select {
+					case <-r.Context().Done():
+					case <-release:
+					}
+					return
+				}
+				requests <- capturedRequest{r.URL.Path, string(body), r.Header.Get("Authorization")}
+				w.Header().Set("Content-Type", "application/json")
+				if protocol == "chat" {
+					finish := "stop"
+					if incomplete.Load() {
+						finish = "length"
+					}
+					_, _ = fmt.Fprintf(w, `{"id":"chat-test","model":"upstream-model","choices":[{"message":{"role":"assistant","content":"21","reasoning_content":"not the answer"},"finish_reason":%q}],"usage":{"prompt_tokens":30,"completion_tokens":8,"total_tokens":38}}`, finish)
+					return
+				}
+				status := "completed"
+				if incomplete.Load() {
+					status = "incomplete"
+				}
+				_, _ = fmt.Fprintf(w, `{"id":"resp-test","object":"response","status":%q,"model":"upstream-model","output":[{"type":"reasoning","content":[{"type":"output_text","text":"not the answer"}]},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"21"}]}],"usage":{"input_tokens":30,"output_tokens":8,"total_tokens":38}}`, status)
+			}))
+			t.Cleanup(func() {
+				close(release)
+				upstream.Close()
+			})
+			mapping, err := common.Marshal(map[string]string{modelName: "upstream-model"})
+			require.NoError(t, err)
+			override := `{"messages":[{"role":"user","content":"replace prompt"}],"input":"replace prompt","stream":true,"max_tokens":999999,"max_completion_tokens":999999,"max_output_tokens":999999,"n":12,"reasoning_effort":"low"}`
+			channel := model.Channel{Type: constant.ChannelTypeOpenAI, Key: "benchmark-test-key", Name: protocol, Models: modelName, Group: "benchmark", BaseURL: &upstream.URL, ModelMapping: common.GetPointer(string(mapping)), ParamOverride: &override, Status: common.ChannelStatusEnabled}
+			require.NoError(t, channel.Insert())
+			result, err := RunBenchmarkProbe(context.Background(), "benchmark", modelName, "Configured candy prompt", 4096)
+			require.NoError(t, err)
+			assert.Equal(t, channel.Id, result.ChannelID)
+			assert.Equal(t, "21", result.Output)
+			assert.False(t, result.Truncated)
+			assert.Equal(t, 30, result.InputTokens)
+			assert.Equal(t, 8, result.OutputTokens)
+			request := <-requests
+			assert.Equal(t, "Bearer benchmark-test-key", request.authorization)
+			var body map[string]any
+			require.NoError(t, common.UnmarshalJsonStr(request.body, &body))
+			assert.Equal(t, "upstream-model", body["model"])
+			assert.Equal(t, false, body["stream"])
+			assert.Equal(t, "low", body["reasoning_effort"])
+			assert.NotContains(t, request.body, "replace prompt")
+			assert.Contains(t, request.body, "Configured candy prompt")
+			assert.NotContains(t, body, "n")
+			assert.NotContains(t, body, "max_tokens")
+			if protocol == "chat" {
+				assert.Equal(t, "/v1/chat/completions", request.path)
+				assert.Equal(t, float64(4096), body["max_completion_tokens"])
+				assert.NotContains(t, body, "max_output_tokens")
+			} else {
+				assert.Equal(t, "/v1/responses", request.path)
+				assert.Equal(t, float64(4096), body["max_output_tokens"])
+				assert.NotContains(t, body, "max_completion_tokens")
+			}
+			var user model.User
+			require.NoError(t, db.First(&user, root.Id).Error)
+			assert.Equal(t, root.Quota, user.Quota)
+			assert.Zero(t, user.UsedQuota)
+			var log model.Log
+			require.NoError(t, db.Where("channel_id = ?", channel.Id).First(&log).Error)
+			assert.Equal(t, "Model test", log.TokenName)
+			assert.Equal(t, "benchmark", log.Group)
+			assert.Equal(t, modelName, log.ModelName)
+
+			incomplete.Store(true)
+			result, err = RunBenchmarkProbe(context.Background(), "benchmark", modelName, "Configured candy prompt", 4096)
+			require.NoError(t, err)
+			assert.True(t, result.Truncated)
+			<-requests
+
+			waitForCancel.Store(true)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			done := make(chan error, 1)
+			go func() {
+				_, err := RunBenchmarkProbe(ctx, "benchmark", modelName, "Configured candy prompt", 4096)
+				done <- err
+			}()
+			select {
+			case <-started:
+				cancel()
+			case <-ctx.Done():
+				t.Fatal("upstream did not receive probe")
+			}
+			select {
+			case err := <-done:
+				require.Error(t, err)
+			case <-time.After(10 * time.Second):
+				t.Fatal("probe ignored context cancellation")
+			}
+		})
+	}
+	_, err := RunBenchmarkProbe(context.Background(), "missing", "gpt-benchmark", "Question", 4096)
+	require.ErrorContains(t, err, "route unavailable")
 }

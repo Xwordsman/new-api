@@ -17,8 +17,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute, redirect } from '@tanstack/react-router'
+import { MessagesSquare } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
-import { Main } from '@/components/layout'
+import { SectionPageLayout } from '@/components/layout'
 import { Playground } from '@/features/playground'
 import { isSidebarModuleEnabled } from '@/lib/nav-modules'
 
@@ -32,9 +34,23 @@ export const Route = createFileRoute('/_authenticated/playground/')({
 })
 
 function PlaygroundPage() {
+  const { t } = useTranslation()
   return (
-    <Main className='p-0'>
-      <Playground />
-    </Main>
+    <SectionPageLayout fixedContent>
+      <SectionPageLayout.Title
+        icon={MessagesSquare}
+        eyebrow='PLAYGROUND'
+        description={t(
+          'Try models and fine-tune your conversations in one place.'
+        )}
+      >
+        {t('Playground')}
+      </SectionPageLayout.Title>
+      <SectionPageLayout.Content>
+        <div className='bg-card h-full min-h-0 overflow-hidden rounded-xl border'>
+          <Playground />
+        </div>
+      </SectionPageLayout.Content>
+    </SectionPageLayout>
   )
 }

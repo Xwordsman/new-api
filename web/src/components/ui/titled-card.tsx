@@ -56,13 +56,14 @@ export function TitledCard({
   headerClassName,
   contentClassName,
   iconClassName,
-  iconTone,
+  iconTone = 'primary',
   titleClassName,
   descriptionClassName,
 }: TitledCardProps) {
   return (
     <Card
       data-card-hover={disableHoverEffect ? 'false' : undefined}
+      data-console-tone={iconTone}
       className={cn('gap-0 overflow-hidden py-0', className)}
     >
       <CardHeader

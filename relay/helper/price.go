@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/extensions/leaderboard/record"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
@@ -16,6 +18,7 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/relayconvert/reasoning"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/setting/billing_setting"
+	"github.com/QuantumNous/new-api/setting/groupdiscount"
 	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -59,6 +62,15 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) hostty
 		groupRatioInfo.GroupRatio = ratio_setting.GetGroupRatio(relayInfo.UsingGroup)
 	}
 
+	if relayInfo.GroupDiscounts == nil {
+		relayInfo.GroupDiscounts = groupdiscount.Default.Capture(time.Now())
+	}
+	if factor, ok := relayInfo.GroupDiscounts[relayInfo.UsingGroup]; ok {
+		groupRatioInfo.GroupRatio *= factor
+	}
+	relayInfo.LeaderboardSavings = &record.SavingsBasis{
+		Standard: ratio_setting.GetGroupRatio(relayInfo.UsingGroup), Effective: groupRatioInfo.GroupRatio,
+	}
 	return groupRatioInfo
 }
 

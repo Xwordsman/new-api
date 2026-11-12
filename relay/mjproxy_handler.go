@@ -203,6 +203,11 @@ func RelaySwapFace(c *gin.Context, info *relaycommon.RelayInfo) *dto.MidjourneyR
 		return service.MidjourneyErrorWrapper(constant.MjRequestError, "sour_base64_and_target_base64_is_required")
 	}
 	modelName := service.CovertMjpActionToModelName(constant.MjActionSwapFace)
+	protectionInfo := *info
+	protectionInfo.OriginModelName = modelName
+	if apiErr := service.CheckRequestProtection(c, &protectionInfo); apiErr != nil {
+		return &dto.MidjourneyResponse{Code: 4, Description: apiErr.Error()}
+	}
 
 	priceData, err := helper.ModelPriceHelperPerCall(c, info)
 	if err != nil {
@@ -210,6 +215,9 @@ func RelaySwapFace(c *gin.Context, info *relaycommon.RelayInfo) *dto.MidjourneyR
 			Code:        4,
 			Description: err.Error(),
 		}
+	}
+	if apiErr := service.CheckTokenGroupPrice(c, info, priceData.GroupRatioInfo.GroupRatio); apiErr != nil {
+		return &dto.MidjourneyResponse{Code: 4, Description: apiErr.Error()}
 	}
 
 	userQuota, err := model.GetUserQuota(info.UserId, false)
@@ -230,6 +238,7 @@ func RelaySwapFace(c *gin.Context, info *relaycommon.RelayInfo) *dto.MidjourneyR
 	baseURL := c.GetString("base_url")
 	fullRequestURL := fmt.Sprintf("%s%s", baseURL, requestURL)
 	service.RequestPolicy(c).BeginAttempt(&model.Channel{Id: c.GetInt("channel_id")}, info.UsingGroup)
+	service.MarkRequestProtectionForwarded(c, info)
 	mjResp, _, err := service.DoMidjourneyHttpRequest(c, time.Second*60, fullRequestURL)
 	accepted := service.RecordMidjourneyPolicyResponse(c, mjResp, err)
 	if err != nil {
@@ -526,6 +535,11 @@ func RelayMidjourneySubmit(c *gin.Context, relayInfo *relaycommon.RelayInfo) *dt
 	fullRequestURL := fmt.Sprintf("%s%s", baseURL, requestURL)
 
 	modelName := service.CovertMjpActionToModelName(midjRequest.Action)
+	protectionInfo := *relayInfo
+	protectionInfo.OriginModelName = modelName
+	if apiErr := service.CheckRequestProtection(c, &protectionInfo); apiErr != nil {
+		return &dto.MidjourneyResponse{Code: 4, Description: apiErr.Error()}
+	}
 
 	priceData, err := helper.ModelPriceHelperPerCall(c, relayInfo)
 	if err != nil {
@@ -533,6 +547,9 @@ func RelayMidjourneySubmit(c *gin.Context, relayInfo *relaycommon.RelayInfo) *dt
 			Code:        4,
 			Description: err.Error(),
 		}
+	}
+	if apiErr := service.CheckTokenGroupPrice(c, relayInfo, priceData.GroupRatioInfo.GroupRatio); apiErr != nil {
+		return &dto.MidjourneyResponse{Code: 4, Description: apiErr.Error()}
 	}
 
 	userQuota, err := model.GetUserQuota(relayInfo.UserId, false)
@@ -551,6 +568,7 @@ func RelayMidjourneySubmit(c *gin.Context, relayInfo *relaycommon.RelayInfo) *dt
 	}
 
 	service.RequestPolicy(c).BeginAttempt(&model.Channel{Id: c.GetInt("channel_id")}, relayInfo.UsingGroup)
+	service.MarkRequestProtectionForwarded(c, relayInfo)
 	midjResponseWithStatus, responseBody, err := service.DoMidjourneyHttpRequest(c, time.Second*60, fullRequestURL)
 	accepted := service.RecordMidjourneyPolicyResponse(c, midjResponseWithStatus, err)
 	if err != nil {

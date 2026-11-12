@@ -8,9 +8,12 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/extensions"
+	"github.com/QuantumNous/new-api/extensions/registrationrisk"
+	"github.com/QuantumNous/new-api/extensions/registrationrisk/guard"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/middleware"
@@ -244,18 +247,30 @@ func Register(c *gin.Context) {
 		common.ApiErrorT(c, "Invalid input {{error}}", map[string]any{"error": err.Error()})
 		return
 	}
-	if common.EmailVerificationEnabled {
+	settings, err := guard.GetSettings(model.DB.WithContext(c.Request.Context()))
+	if err != nil {
+		common.ApiErrorT(c, "Registration protection is temporarily unavailable")
+		return
+	}
+	requireEmail := common.EmailVerificationEnabled || settings.RequireEmail
+	inviterId, _ := model.GetUserIdByAffCode(user.AffCode)
+	decision, err := registrationrisk.Evaluate(c, "register", "password", user.Email, inviterId, requireEmail)
+	if err != nil {
+		common.ApiErrorT(c, "Registration cannot be completed. Please try later or contact support.")
+		return
+	}
+	if requireEmail {
 		if user.Email == "" || user.VerificationCode == "" {
 			common.ApiErrorT(c, "Email verification is enabled, please enter email address and verification code")
 			return
 		}
-		if !common.VerifyCodeWithKey(user.Email, user.VerificationCode, common.EmailVerificationPurpose) {
+		if err := guard.ConsumeCode(model.DB.WithContext(c.Request.Context()), user.Email, user.VerificationCode, time.Now()); err != nil {
 			common.ApiErrorT(c, "Verification code is incorrect or has expired")
 			return
 		}
 		if err := model.EnsureEmailAvailable(user.Email, 0); err != nil {
 			if errors.Is(err, model.ErrEmailAlreadyTaken) {
-				common.ApiErrorT(c, "Email address is already in use")
+				common.ApiErrorT(c, "Registration cannot be completed. Please try later or contact support.")
 				return
 			}
 			common.ApiErrorT(c, "Database error, please contact the administrator")
@@ -263,7 +278,7 @@ func Register(c *gin.Context) {
 		}
 	}
 	emailForExistCheck := ""
-	if common.EmailVerificationEnabled {
+	if requireEmail {
 		emailForExistCheck = user.Email
 	}
 	exist, err := model.CheckUserExistOrDeleted(user.Username, emailForExistCheck)
@@ -273,11 +288,10 @@ func Register(c *gin.Context) {
 		return
 	}
 	if exist {
-		common.ApiErrorT(c, "Username already exists or has been deleted")
+		common.ApiErrorT(c, "Registration cannot be completed. Please try later or contact support.")
 		return
 	}
-	affCode := user.AffCode // this code is the inviter's code, not the user's own code
-	inviterId, _ := model.GetUserIdByAffCode(affCode)
+
 	cleanUser := model.User{
 		Username:    user.Username,
 		Password:    user.Password,
@@ -285,11 +299,11 @@ func Register(c *gin.Context) {
 		InviterId:   inviterId,
 		Role:        common.RoleCommonUser, // 明确设置角色为普通用户
 	}
-	if common.EmailVerificationEnabled {
+	if requireEmail {
 		cleanUser.Email = user.Email
 	}
 	err = model.DB.Transaction(func(tx *gorm.DB) error {
-		if err := cleanUser.InsertWithTx(tx, inviterId); err != nil {
+		if err := cleanUser.InsertWithTx(registrationrisk.SignupContext(extensions.ReferralSignupContext(tx, c.ClientIP(), c.Request.UserAgent()), decision), inviterId); err != nil {
 			return err
 		}
 		return extensions.ConsumeRegistrationInvitation(tx, request.InvitationCode)
@@ -300,10 +314,11 @@ func Register(c *gin.Context) {
 			return
 		}
 		if errors.Is(err, model.ErrEmailAlreadyTaken) {
-			common.ApiErrorT(c, "Email address is already in use")
+			common.ApiErrorT(c, "Registration cannot be completed. Please try later or contact support.")
 			return
 		}
-		common.ApiError(c, err)
+		common.SysError("registration transaction failed")
+		common.ApiErrorT(c, "Registration cannot be completed. Please try later or contact support.")
 		return
 	}
 	cleanUser.FinishInsert(inviterId)

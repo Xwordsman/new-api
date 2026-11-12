@@ -329,6 +329,11 @@ func waitPerfCounters(t *testing.T, wantRequests int64) (requests, successes int
 
 func newResponsesWSBillingTest(t *testing.T, expression string, handle func(*websocket.Conn, *http.Request), httpEvents ...string) *responsesWSBillingTest {
 	t.Helper()
+	return newResponsesWSBillingTestWithRunner(t, expression, handle, nil, httpEvents...)
+}
+
+func newResponsesWSBillingTestWithRunner(t *testing.T, expression string, handle func(*websocket.Conn, *http.Request), wrapRunner func(relay.ResponsesWSRequestRunner) relay.ResponsesWSRequestRunner, httpEvents ...string) *responsesWSBillingTest {
+	t.Helper()
 	user, token := setupResponsesWSRequestTest(t)
 	previousTimeout := constant.StreamingTimeout
 	constant.StreamingTimeout = 30
@@ -407,7 +412,17 @@ func newResponsesWSBillingTest(t *testing.T, expression string, handle func(*web
 	engine.GET("/v1/responses", middleware.TokenAuth(), func(c *gin.Context) {
 		defer close(fixture.done)
 		c.Set(common.RequestIdKey, "responses-ws-billing")
-		ResponsesWebSocket(c)
+		if wrapRunner == nil {
+			ResponsesWebSocket(c)
+			return
+		}
+		runner := wrapRunner(newResponsesWSRequestRunner(c))
+		ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+		if !assert.NoError(t, err) {
+			return
+		}
+		defer ws.Close()
+		assert.Nil(t, relay.ResponsesWebSocketHelper(c, ws, runner))
 	})
 	engine.POST("/v1/responses", middleware.TokenAuth(), middleware.ModelRequestRateLimit(), middleware.Distribute(), func(c *gin.Context) {
 		defer func() { fixture.httpDone <- struct{}{} }()
@@ -746,6 +761,46 @@ func TestResponsesWebSocketDisconnectSettlesDeliveredOutputOnce(t *testing.T) {
 	keys, err := common.RDB.Keys(context.Background(), "perf:ws-billing:*").Result()
 	require.NoError(t, err)
 	assert.Empty(t, keys, "client cancellation must not affect model health")
+}
+
+func TestResponsesWebSocketGenerationCancellationClosesUpstreamAndSettlesOnce(t *testing.T) {
+	cancelGeneration := make(chan context.CancelFunc, 1)
+	fixture := newResponsesWSBillingTestWithRunner(t, `tier("output", c * 2)`, func(ws *websocket.Conn, _ *http.Request) {
+		if _, _, err := ws.ReadMessage(); !assert.NoError(t, err) {
+			return
+		}
+		for _, event := range []string{
+			`{"type":"response.created","response":{"id":"partial","status":"in_progress"}}`,
+			`{"type":"response.output_text.delta","delta":"hello"}`,
+		} {
+			if !assert.NoError(t, ws.WriteMessage(websocket.TextMessage, []byte(event))) {
+				return
+			}
+		}
+		_, _, _ = ws.ReadMessage()
+	}, func(base relay.ResponsesWSRequestRunner) relay.ResponsesWSRequestRunner {
+		return func(request *http.Request, requestID string, handle func(*gin.Context) *types.NewAPIError) *types.NewAPIError {
+			return base(request, requestID, func(c *gin.Context) *types.NewAPIError {
+				ctx, cancel := context.WithCancel(c.Request.Context())
+				defer cancel()
+				c.Request = c.Request.WithContext(ctx)
+				cancelGeneration <- cancel
+				return handle(c)
+			})
+		}
+	})
+	require.NoError(t, fixture.client.WriteMessage(websocket.TextMessage, []byte(`{"type":"response.create","model":"ws-billing","input":"hi","max_output_tokens":1}`)))
+	assert.Equal(t, "response.created", readResponsesWSTestEvent(t, fixture.client)["type"])
+	require.Equal(t, "response.output_text.delta", readResponsesWSTestEvent(t, fixture.client)["type"])
+	(<-cancelGeneration)()
+	require.NoError(t, fixture.client.SetReadDeadline(time.Now().Add(3*time.Second)))
+	_, _, err := fixture.client.ReadMessage()
+	assert.True(t, websocket.IsCloseError(err, websocket.CloseInternalServerErr), "a cancelled generation must close the persistent transport: %v", err)
+	fixture.closeAndWait(t)
+	assertResponsesWSAccounting(t, fixture, []int{1})
+	keys, err := common.RDB.Keys(context.Background(), "perf:ws-billing:*").Result()
+	require.NoError(t, err)
+	assert.Empty(t, keys, "capacity cancellation must not report an upstream health failure")
 }
 
 func TestResponsesWebSocketCancelErrorDoesNotFinishActiveRequest(t *testing.T) {

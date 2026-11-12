@@ -1,0 +1,227 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+
+@layer components {
+  .gateway-hero {
+    background-image:
+      radial-gradient(
+        ellipse at 85% 20%,
+        color-mix(in oklch, var(--primary) 7%, transparent),
+        transparent 55%
+      ),
+      linear-gradient(var(--card), var(--card));
+  }
+
+  .gateway-code {
+    color: #e5edfc;
+    background: #10233e;
+  }
+
+  .console-page {
+    background: var(--background);
+  }
+
+  .console-page-header-ambient {
+    background-image: radial-gradient(
+      ellipse at 0% 20%,
+      color-mix(in oklch, var(--primary) 13%, transparent),
+      transparent 58%
+    );
+  }
+
+  .console-page-header-ambient::after {
+    content: '';
+    position: absolute;
+    inset: 0 0 0 40%;
+    pointer-events: none;
+    background-image: radial-gradient(
+      circle,
+      color-mix(in oklch, var(--primary) 24%, transparent) 1px,
+      transparent 1px
+    );
+    background-size: 14px 14px;
+    mask-image: radial-gradient(ellipse at 100% 40%, black, transparent 76%);
+  }
+
+  /* The console scope also covers upstream Card consumers without changing them. */
+  :where(
+    .console-page [data-slot='card'],
+    .console-page .console-surface,
+    .console-metric
+  ) {
+    --metric-accent: var(--primary);
+  }
+
+  :where(.console-page)
+    :is(
+      [data-slot='card']:not([data-console-surface='false']),
+      .console-surface
+    ),
+  .console-metric {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    background-color: var(--card);
+  }
+
+  :where(.console-page)
+    :is(
+      [data-slot='card']:not([data-console-surface='false']),
+      .console-surface
+    ):not(.console-metric) {
+    background-image: none;
+  }
+
+  /* Only explicitly marked statistics receive accents and hover feedback. */
+  .console-metric {
+    background-image: radial-gradient(
+      ellipse at 0 0,
+      color-mix(in oklch, var(--metric-accent) 6%, transparent),
+      transparent 60%
+    );
+    transition:
+      border-color 200ms ease,
+      box-shadow 200ms ease;
+  }
+
+  :where(.console-page) [data-console-tone='success'] {
+    --metric-accent: var(--success);
+  }
+
+  :where(.console-page) [data-console-tone='warning'] {
+    --metric-accent: var(--warning);
+  }
+
+  :where(.console-page) [data-console-tone='info'] {
+    --metric-accent: var(--info);
+  }
+
+  :where(.console-page) [data-console-tone='destructive'] {
+    --metric-accent: var(--destructive);
+  }
+
+  :where(.console-page) [data-console-tone='chart-1'] {
+    --metric-accent: var(--chart-1);
+  }
+
+  :where(.console-page) [data-console-tone='chart-2'] {
+    --metric-accent: var(--chart-2);
+  }
+
+  :where(.console-page) [data-console-tone='chart-3'] {
+    --metric-accent: var(--chart-3);
+  }
+
+  :where(.console-page) [data-console-tone='chart-4'] {
+    --metric-accent: var(--chart-4);
+  }
+
+  :where(.console-page) [data-console-tone='chart-5'] {
+    --metric-accent: var(--chart-5);
+  }
+
+  .console-surface-icon {
+    color: var(--metric-accent, var(--primary));
+    background: color-mix(
+      in oklch,
+      var(--metric-accent, var(--primary)) 10%,
+      transparent
+    );
+  }
+
+  .overview-metric-card-today {
+    --metric-accent: var(--warning);
+    --overview-accent-1: var(--metric-accent);
+  }
+
+  .overview-metric-card-history {
+    --metric-accent: var(--chart-2);
+  }
+
+  .overview-metric-card-requests {
+    --metric-accent: var(--info);
+    --overview-accent-3: var(--metric-accent);
+  }
+
+  .console-metric::before,
+  .console-metric::after {
+    content: '';
+    position: absolute;
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  .console-metric::before {
+    inset: 0;
+    background: linear-gradient(
+      135deg,
+      color-mix(in oklch, var(--metric-accent) 13%, transparent),
+      color-mix(in oklch, var(--metric-accent) 4%, transparent)
+    );
+    opacity: 0;
+    border-radius: inherit;
+    transition: opacity 250ms ease;
+  }
+
+  .console-metric::after {
+    top: 0;
+    left: 1.25rem;
+    width: 2rem;
+    height: 3px;
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+    background: var(--metric-accent);
+  }
+
+  .console-metric:hover,
+  .console-metric:focus-within {
+    border-color: color-mix(in oklch, var(--metric-accent) 30%, var(--border));
+    box-shadow: 0 10px 28px -20px
+      color-mix(in oklch, var(--metric-accent) 40%, transparent);
+  }
+
+  .console-metric:hover::before,
+  .console-metric:focus-within::before {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .console-metric,
+    .console-metric::before {
+      transition: none;
+    }
+  }
+
+  .app-sidebar [data-slot='sidebar-menu'] {
+    gap: 0.25rem;
+  }
+
+  .app-sidebar [data-slot='sidebar-group'] + [data-slot='sidebar-group'] {
+    margin-top: 0.75rem;
+  }
+
+  .app-sidebar [data-sidebar='menu-button'] {
+    height: 2rem;
+    min-height: 2rem;
+    border-radius: calc(var(--radius) * 0.8);
+  }
+
+  .app-sidebar [data-sidebar='menu-button'][data-active] {
+    font-weight: 600;
+  }
+}

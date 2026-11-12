@@ -17,6 +17,33 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// DeepSeek Chat accepts instructions as system messages, while its Responses
+// endpoint supports the developer role. Preserve content and other roles in
+// both formats.
+func TestDeveloperRoleUpstreamCompatibility(t *testing.T) {
+	t.Run("chat completions", func(t *testing.T) {
+		const body = `{"model":"deepseek-flash","messages":[{"role":"system","content":"Site instructions"},{"role":"developer","content":"Developer instructions"},{"role":"developer","content":[{"type":"text","text":"Structured instructions"}]},{"role":"user","content":"Explain the developer role"},{"role":"assistant","content":"Checking"},{"role":"tool","content":"Result","tool_call_id":"call_1"}]}`
+		const want = `{"model":"deepseek-flash","messages":[{"role":"system","content":"Site instructions"},{"role":"system","content":"Developer instructions"},{"role":"system","content":[{"type":"text","text":"Structured instructions"}]},{"role":"user","content":"Explain the developer role"},{"role":"assistant","content":"Checking"},{"role":"tool","content":"Result","tool_call_id":"call_1"}]}`
+		var request dto.GeneralOpenAIRequest
+		require.NoError(t, common.UnmarshalJsonStr(body, &request))
+		converted, err := (&Adaptor{}).ConvertOpenAIRequest(nil, &relaycommon.RelayInfo{}, &request)
+		require.NoError(t, err)
+		sent, err := common.Marshal(converted)
+		require.NoError(t, err)
+		assert.JSONEq(t, want, string(sent))
+	})
+	t.Run("responses", func(t *testing.T) {
+		const body = `{"model":"deepseek-flash","input":[{"role":"developer","content":"Developer instructions"},{"role":"user","content":"Hello"}]}`
+		var request dto.OpenAIResponsesRequest
+		require.NoError(t, common.UnmarshalJsonStr(body, &request))
+		converted, err := (&Adaptor{}).ConvertOpenAIResponsesRequest(nil, &relaycommon.RelayInfo{}, request)
+		require.NoError(t, err)
+		sent, err := common.Marshal(converted)
+		require.NoError(t, err)
+		assert.JSONEq(t, body, string(sent))
+	})
+}
+
 // The -none/-low/-max tails of deepseek-flash and deepseek-v4-* reach DeepSeek
 // as its own thinking switch and effort in each upstream format, with the base
 // name; a bare name keeps DeepSeek's default, and a blacklisted name is sent

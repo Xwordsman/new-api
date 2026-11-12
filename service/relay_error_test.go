@@ -12,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/extensions/leaderboard/record"
 	"github.com/QuantumNous/new-api/model"
 	kitdto "github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
@@ -277,4 +278,38 @@ func TestRequestPolicyEventsReachLogAdminInfo(t *testing.T) {
 	other := model.NewLogOther()
 	AppendRelayLogAdminInfo(untouched, nil, other)
 	assert.NotContains(t, other.Snapshot()["admin_info"], "request_policy", "requests without decisions do not carry an empty record")
+}
+
+func TestLeaderboardCountsOnlyUpstreamGPTSafetyErrorsWithErrorLoggingDisabled(t *testing.T) {
+	require.NoError(t, record.Migrate(model.DB))
+	record.Configure(model.DB, record.Policy{Enabled: true, Cyber: true, ModelPrefixes: []string{"gpt-"}, SafetyCodes: []string{"content_filter"}})
+	oldLogging, oldBan := constant.ErrorLogEnabled, common.AutomaticDisableChannelEnabled
+	constant.ErrorLogEnabled, common.AutomaticDisableChannelEnabled = false, false
+	t.Cleanup(func() {
+		record.Configure(nil, record.Policy{})
+		constant.ErrorLogEnabled, common.AutomaticDisableChannelEnabled = oldLogging, oldBan
+		require.NoError(t, model.DB.Where("user_id = ?", 153).Delete(&record.Warning{}).Error)
+	})
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest("POST", "/v1/chat/completions", nil)
+	ctx.Set("id", 153)
+	ctx.Set("original_model", "gpt-5")
+	ctx.Set(common.RequestIdKey, "leaderboard-safety-request")
+	upstream := types.WithOpenAIError(types.OpenAIError{Code: "content_filter", Type: "upstream_error", Message: "private prompt details"}, 400)
+	ProcessChannelError(ctx, types.ChannelError{ChannelId: 1}, upstream, nil)
+	ProcessChannelError(ctx, types.ChannelError{ChannelId: 1}, upstream, nil)
+	ctx.Set(common.RequestIdKey, "leaderboard-local-permission")
+	local := types.NewErrorWithStatusCode(errors.New("content_filter"), types.ErrorCodeBadResponseStatusCode, 403)
+	ProcessChannelError(ctx, types.ChannelError{ChannelId: 1}, local, nil)
+	ctx.Set(common.RequestIdKey, "leaderboard-other-model")
+	ctx.Set("original_model", "claude-test")
+	ProcessChannelError(ctx, types.ChannelError{ChannelId: 1}, upstream, nil)
+	var warnings []record.Warning
+	require.NoError(t, model.DB.Where("user_id = ?", 153).Find(&warnings).Error)
+	require.Len(t, warnings, 1)
+	assert.Equal(t, "content_filter", warnings[0].Code)
+	payload, err := common.Marshal(warnings)
+	require.NoError(t, err)
+	assert.NotContains(t, string(payload), "private prompt details")
+	assert.NotContains(t, string(payload), "leaderboard-safety-request")
 }

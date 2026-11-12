@@ -131,6 +131,8 @@ export interface ToolSurchargeItem {
 }
 
 export interface LogOtherData {
+  promotional_consumed?: number
+  wallet_quota_deducted?: number
   admin_info?: {
     request_policy?: PolicyEvent[]
     is_multi_key?: boolean

@@ -16,24 +16,24 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ConfigDrawer } from '@/components/config-drawer'
 import { LanguageSwitcher } from '@/components/language-switcher'
-import { NotificationPopover } from '@/components/notification-popover'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
-import { SystemUpdateAction } from '@/features/system-update/system-update-action'
+import { ThemeSwitch } from '@/components/theme-switch'
+import { TicketNotificationPopover } from '@/extensions/tickets/notifications'
 import { useNotifications } from '@/hooks/use-notifications'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 
 import { defaultTopNavLinks } from '../config/top-nav.config'
 import type { TopNavLink } from '../types'
 import { Header } from './header'
+import { HeaderBalance } from './header-balance'
 import { SystemBrand } from './system-brand'
 import { TopNav } from './top-nav'
 
 /**
  * General application Header component
- * Integrates navigation bar, search, configuration and profile functions
+ * Integrates navigation bar, search, theme mode and profile functions
  *
  * @example
  * // Basic usage
@@ -83,10 +83,10 @@ type AppHeaderProps = {
    */
   showNotifications?: boolean
   /**
-   * Whether to show config drawer
+   * Whether to show light/dark mode switch
    * @default true
    */
-  showConfigDrawer?: boolean
+  showThemeSwitch?: boolean
   /**
    * Whether to show profile dropdown
    * @default true
@@ -101,7 +101,7 @@ export function AppHeader({
   showSearch = true,
   rightContent,
   showNotifications = true,
-  showConfigDrawer = true,
+  showThemeSwitch = true,
   showProfileDropdown = true,
 }: AppHeaderProps) {
   // Prioritize dynamically generated links from backend
@@ -113,27 +113,28 @@ export function AppHeader({
 
   return (
     <Header>
-      <div className='@container/system-brand flex min-w-0 flex-1 items-center gap-1'>
+      <div className='@container/system-brand flex min-w-7 flex-1 items-center gap-1 lg:min-w-36 lg:flex-none'>
         <SystemBrand variant='inline' />
-        <SystemUpdateAction presentation='version' />
       </div>
 
       {leftContent ? (
-        <div className='ms-2 flex items-center'>{leftContent}</div>
-      ) : null}
+        <div className='ms-3 flex items-center'>{leftContent}</div>
+      ) : (
+        showTopNav && (
+          <div className='shrink-0 sm:ms-5'>
+            <TopNav links={links} />
+          </div>
+        )
+      )}
 
       {rightContent ?? (
-        <div className='ms-auto flex shrink-0 items-center gap-1 sm:gap-2'>
-          {showTopNav && (
-            <div className='me-1 hidden lg:block'>
-              <TopNav links={links} />
-            </div>
-          )}
-          {showSearch && (
-            <Search className='w-8 flex-none [&>span]:hidden sm:[&>span]:inline' />
-          )}
+        <div className='ms-auto flex min-w-0 items-center gap-0 sm:shrink-0 sm:gap-2 max-[360px]:[&>button]:max-w-8'>
+          <HeaderBalance />
+          {showSearch && <Search />}
+          <LanguageSwitcher />
+          {showThemeSwitch && <ThemeSwitch />}
           {showNotifications && (
-            <NotificationPopover
+            <TicketNotificationPopover
               open={notifications.popoverOpen}
               onOpenChange={notifications.setPopoverOpen}
               unreadCount={notifications.unreadCount}
@@ -144,8 +145,6 @@ export function AppHeader({
               loading={notifications.loading}
             />
           )}
-          <LanguageSwitcher />
-          {showConfigDrawer && <ConfigDrawer />}
           {showProfileDropdown && <ProfileDropdown />}
         </div>
       )}

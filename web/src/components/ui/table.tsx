@@ -25,13 +25,19 @@ import { cn } from '@/lib/utils'
 function Table({
   className,
   withContainer = true,
+  typography = 'uniform',
   ...props
-}: React.ComponentProps<'table'> & { withContainer?: boolean }) {
+}: React.ComponentProps<'table'> & {
+  withContainer?: boolean
+  typography?: 'uniform' | 'content'
+}) {
   const table = (
     <table
       data-slot='table'
       className={cn(
-        'w-full caption-bottom text-sm tabular-nums [font-family:var(--font-body)] [&_td]:text-sm [&_td]:font-medium [&_th]:text-sm [&_:is(th,td)_*]:[font-family:inherit] [&_:is(th,td)_*]:[font-size:inherit] [&_:is(th,td)_*]:[font-weight:inherit]',
+        'w-full caption-bottom text-sm tabular-nums [font-family:var(--font-body)]',
+        typography === 'uniform' &&
+          '[&_td]:text-sm [&_td]:font-medium [&_th]:text-sm [&_:is(th,td)_*]:[font-family:inherit] [&_:is(th,td)_*]:[font-size:inherit] [&_:is(th,td)_*]:[font-weight:inherit]',
         '[&_[data-table-text=secondary]]:text-xs [&_[data-table-text=secondary]]:font-normal',
         className
       )}
@@ -55,7 +61,10 @@ function TableHeader({ className, ...props }: React.ComponentProps<'thead'>) {
   return (
     <thead
       data-slot='table-header'
-      className={cn('[&_tr]:border-b', className)}
+      className={cn(
+        '[--table-row-hover:var(--table-header-hover)] [&_tr]:border-b',
+        className
+      )}
       {...props}
     />
   )
@@ -89,7 +98,7 @@ function TableRow({ className, ...props }: React.ComponentProps<'tr'>) {
     <tr
       data-slot='table-row'
       className={cn(
-        'group data-[state=selected]:bg-muted border-b transition-colors hover:[background-color:color-mix(in_oklch,var(--muted)_50%,var(--background))] has-aria-expanded:[background-color:color-mix(in_oklch,var(--muted)_50%,var(--background))]',
+        'group data-[state=selected]:bg-muted border-b transition-colors hover:bg-(--table-row-hover) has-aria-expanded:bg-(--table-row-hover)',
         className
       )}
       {...props}

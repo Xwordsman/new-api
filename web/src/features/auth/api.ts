@@ -258,7 +258,7 @@ export async function register(payload: RegisterPayload): Promise<ApiResponse> {
 export async function sendEmailVerification(
   email: string,
   turnstile?: string
-): Promise<ApiResponse> {
+): Promise<ApiResponse<{ retry_after?: number }>> {
   const res = await api.get('/api/verification', {
     params: { email, turnstile },
   })

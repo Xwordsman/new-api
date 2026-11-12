@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { KeyRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
@@ -30,7 +31,15 @@ export function ApiKeys() {
   return (
     <ApiKeysProvider>
       <SectionPageLayout fixedContent>
-        <SectionPageLayout.Title>{t('API Keys')}</SectionPageLayout.Title>
+        <SectionPageLayout.Title
+          icon={KeyRound}
+          eyebrow='API KEYS'
+          description={t(
+            'Create and manage the API keys that connect your applications.'
+          )}
+        >
+          {t('API Keys')}
+        </SectionPageLayout.Title>
         <SectionPageLayout.Actions>
           <ApiKeysPrimaryButtons />
         </SectionPageLayout.Actions>

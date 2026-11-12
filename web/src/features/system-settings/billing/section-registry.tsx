@@ -196,15 +196,7 @@ const BILLING_SECTIONS = [
   {
     id: 'checkin',
     titleKey: 'Check-in Rewards',
-    build: (settings: BillingSettings) => (
-      <CheckinSettingsSection
-        defaultValues={{
-          enabled: settings['checkin_setting.enabled'],
-          minQuota: settings['checkin_setting.min_quota'],
-          maxQuota: settings['checkin_setting.max_quota'],
-        }}
-      />
-    ),
+    build: () => <CheckinSettingsSection />,
   },
 ] as const
 

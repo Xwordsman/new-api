@@ -15,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/gin-gonic/gin"
+	messagei18n "github.com/nicksnyder/go-i18n/v2/i18n"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -148,8 +149,16 @@ func TestLocalesRenderEveryKey(t *testing.T) {
 	for _, lang := range SupportedLanguages() {
 		assert.Equal(t, declared, keysByLang[lang], lang)
 		for _, key := range keysByLang[lang] {
-			text := Translate(lang, key, map[string]any{})
-			assert.NotEqual(t, key, text, "%s %s", lang, key)
+			// An English source key may equal its English translation. Verify
+			// successful localization directly so Translate's raw-key fallback
+			// cannot hide a missing message or an invalid template.
+			text, err := GetLocalizer(lang).Localize(&messagei18n.LocalizeConfig{
+				MessageID:    key,
+				TemplateData: map[string]any{},
+			})
+			require.NoError(t, err, "%s %s", lang, key)
+			assert.NotEmpty(t, text, "%s %s", lang, key)
+			assert.Equal(t, text, Translate(lang, key, map[string]any{}), "%s %s", lang, key)
 			assert.False(t, strings.Contains(text, "{{"), "%s %s: %s", lang, key, text)
 		}
 	}

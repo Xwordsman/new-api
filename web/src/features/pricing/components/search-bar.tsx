@@ -21,6 +21,7 @@ import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
 export interface SearchBarProps {
@@ -51,18 +52,19 @@ export function SearchBar(props: SearchBarProps) {
 
   return (
     <div className={cn('relative', props.className)}>
-      <Search className='text-muted-foreground/60 pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2' />
-      <input
+      <Search
+        aria-hidden
+        className='text-muted-foreground/60 pointer-events-none absolute top-1/2 left-4 z-10 size-4 -translate-y-1/2'
+      />
+      <Input
         ref={inputRef}
         type='text'
         placeholder={props.placeholder || t('Search models...')}
         value={props.value}
         onChange={(e) => props.onChange(e.target.value)}
         className={cn(
-          'border-border/60 bg-background placeholder:text-muted-foreground/50',
-          'hover:border-border',
-          'focus:border-primary/50 focus:ring-primary/20 focus:ring-2',
-          'h-10 w-full rounded-lg border pr-16 pl-10 text-sm transition-all outline-none'
+          'border-border bg-card placeholder:text-muted-foreground/70',
+          'h-12 w-full rounded-[var(--radius)] pr-16 pl-11 shadow-xs'
         )}
         aria-label={t('Search models')}
       />
@@ -78,8 +80,11 @@ export function SearchBar(props: SearchBarProps) {
             <X className='size-4' />
           </Button>
         ) : (
-          <kbd className='bg-muted text-muted-foreground pointer-events-none hidden rounded border px-1.5 py-0.5 font-mono text-[10px] sm:inline-block'>
-            ⌘K
+          <kbd
+            aria-hidden
+            className='bg-muted/50 text-muted-foreground pointer-events-none hidden rounded border px-1.5 py-0.5 font-mono text-[10px] sm:inline-block'
+          >
+            Ctrl K
           </kbd>
         )}
       </div>

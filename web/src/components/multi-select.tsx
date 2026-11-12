@@ -55,6 +55,11 @@ export type Option = {
 }
 
 interface MultiSelectProps {
+  'aria-label'?: React.AriaAttributes['aria-label']
+  'aria-labelledby'?: React.AriaAttributes['aria-labelledby']
+  'aria-describedby'?: React.AriaAttributes['aria-describedby']
+  'aria-invalid'?: React.AriaAttributes['aria-invalid']
+  'data-form-root'?: string
   options: Option[]
   selected: string[]
   onChange: (values: string[]) => void
@@ -412,7 +417,14 @@ export function MultiSelect(props: MultiSelectProps) {
           }
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          aria-label={placeholder}
+          aria-label={
+            props['aria-label'] ??
+            (props['aria-labelledby'] ? undefined : placeholder)
+          }
+          aria-labelledby={props['aria-labelledby']}
+          aria-describedby={props['aria-describedby']}
+          aria-invalid={props['aria-invalid']}
+          data-form-root={props['data-form-root']}
         />
       </ComboboxChips>
 

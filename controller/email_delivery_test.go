@@ -5,16 +5,21 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/extensions/emailtemplate"
+	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	xhtml "golang.org/x/net/html"
 	"gorm.io/gorm"
 )
 
@@ -248,4 +253,73 @@ func TestEmailKeyStatusIsDerivedAndReadOnly(t *testing.T) {
 	UpdateOption(context)
 	assert.Contains(t, response.Body.String(), `"success":false`)
 	assert.Contains(t, response.Body.String(), "read-only")
+}
+
+func TestPasswordResetEmailTemplatePreservesPlusAddressAndIssuedChallenge(t *testing.T) {
+	require.NoError(t, i18n.Init())
+	configureEmailDelivery(t, map[string]string{
+		"EmailProvider": "resend", "ResendApiKey": "test-key", "ResendFrom": "sender@example.com",
+		common.EmailTemplateOptionKey: `{"enabled":true,"templates":[]}`,
+	})
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	connection, err := db.DB()
+	require.NoError(t, err)
+	connection.SetMaxOpenConns(1)
+	t.Cleanup(func() { require.NoError(t, connection.Close()) })
+	require.NoError(t, db.AutoMigrate(&model.User{}))
+	email := "mail+reset@example.com"
+	require.NoError(t, db.Create(&model.User{Username: "template-reset", Email: email, AffCode: "template-reset", Setting: `{"language":"en"}`}).Error)
+	previousDB, previousRenderer := model.DB, common.EmailTemplateRenderer
+	previousAddress, previousValidity := system_setting.ServerAddress, common.VerificationValidMinutes
+	model.DB, common.EmailTemplateRenderer = db, emailtemplate.Render
+	system_setting.ServerAddress, common.VerificationValidMinutes = "https://site.example", 7
+	t.Cleanup(func() {
+		model.DB, common.EmailTemplateRenderer = previousDB, previousRenderer
+		system_setting.ServerAddress, common.VerificationValidMinutes = previousAddress, previousValidity
+		common.DeleteKey(email, common.PasswordResetPurpose)
+	})
+	var deliveredHTML string
+	http.DefaultTransport = emailHTTPTransport(func(request *http.Request) (*http.Response, error) {
+		var body struct {
+			To   []string `json:"to"`
+			HTML string   `json:"html"`
+		}
+		require.NoError(t, common.DecodeJson(request.Body, &body))
+		assert.Equal(t, []string{email}, body.To)
+		deliveredHTML = body.HTML
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"id":"preview-reset-test"}`)), Header: make(http.Header)}, nil
+	})
+	response := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(response)
+	context.Request = httptest.NewRequest(http.MethodGet, "/api/reset_password?"+url.Values{"email": {email}}.Encode(), nil)
+	SendPasswordResetEmail(context)
+	require.Equal(t, http.StatusOK, response.Code)
+	assert.Contains(t, response.Body.String(), `"success":true`)
+	assert.Contains(t, deliveredHTML, "Powered by new-api")
+	assert.Contains(t, deliveredHTML, "Valid for 7 minutes")
+	document, err := xhtml.Parse(strings.NewReader(deliveredHTML))
+	require.NoError(t, err)
+	links := 0
+	var walk func(*xhtml.Node)
+	walk = func(node *xhtml.Node) {
+		for _, attribute := range node.Attr {
+			if node.Data != "a" || attribute.Key != "href" {
+				continue
+			}
+			link, parseErr := url.Parse(attribute.Val)
+			require.NoError(t, parseErr)
+			assert.Equal(t, "site.example", link.Host)
+			assert.Equal(t, "/user/reset", link.Path)
+			assert.Equal(t, email, link.Query().Get("email"))
+			assert.True(t, common.VerifyCodeWithKey(email, link.Query().Get("token"), common.PasswordResetPurpose))
+			assert.NotContains(t, response.Body.String(), link.Query().Get("token"))
+			links++
+		}
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			walk(child)
+		}
+	}
+	walk(document)
+	assert.Equal(t, 2, links, "button and fallback must both carry the issued reset challenge")
 }

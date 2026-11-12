@@ -47,11 +47,14 @@ type BillingSession struct {
 func (s *BillingSession) Settle(actualQuota int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.settled {
+	if s.settled || s.refunded {
 		return nil
 	}
+	if actualQuota < 0 || actualQuota > math.MaxInt32 {
+		return fmt.Errorf("invalid settlement quota")
+	}
 	delta := actualQuota - s.preConsumedQuota
-	if delta == 0 {
+	if delta == 0 && s.funding.Source() != BillingSourcePromotional {
 		s.settled = true
 		return nil
 	}
@@ -62,9 +65,13 @@ func (s *BillingSession) Settle(actualQuota int) error {
 		}
 		s.fundingSettled = true
 	}
+	if promo, ok := s.funding.(*PromotionalFunding); ok {
+		s.relayInfo.PromotionalConsumed = min(promo.finalActual, promo.initial)
+		s.relayInfo.PromotionalWalletConsumed = promo.finalActual - s.relayInfo.PromotionalConsumed
+	}
 	// 2) 调整令牌额度
 	var tokenErr error
-	if !s.relayInfo.IsPlayground {
+	if !s.relayInfo.IsPlayground && delta != 0 {
 		if delta > 0 {
 			tokenErr = model.DecreaseTokenQuota(s.relayInfo.TokenId, s.relayInfo.TokenKey, delta)
 		} else {
@@ -140,6 +147,9 @@ func (s *BillingSession) needsRefundLocked() bool {
 		// fundingSettled 时资金来源已提交结算，不能再退预扣费
 		return false
 	}
+	if promo, ok := s.funding.(*PromotionalFunding); ok {
+		return !promo.committed
+	}
 	if s.tokenConsumed > 0 {
 		return true
 	}
@@ -167,6 +177,9 @@ func (s *BillingSession) ReserveBeforeSubmit(targetQuota int) error {
 func (s *BillingSession) reserve(targetQuota int, requireAvailableQuota bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if targetQuota < 0 || targetQuota > math.MaxInt32 {
+		return fmt.Errorf("invalid reservation quota")
+	}
 
 	if s.relayInfo != nil {
 		_, imageRequest := s.relayInfo.Request.(*dto.ImageRequest)
@@ -284,6 +297,11 @@ func (s *BillingSession) reserveFunding(delta int, requireAvailableQuota bool) e
 		}
 		funding.consumed += delta
 		return nil
+	case *PromotionalFunding:
+		if err := funding.wallet.PreConsume(delta); err != nil {
+			return err
+		}
+		return nil
 	case *SubscriptionFunding:
 		if err := model.PostConsumeUserSubscriptionDelta(funding.subscriptionId, int64(delta)); err != nil {
 			return types.NewErrorWithStatusCode(
@@ -307,6 +325,12 @@ func (s *BillingSession) rollbackFundingReserve(delta int) {
 			common.SysLog(common.LogText("error rolling back wallet funding reserve: %s", err.Error()))
 		} else {
 			funding.consumed -= delta
+		}
+	case *PromotionalFunding:
+		if err := model.IncreaseUserQuota(funding.userID, delta, false); err != nil {
+			common.SysError("promotional wallet reserve rollback failed")
+		} else {
+			funding.wallet.consumed -= delta
 		}
 	case *SubscriptionFunding:
 		if err := model.PostConsumeUserSubscriptionDelta(funding.subscriptionId, -int64(delta)); err != nil {
@@ -390,6 +414,9 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 	if relayInfo == nil {
 		return nil, types.NewError(fmt.Errorf("relayInfo is nil"), types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
 	}
+	if preConsumedQuota < 0 || preConsumedQuota > math.MaxInt32 {
+		return nil, types.NewError(fmt.Errorf("invalid pre-consume quota"), types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
+	}
 
 	pref := common.NormalizeBillingPreference(relayInfo.UserSetting.BillingPreference)
 
@@ -398,6 +425,17 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		userQuota, err := model.GetUserQuota(relayInfo.UserId, false)
 		if err != nil {
 			return nil, types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
+		}
+		if promotionalFundingInstalled.Load() && !relayInfo.ForcePreConsume && preConsumedQuota > 0 {
+			relayInfo.UserQuota = userQuota
+			session := &BillingSession{relayInfo: relayInfo, lang: i18n.StatedLang(c), funding: &PromotionalFunding{requestID: relayInfo.RequestId, userID: relayInfo.UserId, model: relayInfo.GetBillingModelName()}}
+			apiErr := session.preConsume(c, preConsumedQuota)
+			if apiErr == nil {
+				return session, nil
+			}
+			if apiErr.GetErrorCode() != types.ErrorCodeInsufficientUserQuota {
+				return nil, apiErr
+			}
 		}
 		if userQuota <= 0 {
 			return nil, types.NewErrorWithStatusCode(

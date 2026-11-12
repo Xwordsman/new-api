@@ -52,7 +52,7 @@ export function LoadingState(props: LoadingStateProps) {
   return (
     <div
       className={cn(
-        'flex min-h-[200px] flex-col items-center justify-center gap-3',
+        'bg-card flex min-h-[200px] flex-col items-center justify-center gap-3 rounded-xl',
         props.className
       )}
     >

@@ -1,0 +1,350 @@
+{
+  "categories": [
+    {
+      "id": "getting-started",
+      "title": "快速上手",
+      "description": "从创建 API 密钥到发出第一个请求，了解协议、余额与图片生成。",
+      "sort_order": 10
+    },
+    {
+      "id": "platform",
+      "title": "平台功能",
+      "description": "了解分组路由、计费、渠道状态与账户服务，找到适合自己的使用方式。",
+      "sort_order": 20
+    },
+    {
+      "id": "cli",
+      "title": "编程 CLI",
+      "description": "为 Claude Code、Codex、OpenCode 等编程工具配置统一接入。",
+      "sort_order": 30
+    },
+    {
+      "id": "clients",
+      "title": "客户端与工具",
+      "description": "连接桌面聊天客户端、翻译扩展和支持自定义接口的应用。",
+      "sort_order": 40
+    },
+    {
+      "id": "sdk",
+      "title": "SDK 接入",
+      "description": "使用熟悉的 Python 与 JavaScript SDK 开始开发。",
+      "sort_order": 50
+    },
+    {
+      "id": "troubleshooting",
+      "title": "故障排查",
+      "description": "按错误码和请求链路定位问题，准备有效的反馈材料。",
+      "sort_order": 60
+    }
+  ],
+  "articles": [
+    {
+      "id": "quick-start",
+      "category_id": "getting-started",
+      "slug": "quick-start",
+      "title": "5 分钟发出第一个请求",
+      "description": "创建密钥、选择模型、发送请求，再到日志中确认结果。",
+      "content": "欢迎使用 {{site_name}}。接入时需要准备三项信息：平台 API 地址、自己创建的 API 密钥、可用模型的完整 ID。下面用一个最小文本请求走完整个流程。\n\n## 1. 登录并准备余额\n\n打开[登录页面](/sign-in)，没有账户时先[注册](/sign-up)。如果站点开启邮箱验证，请完成验证后再继续。在[钱包](/wallet)确认余额或当前可用套餐；可用额度及充值规则以页面显示为准。\n\n## 2. 为应用创建独立密钥\n\n进入[API 密钥](/keys)，新建一个容易识别的密钥，例如“本地开发”。按实际需要选择分组、模型限制、额度与有效期，然后将密钥保存到本机的安全配置中。不同应用使用不同密钥，方便排查用量和单独撤销权限。\n\n不要把真实密钥放进公开仓库、截图、网页前端代码或客服工单。\n\n## 3. 选择准确的模型 ID\n\n在[模型广场](/pricing)确认可访问的模型、协议和价格。示例里的 `YOUR_MODEL_ID` 需要替换成完整模型 ID；模型展示名称不一定等同于请求里的 ID。\n\n本教程使用 OpenAI Chat Completions。其他协议见[选择正确的 API 协议](/docs/guides/protocols)。\n\n## 4. 发送最小请求\n\n下面示例用于 Bash / zsh。用环境变量保存真实密钥，避免将它写进项目文件。\n\n```bash\nexport NEW_API_KEY='YOUR_API_KEY'\ncurl --connect-timeout 10 --max-time 120 \\\n  '{{api_base_url}}/chat/completions' \\\n  -H \"Authorization: Bearer $NEW_API_KEY\" \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"model\":\"YOUR_MODEL_ID\",\"messages\":[{\"role\":\"user\",\"content\":\"你好，请简短介绍自己。\"}]}'\n```\n\nWindows PowerShell 可以使用下面的写法：\n\n```powershell\n$env:NEW_API_KEY = 'YOUR_API_KEY'\n$body = @{\n  model = 'YOUR_MODEL_ID'\n  messages = @(@{ role = 'user'; content = '你好，请简短介绍自己。' })\n} | ConvertTo-Json -Depth 5\nInvoke-RestMethod -Method Post `\n  -Uri '{{api_base_url}}/chat/completions' `\n  -Headers @{ Authorization = \"Bearer $env:NEW_API_KEY\" } `\n  -ContentType 'application/json' -Body $body -TimeoutSec 120\n```\n\n## 5. 核对结果\n\n成功的 Chat Completions 响应通常包含 `choices`。进入[使用日志](/usage-logs)核对模型、实际分组、状态和消耗，再逐步增加流式输出、工具调用或多模态参数。也可以在[操练场](/playground)试用已开放的模型。\n\n出现错误时保留状态码和经过脱敏的错误消息，按[错误码与排障](/docs/guides/troubleshooting)检查。客户端超时不代表服务端一定没有处理请求，不要立即大量重复提交。\n",
+      "status": "published",
+      "sort_order": 10,
+      "updated_at": 0
+    },
+    {
+      "id": "protocols",
+      "category_id": "getting-started",
+      "slug": "protocols",
+      "title": "选择正确的 API 协议",
+      "description": "分清 Chat Completions、Responses、Messages 与 Gemini 原生接口。",
+      "content": "{{site_name}} 基于 new-api 提供多种兼容接口。能否使用某种协议，还取决于所选模型、分组和上游渠道；接口路径存在不代表所有模型都支持该协议的每项功能。\n\n## 地址应该填到哪里\n\n| 配置项 | 常见填写方式 |\n| --- | --- |\n| 站点地址 | `{{site_url}}` |\n| API 根地址 | `{{site_url}}` |\n| OpenAI SDK Base URL | `{{api_base_url}}` |\n| 要求完整 Chat Completions 地址的工具 | `{{api_base_url}}/chat/completions` |\n| Anthropic SDK Base URL | `{{site_url}}` |\n\n以客户端字段说明为准。有的客户端自动补上 `/v1`，有的需要手动填写。遇到 404，先检查最终请求是否变成 `/v1/v1/...`。\n\n## OpenAI Chat Completions\n\n适合支持 OpenAI 兼容聊天的客户端。通过 `Authorization: Bearer YOUR_API_KEY` 传入密钥，正文使用 `model` 和 `messages`。\n\n```http\nPOST {{api_base_url}}/chat/completions\nContent-Type: application/json\nAuthorization: Bearer YOUR_API_KEY\n```\n\n```json\n{\n  \"model\": \"YOUR_MODEL_ID\",\n  \"messages\": [{\"role\": \"user\", \"content\": \"你好\"}]\n}\n```\n\n## OpenAI Responses\n\n适用于采用 Responses 的开发工具和应用，例如相应配置的 Codex。基础输入使用 `input`，返回结构也与 Chat Completions 不同。\n\n```http\nPOST {{api_base_url}}/responses\nContent-Type: application/json\nAuthorization: Bearer YOUR_API_KEY\n```\n\n```json\n{\"model\":\"YOUR_MODEL_ID\",\"input\":\"用一句话介绍你自己。\"}\n```\n\n会话状态、托管工具、图片输入等能力要单独确认，不要直接套用其他服务商的全部示例。\n\n## Anthropic Messages\n\n适用于 Anthropic SDK 与兼容的 Claude 客户端。使用 `x-api-key` 和 `anthropic-version` 请求头；Messages 请求需要提供 `max_tokens`。\n\n```http\nPOST {{api_base_url}}/messages\nContent-Type: application/json\nx-api-key: YOUR_API_KEY\nanthropic-version: 2023-06-01\n```\n\n```json\n{\n  \"model\": \"YOUR_MODEL_ID\",\n  \"max_tokens\": 256,\n  \"messages\": [{\"role\": \"user\", \"content\": \"你好\"}]\n}\n```\n\n## Gemini 原生接口\n\n模型 ID 位于路径中，正文采用 `contents` / `parts`。使用支持 Gemini 原生协议的模型和渠道。\n\n```http\nPOST {{site_url}}/v1beta/models/YOUR_MODEL_ID:generateContent\nContent-Type: application/json\nx-goog-api-key: YOUR_API_KEY\n```\n\n```json\n{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"你好\"}]}]}\n```\n\n流式接口使用对应的 `streamGenerateContent` 路径。流式事件的读取方式由客户端所用协议决定。\n\n## 不同协议不能只改路径\n\n`messages`、`input`、`contents` 以及响应结构都不相同。优先使用匹配协议的 SDK，从最小请求验证，再加入高级参数。完整模型 ID 和已开放协议请以[模型广场](/pricing)为准。\n",
+      "status": "published",
+      "sort_order": 20,
+      "updated_at": 0
+    },
+    {
+      "id": "tokens-and-usage",
+      "category_id": "getting-started",
+      "slug": "tokens-and-usage",
+      "title": "令牌、余额与用量",
+      "description": "了解 API 密钥额度、账户余额和实际扣费之间的关系。",
+      "content": "API 密钥负责识别应用和限制权限；账户余额或套餐决定可使用的额度；模型、分组与实际用量共同影响最终消耗。三者需要分别检查。\n\n## 给每个应用单独创建密钥\n\n在[API 密钥](/keys)中为桌面客户端、开发服务器和自动任务分别创建密钥。根据用途设置额度、过期时间、允许访问的模型或 IP。密钥额度设为“不限额”不代表账户可以无限消费，也不会绕过模型权限和账户限制。\n\n密钥过期、被禁用或额度耗尽时，请先检查对应状态，不要反复创建新密钥掩盖配置问题。\n\n## 钱包显示什么\n\n[钱包](/wallet)用于查看余额、充值和当前可用的相关账户服务。充值金额如何兑换余额、有哪些支付方式、是否有套餐，以站点当时的页面说明为准。\n\n充值兑换规则与模型单价、分组倍率是不同概念。某次充值的兑换比例不能直接当作每个模型的实际价格。\n\n## 请求会产生哪些用量\n\n文本调用可能分别统计输入、输出、缓存读取与缓存写入；其他模型可能按图片、时长或调用次数计费。实际采用哪种计费方式，以[模型广场](/pricing)和对应请求的[使用日志](/usage-logs)为准。\n\n历史请求的最终消耗请查日志。调用前估算、请求中的输出上限和最终生成用量可能不同。\n\n## 发生异常消耗时\n\n1. 在使用日志中缩小时间范围，核对密钥、模型与请求频次。\n2. 检查客户端是否启用了自动重试、后台任务或多个并发会话。\n3. 怀疑密钥泄露时立即撤销该密钥，再为可信应用更换新密钥。\n4. 需要协助时通过站点开放的[工单中心](/tickets)提交时间、请求信息和脱敏截图，不要附上完整密钥。\n\n更多接入错误参见[错误码与排障](/docs/guides/troubleshooting)。\n",
+      "status": "published",
+      "sort_order": 30,
+      "updated_at": 0
+    },
+    {
+      "id": "image-generation",
+      "category_id": "getting-started",
+      "slug": "image-generation",
+      "title": "接入图片生成",
+      "description": "选择支持图片的模型，发送请求并保存 URL 或 Base64 图片结果。",
+      "content": "图片生成需要使用实际开放的图片模型。聊天模型、图像理解模型与图像生成模型并不等价，先在[模型广场](/pricing)确认模型能力、分组和计费单位。\n\n## 准备参数\n\n创建独立 API 密钥，复制完整模型 ID，并准备明确的画面描述。尺寸、质量、张数和返回格式是否可选，由具体模型和渠道决定；第一次调用只传必要参数。\n\n## 发起生成请求\n\n以下示例用于 Bash / zsh，密钥从环境变量读取：\n\n```bash\nexport NEW_API_KEY='YOUR_API_KEY'\ncurl --connect-timeout 10 --max-time 180 \\\n  '{{api_base_url}}/images/generations' \\\n  -H \"Authorization: Bearer $NEW_API_KEY\" \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"model\":\"YOUR_MODEL_ID\",\"prompt\":\"暖色桌面上的透明玻璃花瓶，柔和自然光，简洁摄影构图。\"}'\n```\n\n确认基础调用成功后，再按模型说明增加 `size` 等支持的参数。不要因为其他模型接受某个字段，就默认当前模型同样接受。\n\n## 处理图片结果\n\n兼容接口通常在 `data` 数组中返回结果。根据模型，图片可能通过 `url` 或 `b64_json` 字段提供。\n\n- 返回 URL 时：尽快下载到自己的存储中，第三方临时链接可能过期。\n- 返回 Base64 时：解码后保存为实际图片格式，不要把整段数据复制进工单或普通日志。\n- 返回错误对象时：读取状态码和错误消息，不要把错误正文当作图片保存。\n\n图片输出和输入素材可能包含私人信息，分享前检查内容及下载链接权限。\n\n## 常见失败\n\n400 通常需要检查模型参数、尺寸或输入格式；404 需要检查模型 ID 和最终地址；429 需要降低并发并查看限制说明。图片生成往往耗时较长，客户端超时后先检查[使用日志](/usage-logs)，避免重复提交造成重复生成或消耗。\n\n图片编辑、多图输入或异步任务的地址与字段，必须以所选模型实际支持的接口为准。本教程只演示同步图片生成。\n",
+      "status": "published",
+      "sort_order": 40,
+      "updated_at": 0
+    },
+    {
+      "id": "image-api-skill",
+      "category_id": "getting-started",
+      "slug": "image-api-skill",
+      "title": "给 AI 助手的图像接口 Skill",
+      "description": "将接入要求整理成可复制的任务说明，帮助助手正确调用图像接口。",
+      "content": "如果希望编程助手帮助你接入图片生成，可以把下面的任务说明复制给它。先从[模型广场](/pricing)选定模型，再通过本机环境变量或可信的密钥管理方式提供 API 密钥。\n\n## 使用前准备\n\n1. 确认模型支持图片生成，以及可用的尺寸、质量和计费方式。\n2. 为这项任务创建独立密钥，并设置合适的额度。\n3. 在运行助手的环境中设置 `NEW_API_KEY`。不要把真实密钥直接写进任务说明、公共聊天或 Git 文件。\n\n## 可复制的任务说明\n\n```text\n请帮助我调用 {{site_name}} 的图片生成接口，并保存返回的图片。\n\nAPI 根地址：{{site_url}}\n接口：POST /v1/images/generations\n模型 ID：YOUR_MODEL_ID（执行前替换为已确认支持的真实 ID）\n鉴权：从环境变量 NEW_API_KEY 读取，放入 Authorization: Bearer 请求头。\n\n执行要求：\n1. 先检查环境变量是否存在，不打印密钥，也不将其写入源代码。\n2. 使用 model 和 prompt 发起最小请求。只添加此模型明确支持的可选参数。\n3. 设置连接和整体超时；不要无限重试。超时后先提示检查站点使用日志。\n4. 检查 HTTP 状态及响应结构，正确处理 data 中的 URL 或 Base64 图片。\n5. 将图片保存到我指定的本地目录，返回实际文件路径、图片数量及必要的结果说明。\n6. 不擅自改用未验证的异步、编辑或第三方上传接口。\n7. 出错时显示脱敏的状态码和消息，不输出鉴权头或完整敏感响应。\n\n本次画面需求：在这里填写。\n输出目录：在这里填写。\n```\n\n## 审核生成的代码\n\n确认请求地址属于自己的站点；检查密钥是否只从安全配置读取；确认保存文件前校验了响应类型。对 Base64 图片可以直接解码到本地文件，通常无需上传到额外的第三方图片服务。\n\n更多参数与失败处理见[接入图片生成](/docs/guides/image-generation)。\n",
+      "status": "published",
+      "sort_order": 50,
+      "updated_at": 0
+    },
+    {
+      "id": "routing-and-groups",
+      "category_id": "platform",
+      "slug": "routing-and-groups",
+      "title": "分组、auto 与跨组重试",
+      "description": "理解固定分组、自动选择与失败重试，核对请求实际使用的分组。",
+      "content": "分组把不同渠道、模型权限和倍率组合在一起。创建密钥时能看到哪些分组，由账户权限及管理员配置决定。\n\n## 选择分组的三种情况\n\n| 选择方式 | 使用时关注什么 |\n| --- | --- |\n| 跟随账户默认设置 | 账户当前可用分组，以及默认配置发生变化后的影响 |\n| 固定分组 | 此分组是否支持目标模型、当前倍率和可用渠道 |\n| auto 自动选择 | 可参与自动路由的候选分组及顺序，不能访问的分组不会因 auto 自动开放 |\n\n实际界面中提供的选项可能因站点设置而不同。没有可用候选时，auto 不会创造新的模型或渠道权限。\n\n## auto 怎样影响一次请求\n\n平台结合模型、密钥允许范围和自动分组配置选择路由。请求最终在哪个分组执行，要以[使用日志](/usage-logs)记录为准；不能仅凭密钥名称推断此次消耗使用的倍率。\n\n## 跨组重试\n\n开启可用的跨组重试选项后，当前分组失败时可能继续尝试其他允许的候选分组。能否重试还取决于错误类型、渠道和平台策略，不保证每次都成功。\n\n重试可能增加等待时间，并让请求使用不同分组。关注成本时，应同时检查候选分组的价格和实际路由结果；不要只看列表中的第一个分组。\n\n## 选择前检查\n\n1. 在[模型广场](/pricing)确认模型的可用分组。\n2. 若站点开放[渠道监控](/channel-monitor)，查看近期请求表现和当前有效倍率。\n3. 在[API 密钥](/keys)设置允许的范围与额度。\n4. 发出小规模请求，在日志里核对实际分组与消耗。\n\n站点开启分组折扣或[密钥倍率保护](/docs/guides/key-price-protection)时，额外阅读对应说明，了解折扣结束和倍率变化的影响。\n",
+      "status": "published",
+      "sort_order": 10,
+      "updated_at": 0
+    },
+    {
+      "id": "connection-diagnostics",
+      "category_id": "platform",
+      "slug": "connection-diagnostics",
+      "title": "连接诊断与本机测速",
+      "description": "用本机请求区分 DNS、连接、鉴权与模型响应问题。",
+      "content": "排查连接问题时，应从实际运行应用的设备和网络发起测试。浏览器可以打开首页，只能说明网页访问正常，不能证明应用的 API 地址、鉴权和模型配置全部正确。\n\n## 先检查站点连通性\n\nBash / zsh 示例：\n\n```bash\ncurl -o /dev/null -sS --connect-timeout 10 --max-time 30 \\\n  -w 'HTTP %{http_code}\\nDNS %{time_namelookup}s\\nConnect %{time_connect}s\\nTLS %{time_appconnect}s\\nTTFB %{time_starttransfer}s\\nTotal %{time_total}s\\n' \\\n  '{{site_url}}/api/status'\n```\n\nWindows PowerShell 请使用 `curl.exe`，并将输出丢弃目标改为 `NUL`：\n\n```powershell\ncurl.exe -o NUL -sS --connect-timeout 10 --max-time 30 -w 'HTTP %{http_code}\\nDNS %{time_namelookup}s\\nConnect %{time_connect}s\\nTLS %{time_appconnect}s\\nTTFB %{time_starttransfer}s\\nTotal %{time_total}s\\n' '{{site_url}}/api/status'\n```\n\n这些计时值大多是从请求开始计算的累计时间点。`Connect - DNS` 可帮助估计建立 TCP 连接的时间，HTTPS 下 `TLS - Connect` 可帮助观察握手耗时。代理、重定向和连接复用会影响解释，不能简单把每个值相加。\n\n## 再验证 API 地址和密钥\n\n```bash\ncurl --connect-timeout 10 --max-time 30 \\\n  '{{api_base_url}}/models' \\\n  -H \"Authorization: Bearer $NEW_API_KEY\"\n```\n\n模型列表请求可以帮助检查基础路由和鉴权，但成功返回列表不保证某个模型的推理渠道此刻可用。接下来再发送[快速上手](/docs/guides/quick-start)中的最小请求。\n\n## 对比测试要保持条件一致\n\n每次使用相同设备、网络、地址和测试方法，连续采样数次后观察典型值。必要时分别记录代理开启与关闭的结果，并标明测试时间。不要通过大量图片生成或长文本请求来测试网络速度。\n\nDNS 或 TLS 阶段失败时，检查本机解析、系统时间、证书链和代理配置；接口正常但特定模型缓慢时，再查看渠道状态、首 Token 延迟和使用日志。\n\n本文提供本机诊断方法，不要求站点额外部署测速页面。需要协助时提交经过脱敏的测试结果，参见[日志、安全与问题定位](/docs/guides/logs-and-security)。\n",
+      "status": "published",
+      "sort_order": 20,
+      "updated_at": 0
+    },
+    {
+      "id": "models-and-pricing",
+      "category_id": "platform",
+      "slug": "models-and-pricing",
+      "title": "模型库与计费",
+      "description": "确认完整模型 ID、协议、计费单位和分组倍率，再核对实际消耗。",
+      "content": "[模型广场](/pricing)是选择模型和了解当前价格的入口。相近的展示名称不代表相同的接口、能力或计费方式，复制模型 ID 时请保留完整拼写。\n\n## 调用前确认四项信息\n\n- **模型与协议**：支持 Chat Completions、Responses、Messages 或其他何种接口。\n- **可用分组**：自己的账户与密钥能否通过此分组调用模型。\n- **计费单位**：按 Token、图片、时长、请求次数或其他已展示的规则收费。\n- **细分价格**：输入、输出、缓存读取、缓存写入等是否单独计价。\n\n同一模型通过不同分组接入时，有效价格和可用能力可能不同。\n\n## 分组倍率与活动折扣\n\n站点开放公共分组折扣时，当前有效倍率可能受到折扣系数、有效日期、每日时段和时区的影响。在[渠道监控](/channel-monitor)展示的倍率详情中确认基础倍率与当前折扣；不要把过期截图当作当前报价。\n\n如果密钥开启倍率保护，倍率上涨达到平台配置条件时可能暂停后续请求，需先查看并接受当前倍率。详情见[密钥倍率保护](/docs/guides/key-price-protection)。\n\n## 充值与调用价格分别查看\n\n[钱包](/wallet)显示充值及余额相关信息。充值兑换与模型计费不是同一套数字，不能把钱包里的充值比例直接套在每个模型上。\n\n价格展示用于调用前了解规则；历史请求的模型、路由和实际消耗，以[使用日志](/usage-logs)中的对应记录为准。客户端显示的估计 Token 数也可能与最终结算统计不同。\n\n## 控制成本的实用方法\n\n先用短输入验证接入，再测试真实业务；为不同应用创建独立密钥并设置额度；减少无效自动重试；只有模型明确支持时才启用缓存或其他优化选项。长输出、图片生成和并发任务尤其适合设置应用侧预算与告警。\n",
+      "status": "published",
+      "sort_order": 30,
+      "updated_at": 0
+    },
+    {
+      "id": "logs-and-security",
+      "category_id": "platform",
+      "slug": "logs-and-security",
+      "title": "日志、安全与问题定位",
+      "description": "通过请求时间、模型和状态定位问题，同时保护密钥与输入内容。",
+      "content": "发生问题时，[使用日志](/usage-logs)可以帮助你把客户端现象与实际请求对应起来。排查的重点是确定哪一次请求、在什么环节发生了什么错误。\n\n## 先缩小范围\n\n1. 记录请求发生的时间和时区，尽量精确到分钟。\n2. 按密钥、模型、分组或状态筛选日志，核对相邻请求是否正常。\n3. 如果响应或日志中提供请求 ID，将它一并保存。\n4. 对比客户端配置的模型与日志实际模型、配置的分组与实际路由。\n\n是否记录某类请求以及记录哪些字段，取决于平台配置。没有找到日志不一定说明请求没有到达服务端：也可能在早期校验被拒绝、日志未开启或查询条件不匹配。\n\n## 有效的反馈材料\n\n提交站点开放的[工单](/tickets)时，提供以下信息：\n\n- 发生时间、时区和影响范围；\n- 使用的工具及版本，API 协议、路径和模型 ID；\n- HTTP 状态码、脱敏后的错误消息和请求 ID；\n- 最小复现步骤，是否经过代理，其他模型是否正常；\n- 关联日志截图，移除密钥和不必要的私人输入。\n\n只描述“不能用”通常无法区分网络问题、权限问题与模型上游异常。\n\n## 密钥和隐私\n\n密钥应放在服务端环境变量、系统钥匙串或可信的凭据管理器中。不要打包到浏览器前端，不要提交到公开仓库，也不要直接发给客服。为不同应用设置不同密钥，停用旧应用时同步撤销对应密钥。\n\n调试日志不要完整记录 `Authorization`、`x-api-key`、Cookie 或包含敏感内容的正文。SDK 的调试开关可能输出额外请求信息，分享前务必脱敏。\n\n## 怀疑密钥泄露\n\n先撤销可疑密钥，再排查异常时间段的用量和应用配置；确认应用可信后替换新密钥。修改账户密码不能作为撤销已经泄露 API 密钥的替代措施。\n\n常见错误处理见[错误码与排障](/docs/guides/troubleshooting)。\n",
+      "status": "published",
+      "sort_order": 40,
+      "updated_at": 0
+    },
+    {
+      "id": "platform-tour",
+      "category_id": "platform",
+      "slug": "platform-tour",
+      "title": "平台功能总览",
+      "description": "了解控制台常用入口，以及按站点设置开放的扩展功能。",
+      "content": "{{site_name}} 使用 new-api 作为基础服务，并提供可由管理员控制的扩展功能。不同站点、不同账户实际看到的菜单可能不同；功能关闭或没有权限时，以当前控制台为准。\n\n## 基础使用路径\n\n| 入口 | 主要用途 |\n| --- | --- |\n| [概览](/dashboard) | 查看余额、近期用量与请求概况 |\n| [API 密钥](/keys) | 为应用创建密钥、限制额度和允许范围 |\n| [模型广场](/pricing) | 查找模型 ID、协议、分组和价格 |\n| [使用日志](/usage-logs) | 核对请求结果、路由与消耗 |\n| [钱包](/wallet) | 查看余额与站点提供的充值服务 |\n| [操练场](/playground) | 在网页中测试已开放模型 |\n| [个人资料](/profile) | 管理个人账户信息 |\n| [安全设置](/security) | 查看账户可用的安全设置 |\n\n建议按“模型广场 → 创建密钥 → 最小调用 → 使用日志”的顺序完成首次接入。\n\n## 渠道质量与调用控制\n\n站点开启时，[渠道监控](/channel-monitor)展示公开分组的可用表现和倍率信息；[降智检测](/benchmark)展示指定模型的定期测试结果。它们分别侧重请求运行情况和测试题表现，不能互相替代。\n\n密钥倍率保护可以在分组倍率上涨满足条件时暂停相关请求；并发限制控制同时进行的请求数量。它们都可能影响调用，需要结合错误信息排查，而不是一律当作余额不足。\n\n## 账户与社区服务\n\n站点还可能开放[推荐计划](/referrals)、[工单中心](/tickets)与[风云榜](/leaderboard)。推荐奖励条件以页面规则为准；工单用于保留问题沟通记录；风云榜展示站点配置范围内的社区统计。\n\n[模型排行榜](/rankings)与用户风云榜是不同入口，查看时先确认榜单衡量的对象和指标。\n\n## 功能没有出现时\n\n先确认登录账户及权限。如果站点没有启用某项功能，菜单不会提供相应入口；不要通过其他站点的截图推断本站一定开放同样服务。有需要时联系站点管理员了解开放计划。\n",
+      "status": "published",
+      "sort_order": 50,
+      "updated_at": 0
+    },
+    {
+      "id": "channel-monitor",
+      "category_id": "platform",
+      "slug": "channel-monitor",
+      "title": "使用渠道监控与分组折扣",
+      "description": "展开分组指标，理解成功率、首 Token 延迟、速度和当前倍率。",
+      "content": "[渠道监控](/channel-monitor)由站点管理员决定是否开启、展示哪些分组以及显示哪些模型。页面提供观察运行状态的窗口，不代表所有渠道都公开展示。\n\n## 先看统计范围\n\n查看当前时间窗口、更新时间和样本数量。同一指标在不同窗口下可能差异明显；没有样本、空闲或停用不等于成功率为零。若数据量很少，应结合更长时间和自己的实际请求判断。\n\n## 四类常用指标\n\n| 指标 | 用途与注意事项 |\n| --- | --- |\n| 请求成功率 | 观察统计窗口内已记录请求的成功情况，展开后核对明细与样本 |\n| 首 Token 延迟 | 观察流式请求开始输出的等待时间，不等同于整段回复的完成时间 |\n| 生成速度 | 观察有有效样本时的输出速度，不能直接预测所有模型和上下文长度 |\n| 缓存命中率 | 反映被统计请求的缓存情况，模型不支持或数据不足时不能强行比较 |\n\n点击可展开的分组行或指标查看更细的分组、模型或请求统计，再判断异常是否集中在某个模型。\n\n## 当前倍率与折扣详情\n\n倍率出现活动标识时，查看其详情，区分基础倍率、折扣系数和最终有效倍率。折扣可能设置开始/结束时间或每日生效时段，页面中的时区也会影响你看到的活动时间。\n\n公共分组折扣不等同于某个用户的专属倍率。实际请求仍需满足账户权限和路由条件；最终使用的分组及结算结果以[使用日志](/usage-logs)为准。\n\n## 如何用这些信息选择分组\n\n先确认模型支持与预算，再对比同一时间范围内的成功率和延迟。对持续任务设置适当超时和有限重试，不要因为一个瞬时指标就大量并发切换请求。\n\n管理员可在插件设置中选择公开分组和折扣规则。未被公开的分组不会自动出现在用户监控页面。\n",
+      "status": "published",
+      "sort_order": 60,
+      "updated_at": 0
+    },
+    {
+      "id": "benchmark",
+      "category_id": "platform",
+      "slug": "benchmark",
+      "title": "阅读降智检测结果",
+      "description": "理解糖果逻辑与 SVG 测试、检测周期，以及结果的适用范围。",
+      "content": "[降智检测](/benchmark)对管理员指定的分组和模型定期发起测试，展示每次测试的结果。检测间隔、题目和 SVG 提示词均可配置，具体以页面当前信息为准。\n\n## 糖果逻辑检测\n\n这类测试用固定逻辑题及预期答案观察模型是否按题意作答。查看结果时同时核对题目版本、模型、分组、执行时间和错误详情。一次答错可能受提示词、输出截断或上游状态影响，不能单凭一次结果推断原因。\n\n## SVG 测绘\n\nSVG 测试要求模型根据提示词生成图形代码，用来观察结构化输出与指令遵循情况。管理员可以设置多条提示词，不同提示词的难度与评分条件可能不同。\n\n成功状态表示通过当前检测规则，并不保证画面审美或几何细节在所有场景都满足需求。遇到无效、截断、请求失败或超时，需要分别分析。\n\n## 看懂任务状态\n\n- **运行中**：任务还没有完成，先等待本次结果。\n- **通过 / 答案错误**：请求有结果，按当前题目规则判断。\n- **无效 / 截断**：输出格式或完整性未满足检测要求。\n- **请求失败 / 超时 / 中断**：调用或执行过程有问题，不能直接视为逻辑题答错。\n\n## 检测周期与分组\n\n管理员可以设置全局周期、指定分组和相关提示词；某些分组可以有独立的检测间隔。倒计时显示的是计划时间，任务排队、执行耗时和服务状态可能影响实际完成时间。\n\n比较结果时尽量使用同一题目、相近时间和一致参数。检测是一种抽样诊断，不是模型身份、智力或全场景质量的认证。与[渠道监控](/channel-monitor)和自己的业务评测结合，结论才更有参考价值。\n",
+      "status": "published",
+      "sort_order": 70,
+      "updated_at": 0
+    },
+    {
+      "id": "referrals",
+      "category_id": "platform",
+      "slug": "referrals",
+      "title": "了解推荐计划与奖励",
+      "description": "查看邀请关系、有效期、冷却复核和奖励领取记录。",
+      "content": "站点开启[推荐计划](/referrals)后，你可以在页面获取邀请链接并查看邀请与奖励记录。比例、有效期、冷却时间及每位受邀者上限由管理员设置，请以当前页面规则及相关记录为准。\n\n## 开始邀请\n\n从推荐计划页面复制自己的邀请链接，向确实有需求的朋友介绍平台。邀请关系是否有效，以及哪些消费计入奖励，取决于站点规则。不要使用自我邀请、多账号注册、虚假交易或其他绕过规则的方式获取奖励。\n\n## 区分几类金额\n\n| 状态或统计 | 如何理解 |\n| --- | --- |\n| 可用奖励 | 已满足领取条件、可按页面操作领取的部分 |\n| 待领取或冷却中 | 尚未完成冷却、复核或其他结算步骤的部分 |\n| 累计获得 | 历史累计统计，不一定等于当前可以领取的余额 |\n| 受邀好友 | 与邀请关系相关的统计，不能直接等同于已产生奖励的人数 |\n\n查看明细时关注奖励对应的受邀者、有效期、状态与结算记录，而不仅是顶部汇总数字。\n\n## 有效期和每人上限\n\n邀请关系的奖励窗口到期，或已达到该受邀者可产生的奖励上限后，后续消费可能不再继续产生相应奖励。不同时间参与计划的邀请记录，可能保留各自生效时的规则快照；规则调整后不要直接用最新比例重算所有历史记录。\n\n## 冷却、复核与回退\n\n奖励可能需要经过冷却和审核后才可领取。退款、异常交易或风控复核可能导致奖励扣回、抵扣或状态变化。页面记录是核对依据，尚在处理中的奖励不等于最终收入。\n\n## 领取到余额\n\n按页面提供的领取操作确认金额，然后到[钱包](/wallet)查看变化。若按钮不可用，先检查冷却、复核和账户状态。遇到争议时通过[工单中心](/tickets)提交相关记录编号和时间，不要重复发起相同申请。\n",
+      "status": "published",
+      "sort_order": 80,
+      "updated_at": 0
+    },
+    {
+      "id": "key-price-protection",
+      "category_id": "platform",
+      "slug": "key-price-protection",
+      "title": "密钥倍率保护与恢复",
+      "description": "了解分组倍率上涨时的暂停，以及如何查看并接受新的倍率。",
+      "content": "站点启用密钥倍率保护后，受保护的 API 密钥会对照已接受的分组倍率检查变化。上涨超过管理员设置的阈值时，相关调用可能暂停，防止应用在不知情的情况下继续按更高倍率运行。\n\n## 保护的范围\n\n该功能针对平台记录的分组有效倍率及相关路由配置。它不是所有模型单价、所有消费场景的总费用保险，也不保证未来价格固定不变。具体启用方式、上涨阈值和能否自行关闭保护，由管理员控制。\n\n临时降价一般不会自动降低你已经接受的倍率上限；后续是否触发保护，仍按已接受记录与当前策略判断。\n\n## 发生暂停时\n\n1. 进入[API 密钥](/keys)，找到发生问题的密钥。\n2. 在该密钥的操作菜单打开“密钥倍率保护”。\n3. 对比已接受倍率和当前倍率，查看保护历史及相关分组。\n4. 点击查看当前倍率，再决定是否接受并恢复。\n\n报价存在有效期。如果审阅期间倍率或路由变化，或者报价过期，需要重新获取当前倍率后再确认。\n\n## 接受后仍不能使用\n\n接受倍率只解除倍率保护造成的暂停，不会解除手动禁用、过期、余额不足、密钥额度耗尽或模型权限限制。继续失败时查看密钥本身状态及具体错误消息。\n\n如果你不愿接受新的倍率，可以停用相关应用、选择其他可用分组，或联系管理员了解变化原因。不要通过频繁重建密钥绕过自己的成本控制。\n",
+      "status": "published",
+      "sort_order": 90,
+      "updated_at": 0
+    },
+    {
+      "id": "concurrency",
+      "category_id": "platform",
+      "slug": "concurrency",
+      "title": "账户并发与请求排队",
+      "description": "区分同时请求数和每分钟请求数，为客户端设置合理的并发。",
+      "content": "并发是同一时刻仍在处理的请求数量，RPM 是一段时间内发出的请求数量。两者解决的问题不同：一个请求持续很久，即使每分钟只发少量请求，也可能占用并发名额。\n\n## 哪些请求会占用并发\n\n普通请求在处理期间占用名额；流式请求在连接和生成尚未结束时，也会持续占用。客户端关闭页面、网络中断和服务端实际结束处理之间可能存在时间差。\n\n站点可以按账户、分组、渠道或密钥配置相关限制。因此创建多个密钥不一定能增加账户总并发。\n\n## 排队和拒绝\n\n当可用名额不足时，平台可能根据设置让请求短暂排队，或者返回限制错误。排队长度、等待上限与额度等都是独立控制项，不保证每个请求都会排队成功。\n\n遇到 429 或并发相关提示时，先读取错误消息。不要让客户端立即无限重试，否则可能持续加剧拥堵。\n\n## 客户端怎么配\n\n- 从较低并发开始，例如先验证单个请求稳定工作，再逐步提高。\n- 给任务队列设置有限长度和等待时间。\n- 对允许重试的临时失败使用有限次数、带间隔的重试。\n- 为长文本、图片和批量任务分别评估超时，取消不再需要的任务。\n- 多个客户端共用一个账户时，将它们的总并发一起考虑。\n\n沉浸式翻译、批量文档处理和自动代理工具容易同时发出很多请求，尤其需要应用侧节流。\n\n## 需要协助时\n\n保留发生时间、客户端并发设置、状态码和脱敏错误消息，结合[使用日志](/usage-logs)提交给站点支持。管理员可在插件后台调整策略；用户应以实际开放额度为准，不存在通用的固定并发数。\n",
+      "status": "published",
+      "sort_order": 100,
+      "updated_at": 0
+    },
+    {
+      "id": "tickets",
+      "category_id": "platform",
+      "slug": "tickets",
+      "title": "使用工单中心",
+      "description": "创建清晰的问题记录，补充资料并跟进处理状态。",
+      "content": "站点启用[工单中心](/tickets)后，你可以在控制台提交问题并持续跟进。它适合需要保留上下文的额度、平台、接口、退款或账户问题。\n\n## 创建工单\n\n选择最贴近问题的分类，用一句话写清标题，再描述发生时间、影响范围与已尝试的排查步骤。例如“某模型从今天 14:20 起持续返回 429”比“不能用了”更容易处理。\n\n接口问题建议附上模型 ID、协议路径、客户端版本、HTTP 状态和脱敏的错误信息。如果有对应日志或请求 ID，一并提供。\n\n## 附件与敏感信息\n\n截图可以帮助说明页面和错误，但上传前删除完整密钥、Cookie、验证码、密码、支付凭据中的不必要信息，以及私人提示词。支持人员通常不需要你的可用 API 密钥。\n\n涉及付款时，按工单表单和管理员要求提供必要的订单信息，不要在普通描述中附上完整支付账户敏感资料。\n\n## 跟进状态\n\n工单可能处于处理中、等待用户补充、已解决或已撤回等状态。需要补充时在原工单内回复，保持问题上下文连续。问题解决后按页面操作结束工单；仍有问题时，使用页面允许的重新打开操作。\n\n同一问题不要连续创建多张重复工单。回复时间和处理政策以站点实际安排为准。\n\n## 提交前自查\n\n先查看[错误码与排障](/docs/guides/troubleshooting)、余额、密钥有效期和模型权限。明确自己已经做过哪些检查，能帮助支持人员更快定位。\n",
+      "status": "published",
+      "sort_order": 110,
+      "updated_at": 0
+    },
+    {
+      "id": "leaderboard",
+      "category_id": "platform",
+      "slug": "leaderboard",
+      "title": "阅读风云榜",
+      "description": "了解榜单周期、统计维度和展示范围，避免误读排名。",
+      "content": "[风云榜](/leaderboard)展示站点配置范围内的社区统计。它和[模型排行榜](/rankings)不是同一种榜单：前者围绕站内用户和活动数据，后者围绕模型相关信息。\n\n## 先看周期和更新时间\n\n榜单可能提供今日、昨日或累计等周期。不同周期不宜直接比较，刷新也可能存在间隔。刚发生的请求或奖励未必立刻体现在榜单上。\n\n## 统计维度\n\n管理员可以选择开放邀请、奖励收入、Token 用量、节省等不同维度，也可以配置其他活动榜。具体名称和计算说明以页面展示为准。\n\n一次调用的 Token 数、消费金额、邀请人数和实际已领取奖励是不同指标。排名靠前不代表服务质量更高，也不代表该用户在每个维度都领先。\n\n## 可见范围与隐私\n\n站点可以对名称做脱敏，并排除管理员或指定账户。因此榜单是经过展示规则处理的统计，不一定包含全部站内用户，也不应通过排名推断他人的完整账户活动。\n\n如果认为自己的数据异常，先核对所选周期、更新时间与个人记录，再通过站点支持反馈。请提供相关时间和榜单维度，不要提交其他用户的私人信息。\n",
+      "status": "published",
+      "sort_order": 120,
+      "updated_at": 0
+    },
+    {
+      "id": "claude-code",
+      "category_id": "cli",
+      "slug": "claude-code",
+      "title": "接入 Claude Code",
+      "description": "配置 Anthropic 兼容地址、独立密钥和已确认可用的模型。",
+      "content": "Claude Code 接入需要模型与渠道支持 Anthropic Messages，并满足客户端所用功能的要求。基础 Messages 调用成功，不等于所有工具、辅助接口和客户端版本均兼容。\n\n## 准备独立密钥和模型\n\n在[API 密钥](/keys)创建专用密钥，在[模型广场](/pricing)确认模型 ID 和 Messages 支持。安装和更新 Claude Code 请使用其[官方文档](https://code.claude.com/docs/en/overview)。\n\n## 配置环境变量\n\nBash / zsh：\n\n```bash\nexport NEW_API_KEY='YOUR_API_KEY'\nexport ANTHROPIC_BASE_URL='{{site_url}}'\nexport ANTHROPIC_AUTH_TOKEN=\"$NEW_API_KEY\"\nexport ANTHROPIC_MODEL='YOUR_MODEL_ID'\nclaude\n```\n\nPowerShell：\n\n```powershell\n$env:NEW_API_KEY = 'YOUR_API_KEY'\n$env:ANTHROPIC_BASE_URL = '{{site_url}}'\n$env:ANTHROPIC_AUTH_TOKEN = $env:NEW_API_KEY\n$env:ANTHROPIC_MODEL = 'YOUR_MODEL_ID'\nclaude\n```\n\n`ANTHROPIC_BASE_URL` 填 API 根地址，不要额外附加 `/v1/messages`。检查已有的登录状态、环境变量和项目配置是否与新设置冲突；同时配置多套鉴权方式时，先了解当前客户端的优先级。\n\n## 验证当前配置\n\n在一个可信的小项目里启动客户端，确认显示的模型，并发送简单的问题。到[使用日志](/usage-logs)检查实际模型、状态和消耗。确认基础交互后再测试工具调用、长上下文和其他功能。\n\n## 兼容性与排障\n\n401 优先检查启动进程能否读取密钥；404 检查 Base URL 和客户端实际请求路径；模型不可用时核对模型 ID、分组权限和协议。\n\n部分客户端会调用额外的计数或辅助接口。本站是否支持这些路径需要单独确认，不能仅因 `/v1/messages` 可用就默认完整支持。官方网关配置说明见 [Claude Code LLM gateway](https://code.claude.com/docs/en/llm-gateway-connect)。\n",
+      "status": "published",
+      "sort_order": 10,
+      "updated_at": 0
+    },
+    {
+      "id": "codex-cli",
+      "category_id": "cli",
+      "slug": "codex-cli",
+      "title": "接入 Codex CLI",
+      "description": "为 Codex 配置自定义 Responses 服务商，并保留现有工作环境设置。",
+      "content": "Codex 使用自定义服务商时，需要选择本站已开放、支持 Responses 的模型。第三方服务商的 API 消耗按本站账户规则结算，与 ChatGPT 订阅不是同一项服务。\n\n## 1. 设置密钥环境变量\n\n为 Codex 单独创建密钥。在启动 Codex 的终端中设置：\n\n```bash\nexport NEW_API_KEY='YOUR_API_KEY'\n```\n\nPowerShell 对应写法：\n\n```powershell\n$env:NEW_API_KEY = 'YOUR_API_KEY'\n```\n\n不要把真实密钥直接写进 `config.toml` 或提交到项目仓库。\n\n## 2. 合并服务商配置\n\n找到 Codex 使用的配置文件，通常是 `~/.codex/config.toml`；如果设置了 `CODEX_HOME`，请使用对应目录。先备份文件，再把以下内容合并进去，保留已有的权限、工作目录、其他服务商与个人偏好设置。\n\n```toml\nmodel = \"YOUR_MODEL_ID\"\nmodel_provider = \"site\"\n\n[model_providers.site]\nname = \"{{site_name}}\"\nbase_url = \"{{api_base_url}}\"\nenv_key = \"NEW_API_KEY\"\nwire_api = \"responses\"\n```\n\n若文件中已有相同键或 `[model_providers.site]` 表，修改已有项即可，不要重复定义。服务商 ID `site` 必须和 `model_provider` 一致。\n\n## 3. 验证实际请求\n\n在可信项目中启动 Codex，先执行简单的问答或只读任务，核对当前模型和服务商。在[使用日志](/usage-logs)确认请求已到达本站，再按需要测试工具调用等能力。\n\n`/v1` 在 `base_url` 中只出现一次，客户端会继续拼接 Responses 路径。模型支持基础 Responses 不保证支持所有托管工具、会话管理、WebSocket 或其他扩展能力。\n\n## 常见问题\n\n- **找不到环境变量**：确认变量在启动 Codex 的同一终端进程环境中可见。\n- **401**：检查密钥有效期、禁用状态和读取到的变量。\n- **404**：检查是否重复 `/v1`，以及模型和路径是否可用。\n- **配置字段不识别**：按已安装版本的官方配置说明核对，不要直接覆盖整个配置文件。\n\n参考 [Codex 配置文档](https://developers.openai.com/codex/config-reference/)及 [OpenAI 官方配置 schema](https://github.com/openai/codex/blob/main/codex-rs/core/config.schema.json)。\n",
+      "status": "published",
+      "sort_order": 20,
+      "updated_at": 0
+    },
+    {
+      "id": "cc-switch",
+      "category_id": "cli",
+      "slug": "cc-switch",
+      "title": "使用 CC Switch 管理配置",
+      "description": "备份现有配置，再为 Claude Code 或 Codex 新增自定义服务商。",
+      "content": "CC Switch 可以帮助管理编程客户端的多套服务商配置。它负责切换连接设置，不会自动获得本站模型权限，也不会改变账户余额和计费规则。\n\n## 安装与备份\n\n从 [CC Switch 官方仓库](https://github.com/farion1231/cc-switch)获取适合系统的版本。首次使用时先备份或导入现有配置，了解工具会修改哪些客户端文件。\n\n导出的配置可能包含密钥和其他敏感内容，不要未经检查就分享或上传公共仓库。\n\n## 新增服务商\n\n选择要管理的客户端，再新增自定义服务商，名称可以填 `{{site_name}}`。为不同客户端使用独立密钥。\n\n| 目标客户端 | 地址与协议 |\n| --- | --- |\n| Claude Code | 根地址 `{{site_url}}`，Anthropic Messages 兼容模型 |\n| Codex | `{{api_base_url}}`，Responses 兼容模型 |\n\n按工具当前版本的字段填写密钥和模型 ID。若使用导入功能，先核对即将导入的地址和模型，不要覆盖不相关的权限或项目设置。\n\n## 切换后验证\n\n保存并切换服务商，按需要重新打开客户端或终端。检查环境变量是否仍指向旧服务商，然后发出简短请求，在[使用日志](/usage-logs)确认模型和消耗。\n\n配置无效时回到备份或上一套设置，比较地址、密钥来源和模型 ID，避免同时修改多个无法追踪的参数。\n\n更详细的手动设置见[Claude Code](/docs/guides/claude-code)与[Codex CLI](/docs/guides/codex-cli)接入文档。\n",
+      "status": "published",
+      "sort_order": 30,
+      "updated_at": 0
+    },
+    {
+      "id": "opencode-zcode",
+      "category_id": "cli",
+      "slug": "opencode-zcode",
+      "title": "接入 OpenCode 与 ZCode",
+      "description": "为编程代理添加自定义 OpenAI 兼容服务商。",
+      "content": "编程代理需要准确的协议、地址、密钥和模型 ID。选择内置的其他服务商通常不会自动把请求转到本站，应明确创建自定义服务商。\n\n## OpenCode 配置\n\n从[模型广场](/pricing)选择支持 Chat Completions 的模型。将以下示例合并到所用的 `opencode.json` 中，保留现有项目设置。\n\n```json\n{\n  \"$schema\": \"https://opencode.ai/config.json\",\n  \"model\": \"site/YOUR_MODEL_ID\",\n  \"provider\": {\n    \"site\": {\n      \"npm\": \"@ai-sdk/openai-compatible\",\n      \"name\": \"{{site_name}}\",\n      \"options\": {\n        \"baseURL\": \"{{api_base_url}}\"\n      },\n      \"models\": {\n        \"YOUR_MODEL_ID\": {\n          \"name\": \"本站模型\"\n        }\n      }\n    }\n  }\n}\n```\n\n两个位置的 `YOUR_MODEL_ID` 要替换为同一个准确的模型 ID；`site` 是这套配置中的服务商标识。\n\n## 在 OpenCode 中保存密钥\n\n使用 OpenCode 当前版本提供的认证入口，例如：\n\n```bash\nopencode auth login\n```\n\n选择自定义服务商，并让服务商标识与配置里的 `site` 一致。通过认证流程保存专用密钥，不要把它直接写进项目配置文件。\n\n具体入口可能随版本更新，参见 [OpenCode 服务商文档](https://opencode.ai/docs/providers/)。如果使用 Responses，应同时确认客户端适配器与模型都支持，再按对应文档调整。\n\n## ZCode 手动接入\n\n1. 打开服务商设置，选择自定义 OpenAI 兼容服务。\n2. 名称填写 `{{site_name}}`，按字段说明填写 `{{api_base_url}}`。\n3. 输入为 ZCode 单独创建的 API 密钥。\n4. 添加[模型广场](/pricing)中完整的模型 ID。\n5. 保存后发起简单问答，再在本站日志中核对。\n\n安装及界面说明参见 [ZCode 官方文档](https://zcode.z.ai/cn/docs/install)。\n\n## 常见问题\n\n401 检查密钥和有效期；404 检查最终请求路径与重复 `/v1`；工具调用失败时先验证基础聊天，再核对该模型与渠道的工具能力。不要把未验证的模型直接设为所有项目默认值。\n",
+      "status": "published",
+      "sort_order": 40,
+      "updated_at": 0
+    },
+    {
+      "id": "cherry-studio",
+      "category_id": "clients",
+      "slug": "cherry-studio",
+      "title": "接入 Cherry Studio",
+      "description": "新增兼容服务商，填写地址、密钥和模型后再设为默认。",
+      "content": "Cherry Studio 可以连接支持自定义地址的模型服务。先从 [Cherry Studio 官网](https://cherry-ai.com)安装可信版本，再为客户端创建独立 API 密钥。\n\n## 新增服务商\n\n在模型服务设置中新增服务商，选择 OpenAI 或 OpenAI 兼容类型，名称填 `{{site_name}}`。\n\n- **API 地址**：`{{site_url}}` 或 `{{api_base_url}}`，按当前版本输入框的规则填写。\n- **API Key**：为 Cherry Studio 单独创建的密钥。\n- **模型 ID**：从[模型广场](/pricing)复制准确名称。\n\n有的版本会自动补齐路径，保存后注意检查最终地址，不要出现 `/v1/v1`。\n\n## 添加并测试模型\n\n可以先尝试获取模型列表；列表无法自动加载时，手动添加已确认可用的模型 ID。使用连接测试或发送一句简短消息，成功后再设置为默认模型。\n\n模型列表可见不代表它支持客户端的全部功能。图片输入、工具调用、联网和其他选项需要对应模型与协议支持。\n\n## 核对用量\n\n进入[使用日志](/usage-logs)确认请求模型、实际分组和消耗。若一次操作产生多条请求，检查客户端是否启用了标题生成、翻译或其他辅助任务。\n\n401 检查密钥；404 检查地址和模型；429 降低并发或查看平台限制。更多说明见[通用 OpenAI 客户端](/docs/guides/openai-clients)。\n",
+      "status": "published",
+      "sort_order": 10,
+      "updated_at": 0
+    },
+    {
+      "id": "aqbot",
+      "category_id": "clients",
+      "slug": "aqbot",
+      "title": "接入 AQBot",
+      "description": "通过手动配置连接服务商，获取模型列表并验证聊天。",
+      "content": "AQBot 支持自定义服务商。建议先手动填写和验证地址、密钥、模型，再考虑其他导入方式，这样更容易定位错误。\n\n## 安装可信版本\n\n通过 [AQBot 官网](https://app.aqbot.top/)或[官方仓库](https://github.com/AQBot-Desktop/AQBot)获取适合系统的客户端。阅读客户端对本地密钥保存和网络请求的说明。\n\n## 添加服务商\n\n在服务商设置中选择 OpenAI 或 OpenAI 兼容类型，名称填 `{{site_name}}`。地址使用 `{{site_url}}`，如果界面要求带版本号的 Base URL，则填 `{{api_base_url}}`。\n\n输入一个专门为 AQBot 创建的密钥。不要将网页登录密码当作 API 密钥，也不要复用来自其他平台的密钥。\n\n## 获取并选择模型\n\n保存配置后尝试拉取模型列表。如果自动获取失败，从[模型广场](/pricing)复制完整模型 ID 手动添加。确认它支持当前客户端使用的协议。\n\n## 发送第一条消息\n\n新建一个对话并发送简短文本，暂时关闭不必要的附加功能。收到回复后，到[使用日志](/usage-logs)核对实际调用。基础配置正常后，再开启所需的图片输入、工具等能力。\n\n出现 404 时检查 `/v1` 是否缺失或重复；出现 401 时检查密钥与账户状态。需要反馈时保留客户端版本和经过脱敏的错误信息。\n",
+      "status": "published",
+      "sort_order": 20,
+      "updated_at": 0
+    },
+    {
+      "id": "immersive-translate",
+      "category_id": "clients",
+      "slug": "immersive-translate",
+      "title": "接入沉浸式翻译",
+      "description": "设置完整聊天接口，并控制全文翻译的并发与消耗。",
+      "content": "网页全文翻译可能同时产生很多小请求。接入时除了地址和密钥，也要关注模型速度、请求并发与费用。\n\n## 选择翻译服务\n\n从[沉浸式翻译官网](https://immersivetranslate.com/)安装扩展，进入翻译服务设置，选择 OpenAI 或允许自定义接口的 AI 服务。为浏览器扩展创建独立 API 密钥，设置合适额度。\n\n## 填写连接信息\n\n- **API Key**：该扩展专用的本站密钥。\n- **模型**：在[模型广场](/pricing)中确认支持文本聊天、适合翻译的完整模型 ID。\n- **自定义接口**：如果字段要求完整 Chat Completions 地址，填写下面的地址。\n\n```text\n{{api_base_url}}/chat/completions\n```\n\n不同版本的字段可能有差异；若输入框只要求 Base URL，请按其说明填写，不要把完整路径重复拼接。\n\n## 先翻译一小段\n\n先测试少量文本，再翻译整页。长网页会增加请求数量，建议从较低并发和请求频率开始。遇到限制时减少同时翻译的段落或任务，不要立即连续重试整页。\n\n翻译完成后在[使用日志](/usage-logs)查看请求数量与总消耗，判断是否符合预期。注意网页内容会作为翻译输入发送，请谨慎处理私人或企业内部页面。\n\n## 常见错误\n\n401 / 403：检查密钥、模型权限和账户状态。404：检查完整接口路径。429：降低并发和请求频率，并查看平台错误说明。空回复：先用相同模型发起普通短文本请求，检查客户端参数和模型兼容性。\n",
+      "status": "published",
+      "sort_order": 30,
+      "updated_at": 0
+    },
+    {
+      "id": "openai-clients",
+      "category_id": "clients",
+      "slug": "openai-clients",
+      "title": "通用 OpenAI 客户端",
+      "description": "通过四个基础字段连接聊天、翻译和自动化工具。",
+      "content": "支持自定义 OpenAI 兼容接口的应用，通常可以通过服务商类型、Base URL、API Key 和模型 ID 连接本站。具体功能能否使用，还取决于工具采用的协议和模型能力。\n\n## 四个基础字段\n\n| 字段 | 填写内容 |\n| --- | --- |\n| Provider / 服务商类型 | OpenAI Compatible 或支持自定义地址的 OpenAI 类型 |\n| Base URL | `{{api_base_url}}`，若工具自动补 `/v1` 则只填根地址 |\n| API Key | 在本站[API 密钥](/keys)创建的独立密钥 |\n| Model | [模型广场](/pricing)中的完整模型 ID |\n\n网页登录密码、其他服务商密钥和模型展示昵称，都不能代替这些字段中的正确值。\n\n## 判断地址是否填写正确\n\n输入框写“Base URL”时，通常不要附加 `chat/completions`；输入框明确写“完整接口地址”时，则可能需要完整路径。以客户端文档和实际请求为准。\n\n404 常见于缺少 `/v1`、重复 `/v1`，或将 Responses 模型按 Chat Completions 调用。修改路径之前，先确认[协议](/docs/guides/protocols)是否匹配。\n\n## 先验证基础能力\n\n用短文本关闭流式或复杂工具选项进行测试，成功后再逐项增加能力。自动拉取模型列表失败时，可以手动添加已确认可用的 ID；不要凭空猜测模型名。\n\n如果客户端只支持 Chat Completions，不能仅通过更换地址让它自动理解 Responses 或 Anthropic Messages 的响应格式。\n\n## 第三方工具与密钥\n\n了解工具是否把密钥保存在本地、是否通过它自己的服务器转发请求。不要将长期高额度密钥输入到不可信的网页或扩展。停用应用时撤销对应密钥，接入后定期查看[使用日志](/usage-logs)。\n",
+      "status": "published",
+      "sort_order": 40,
+      "updated_at": 0
+    },
+    {
+      "id": "openai-sdk",
+      "category_id": "sdk",
+      "slug": "openai-sdk",
+      "title": "接入 OpenAI SDK",
+      "description": "用 Python 或 JavaScript 调用 Chat Completions 与 Responses。",
+      "content": "OpenAI SDK 可以通过自定义 `base_url` / `baseURL` 连接本站。先准备环境变量 `NEW_API_KEY`，并选择所需协议明确可用的模型。示例中的 `YOUR_MODEL_ID` 都要替换成真实模型 ID。\n\n## Python：Chat Completions\n\n```bash\npip install openai\n```\n\n```python\nimport os\nfrom openai import OpenAI\n\nclient = OpenAI(\n    api_key=os.environ[\"NEW_API_KEY\"],\n    base_url=\"{{api_base_url}}\",\n    timeout=120.0,\n    max_retries=1,\n)\n\ncompletion = client.chat.completions.create(\n    model=\"YOUR_MODEL_ID\",\n    messages=[{\"role\": \"user\", \"content\": \"请用一句话介绍自己。\"}],\n)\nprint(completion.choices[0].message.content)\n```\n\n## Python：Responses\n\n使用支持 Responses 的模型，并复用上述 `client`：\n\n```python\nresponse = client.responses.create(\n    model=\"YOUR_MODEL_ID\",\n    input=\"请解释什么是 API。\",\n)\nprint(response.output_text)\n```\n\n## JavaScript：Responses\n\n```bash\nnpm install openai\n```\n\n以下示例在支持 ES Modules 的 Node.js 环境运行：\n\n```javascript\nimport OpenAI from 'openai'\n\nconst client = new OpenAI({\n  apiKey: process.env.NEW_API_KEY,\n  baseURL: '{{api_base_url}}',\n  timeout: 120_000,\n  maxRetries: 1,\n})\n\nconst response = await client.responses.create({\n  model: 'YOUR_MODEL_ID',\n  input: '请解释什么是 API。',\n})\nconsole.log(response.output_text)\n```\n\n## 流式与高级能力\n\n基础调用成功后，再按 SDK 文档配置流式事件读取。Chat Completions 与 Responses 的事件结构不同，不要混用解析代码。工具调用、文件、会话状态和多模态能力需要逐项确认，兼容基础 API 不代表实现 SDK 暴露的全部接口。\n\n设置有限的重试和合适超时；如果客户端超时，先检查[使用日志](/usage-logs)再决定是否重试，尤其是图片或其他可能重复执行的任务。\n\nSDK 必须在可信的后端环境保存密钥。不要为了浏览器直接调用而将密钥打包到前端页面。\n\n官方资料：[OpenAI Python SDK](https://github.com/openai/openai-python)、[OpenAI JavaScript SDK](https://github.com/openai/openai-node)。\n",
+      "status": "published",
+      "sort_order": 10,
+      "updated_at": 0
+    },
+    {
+      "id": "anthropic-sdk",
+      "category_id": "sdk",
+      "slug": "anthropic-sdk",
+      "title": "接入 Anthropic SDK",
+      "description": "使用 Messages 协议发送文本，并正确读取内容块。",
+      "content": "Anthropic SDK 使用 Messages 协议。请选择本站确认支持该协议的模型，Base URL 使用 API 根地址 `{{site_url}}`，不要附加 `/v1/messages`。\n\n## Python 示例\n\n```bash\npip install anthropic\n```\n\n```python\nimport os\nfrom anthropic import Anthropic\n\nclient = Anthropic(\n    api_key=os.environ[\"NEW_API_KEY\"],\n    base_url=\"{{site_url}}\",\n    timeout=120.0,\n    max_retries=1,\n)\n\nmessage = client.messages.create(\n    model=\"YOUR_MODEL_ID\",\n    max_tokens=256,\n    messages=[{\"role\": \"user\", \"content\": \"请简短介绍你自己。\"}],\n)\nfor block in message.content:\n    if block.type == \"text\":\n        print(block.text)\n```\n\n## JavaScript 示例\n\n```bash\nnpm install @anthropic-ai/sdk\n```\n\n```javascript\nimport Anthropic from '@anthropic-ai/sdk'\n\nconst client = new Anthropic({\n  apiKey: process.env.NEW_API_KEY,\n  baseURL: '{{site_url}}',\n  timeout: 120_000,\n  maxRetries: 1,\n})\n\nconst message = await client.messages.create({\n  model: 'YOUR_MODEL_ID',\n  max_tokens: 256,\n  messages: [{ role: 'user', content: '请简短介绍你自己。' }],\n})\nfor (const block of message.content) {\n  if (block.type === 'text') console.log(block.text)\n}\n```\n\n## 需要注意的差异\n\nMessages 的返回内容是多个内容块，不一定只有纯文本；工具使用等结果需要按块类型处理。输出上限需要根据具体模型和任务调整，示例中的数值仅用于最小测试。\n\n扩展思考、缓存、多模态、工具与辅助接口是否可用，取决于模型和渠道。不要仅因 SDK 提供某个方法，就假定本站所有模型都支持。\n\n先在[使用日志](/usage-logs)验证基础请求，再开启高级功能。错误处理应记录状态和脱敏信息，不记录密钥或完整敏感输入。\n\n官方资料：[Anthropic Python SDK](https://github.com/anthropics/anthropic-sdk-python)、[Anthropic TypeScript SDK](https://github.com/anthropics/anthropic-sdk-typescript)。\n",
+      "status": "published",
+      "sort_order": 20,
+      "updated_at": 0
+    },
+    {
+      "id": "troubleshooting",
+      "category_id": "troubleshooting",
+      "slug": "troubleshooting",
+      "title": "错误码与排障",
+      "description": "按状态码检查地址、鉴权、模型、额度和并发，整理最小复现。",
+      "content": "排障先看 HTTP 状态码和响应中的具体错误消息，再核对请求时间、模型、协议与密钥状态。相同状态码可能由不同环节返回，下面是检查方向，不是唯一原因。\n\n## 400：请求参数不符合要求\n\n检查 JSON 是否正确，必填字段是否齐全，模型 ID 是否准确，所用协议是否匹配。先退回[最小请求](/docs/guides/quick-start)，去掉未经确认支持的参数，再逐个加回。\n\n图片尺寸、输出参数和工具结构通常有模型差异，不要把一个模型的全部参数直接复制给另一个模型。\n\n## 401：鉴权失败\n\n检查密钥是否完整、过期、禁用或已撤销。OpenAI 兼容接口一般使用 `Authorization: Bearer ...`，Anthropic Messages 使用对应的 `x-api-key` 请求头。\n\n确认应用进程实际读取到了正确环境变量；不要在日志或截图中打印完整密钥来验证。\n\n## 403：访问不允许\n\n检查账户状态、密钥允许模型、分组权限和 IP 等限制。权限问题不会因为换一个展示名称或重复发送而自动解决。\n\n如果错误说明与风控或平台政策相关，按站点支持流程处理，不要通过反复注册或创建密钥绕过限制。\n\n## 404：地址或资源不匹配\n\n检查是否缺少 `/v1`、重复成 `/v1/v1`，或把完整接口地址填进了只接受 Base URL 的字段。确认模型 ID 的大小写和完整拼写，以及客户端采用的协议。\n\n某个高级或辅助接口可能未被平台支持，基础聊天成功不代表所有同名 SDK 方法都可用。\n\n## 429：请求受到限制\n\n先阅读具体错误：可能涉及请求频率、并发、排队或上游限额。降低同时进行的任务数量，使用有限次数和有间隔的重试，避免立即重复发送整批任务。\n\n余额、密钥额度和倍率保护也要结合具体消息单独检查，不要把所有限制都解释成同一种原因。\n\n## 5xx、网络中断或超时\n\n先查看[渠道监控](/channel-monitor)及[使用日志](/usage-logs)是否有相关异常，再用相同协议的短请求验证。若连站点基础接口都无法连接，按[本机诊断](/docs/guides/connection-diagnostics)检查 DNS、TLS 和代理。\n\n客户端超时不代表服务端一定没有执行或产生消耗。对图片生成等可能重复执行的任务，先核对日志与结果，再决定是否重试。\n\n## 有响应却没有预期内容\n\n检查客户端是否按正确协议读取响应。Chat Completions、Responses 和 Messages 的文本位置不同；流式请求要处理对应事件。还要查看是否输出被截断、返回工具调用或没有文本的内容块。\n\n## 提交最小复现\n\n问题持续时，通过站点开放的[工单中心](/tickets)提供：时间与时区、客户端及版本、模型 ID、协议与路径、状态码、脱敏的错误消息、请求 ID，以及已尝试的步骤。附上不含私人数据的最小请求比大段截图更便于定位。\n\n不要提交完整 API 密钥、Cookie、验证码或私人输入。更多反馈规范见[日志、安全与问题定位](/docs/guides/logs-and-security)。\n",
+      "status": "published",
+      "sort_order": 10,
+      "updated_at": 0
+    }
+  ]
+}

@@ -186,12 +186,16 @@ func appendBillingInfo(relayInfo *relaycommon.RelayInfo, other *model.LogOther) 
 	if relayInfo == nil || other == nil {
 		return
 	}
-	// billing_source: "wallet" or "subscription"
+	// Keep the actual paid and promotional shares visible to the account owner.
 	if relayInfo.BillingSource != "" {
 		other.SetPublic("billing_source", relayInfo.BillingSource)
 	}
 	if relayInfo.UserSetting.BillingPreference != "" {
 		other.SetPublic("billing_preference", relayInfo.UserSetting.BillingPreference)
+	}
+	if relayInfo.BillingSource == BillingSourcePromotional {
+		other.SetPublic("promotional_consumed", relayInfo.PromotionalConsumed)
+		other.SetPublic("wallet_quota_deducted", relayInfo.PromotionalWalletConsumed)
 	}
 	if relayInfo.BillingSource == "subscription" {
 		if relayInfo.SubscriptionId != 0 {

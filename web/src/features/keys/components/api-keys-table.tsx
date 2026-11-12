@@ -20,7 +20,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getRouteApi } from '@tanstack/react-router'
 import { flexRender, type Table as TanstackTable } from '@tanstack/react-table'
 import { Database } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -30,6 +30,7 @@ import {
   useDebouncedColumnFilter,
   useDataTable,
 } from '@/components/data-table'
+import { ErrorState } from '@/components/error-state'
 import { StatusBadge } from '@/components/status-badge'
 import {
   Empty,
@@ -40,6 +41,8 @@ import {
 } from '@/components/ui/empty'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { getPriceStatuses } from '@/extensions/key-price/api'
+import { KeyPriceStatus } from '@/extensions/key-price/components/key-price-status'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { createServerError } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
@@ -159,12 +162,15 @@ function ApiKeysMobileList({
                 </div>
               </div>
               {statusConfig && (
-                <StatusBadge
-                  label={t(statusConfig.label)}
-                  variant={statusConfig.variant}
-                  copyable={false}
-                  className='shrink-0 px-0 text-xs font-normal'
-                />
+                <div className='flex flex-col items-end gap-1'>
+                  <StatusBadge
+                    label={t(statusConfig.label)}
+                    variant={statusConfig.variant}
+                    copyable={false}
+                    className='shrink-0 px-0 text-xs font-normal'
+                  />
+                  <KeyPriceStatus apiKey={apiKey} />
+                </div>
               )}
             </div>
 
@@ -302,7 +308,33 @@ export function ApiKeysTable() {
     placeholderData: (previousData) => previousData,
   })
 
-  const apiKeys = data?.items || []
+  const ids = (data?.items ?? []).map((key) => key.id)
+  const prices = useQuery({
+    queryKey: ['key-price', 'statuses', ids, refreshTrigger],
+    queryFn: () => getPriceStatuses(ids),
+    enabled: ids.length > 0,
+    refetchInterval: 30_000,
+  })
+  const apiKeys = useMemo(() => {
+    const states = new Map(
+      prices.data?.states.map((state) => [state.token_id, state])
+    )
+    const settings = prices.data?.settings
+    return (data?.items ?? []).map((key) => {
+      const state = states.get(key.id)
+      return {
+        ...key,
+        price_protection: {
+          enabled: settings?.enabled ?? false,
+          protected: Boolean(
+            state && (state.protected || !settings?.allow_opt_out)
+          ),
+          paused: Boolean(state?.paused),
+          confirmation_required: !state && settings?.legacy_mode === 'confirm',
+        },
+      }
+    })
+  }, [data?.items, prices.data])
 
   const { table } = useDataTable({
     data: apiKeys,
@@ -339,45 +371,53 @@ export function ApiKeysTable() {
   }, [columnVisibility, table])
 
   return (
-    <DataTablePage
-      table={table}
-      columns={columns}
-      isLoading={isLoading}
-      isFetching={isFetching}
-      emptyTitle={t('No API Keys Found')}
-      emptyDescription={t(
-        'No API keys available. Create your first API key to get started.'
+    <>
+      {prices.isError && (
+        <ErrorState
+          title={t('Unable to load Key price protection status')}
+          onRetry={() => void prices.refetch()}
+        />
       )}
-      skeletonKeyPrefix='api-keys-skeleton'
-      applyHeaderSize
-      toolbarProps={{
-        searchPlaceholder: t('Filter by name...'),
-        searchDebounceMs: 500,
-        additionalSearch: (
-          <Input
-            placeholder={t('Filter by API key...')}
-            aria-label={t('Filter by API key...')}
-            value={tokenFilterInput}
-            onChange={(e) => setTokenFilterInput(e.target.value)}
-            className='w-full sm:w-50 lg:w-60'
-          />
-        ),
-        filters: [
-          {
-            columnId: 'status',
-            title: t('Status'),
-            options: API_KEY_STATUS_OPTIONS,
-            singleSelect: true,
-          },
-        ],
-      }}
-      mobile={
-        <ApiKeysMobileList table={table} isLoading={isLoading} now={now} />
-      }
-      getRowClassName={(row) =>
-        isDisabledApiKeyRow(row.original) ? DISABLED_ROW_DESKTOP : undefined
-      }
-      bulkActions={<DataTableBulkActions table={table} />}
-    />
+      <DataTablePage
+        table={table}
+        columns={columns}
+        isLoading={isLoading}
+        isFetching={isFetching}
+        emptyTitle={t('No API Keys Found')}
+        emptyDescription={t(
+          'No API keys available. Create your first API key to get started.'
+        )}
+        skeletonKeyPrefix='api-keys-skeleton'
+        applyHeaderSize
+        toolbarProps={{
+          searchPlaceholder: t('Filter by name...'),
+          searchDebounceMs: 500,
+          additionalSearch: (
+            <Input
+              placeholder={t('Filter by API key...')}
+              aria-label={t('Filter by API key...')}
+              value={tokenFilterInput}
+              onChange={(e) => setTokenFilterInput(e.target.value)}
+              className='w-full sm:w-50 lg:w-60'
+            />
+          ),
+          filters: [
+            {
+              columnId: 'status',
+              title: t('Status'),
+              options: API_KEY_STATUS_OPTIONS,
+              singleSelect: true,
+            },
+          ],
+        }}
+        mobile={
+          <ApiKeysMobileList table={table} isLoading={isLoading} now={now} />
+        }
+        getRowClassName={(row) =>
+          isDisabledApiKeyRow(row.original) ? DISABLED_ROW_DESKTOP : undefined
+        }
+        bulkActions={<DataTableBulkActions table={table} />}
+      />
+    </>
   )
 }

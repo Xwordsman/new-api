@@ -125,6 +125,13 @@ export function SidebarModulesCard() {
           description: t('Balance and top-up management'),
         },
         {
+          key: 'checkin',
+          title: t('Daily Check-in'),
+          description: t(
+            'View recharge qualification and claim daily check-in rewards.'
+          ),
+        },
+        {
           key: 'personal',
           title: t('Personal Settings'),
           description: t('Personal info settings'),
@@ -147,7 +154,10 @@ export function SidebarModulesCard() {
         if (!adminSection?.enabled) return []
 
         const modules = section.modules.filter(
-          (module) => adminSection[module.key] === true
+          (module) =>
+            adminSection[module.key] === true &&
+            (module.key !== 'checkin' ||
+              status.extension_features?.checkin === true)
         )
         return modules.length ? [{ ...section, modules }] : []
       })
@@ -228,7 +238,11 @@ export function SidebarModulesCard() {
   if (!status) return null
 
   return (
-    <Card data-card-hover='false' className='gap-0 overflow-hidden py-0'>
+    <Card
+      data-card-hover='false'
+      data-console-tone='info'
+      className='gap-0 overflow-hidden py-0'
+    >
       <CardHeader className='border-b p-3 !pb-3 sm:p-5 sm:!pb-5'>
         <div className='flex items-center gap-3'>
           <IconBadge tone='info' size='title'>

@@ -59,7 +59,9 @@ const inFlightGet = new Map<string, Promise<unknown>>()
 const originalGet = api.get.bind(api)
 
 api.get = ((url: string, config: ApiRequestConfig = {}) => {
-  if (config.disableDuplicate) return originalGet(url, config)
+  // Callers with their own signal must not share another caller's cancellation.
+  // TanStack Query already deduplicates observers of the same query.
+  if (config.disableDuplicate || config.signal) return originalGet(url, config)
 
   const params = config.params ? JSON.stringify(config.params) : '{}'
   const sessionSID = useAuthStore.getState().auth.session?.sid || 'anonymous'

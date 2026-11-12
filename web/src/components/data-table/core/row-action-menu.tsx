@@ -31,6 +31,7 @@ type DataTableRowActionMenuProps = {
   children: React.ReactNode
   ariaLabel: string
   trigger?: React.ReactElement
+  align?: React.ComponentProps<typeof DropdownMenuContent>['align']
   contentClassName?: string
   modal?: boolean
   onOpenChange?: (open: boolean) => void
@@ -54,7 +55,7 @@ export function DataTableRowActionMenu(props: DataTableRowActionMenuProps) {
         aria-label={props.ariaLabel}
       />
       <DropdownMenuContent
-        align='end'
+        align={props.align ?? 'end'}
         className={cn('w-48', props.contentClassName)}
       >
         {props.children}

@@ -29,32 +29,51 @@ import { Route as errors503RouteImport } from './routes/(errors)/503'
 import { Route as AuthenticatedChat2linkRouteImport } from './routes/_authenticated/chat2link'
 import { Route as AuthenticatedSystemSettingsRouteRouteImport } from './routes/_authenticated/system-settings/route'
 import { Route as AboutIndexRouteImport } from './routes/about/index'
+import { Route as DocsIndexRouteImport } from './routes/docs/index'
 import { Route as OauthProviderRouteImport } from './routes/oauth/$provider'
 import { Route as PricingIndexRouteImport } from './routes/pricing/index'
 import { Route as RankingsIndexRouteImport } from './routes/rankings/index'
 import { Route as SetupIndexRouteImport } from './routes/setup/index'
 import { Route as authUserResetRouteImport } from './routes/(auth)/user/reset'
+import { Route as AuthenticatedBenchmarkIndexRouteImport } from './routes/_authenticated/benchmark/index'
+import { Route as AuthenticatedChannelMonitorIndexRouteImport } from './routes/_authenticated/channel-monitor/index'
 import { Route as AuthenticatedChannelsIndexRouteImport } from './routes/_authenticated/channels/index'
 import { Route as AuthenticatedChatChatIdRouteImport } from './routes/_authenticated/chat/$chatId'
+import { Route as AuthenticatedCheckinIndexRouteImport } from './routes/_authenticated/checkin/index'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
 import { Route as AuthenticatedDashboardSectionRouteImport } from './routes/_authenticated/dashboard/$section'
 import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
 import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authenticated/keys/index'
+import { Route as AuthenticatedLeaderboardIndexRouteImport } from './routes/_authenticated/leaderboard/index'
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedModelsSectionRouteImport } from './routes/_authenticated/models/$section'
 import { Route as AuthenticatedPlaygroundIndexRouteImport } from './routes/_authenticated/playground/index'
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile/index'
 import { Route as AuthenticatedRedemptionCodesIndexRouteImport } from './routes/_authenticated/redemption-codes/index'
+import { Route as AuthenticatedReferralsIndexRouteImport } from './routes/_authenticated/referrals/index'
 import { Route as AuthenticatedSecurityIndexRouteImport } from './routes/_authenticated/security/index'
 import { Route as AuthenticatedSubscriptionsIndexRouteImport } from './routes/_authenticated/subscriptions/index'
 import { Route as AuthenticatedSystemInfoIndexRouteImport } from './routes/_authenticated/system-info/index'
 import { Route as AuthenticatedSystemSettingsIndexRouteImport } from './routes/_authenticated/system-settings/index'
+import { Route as AuthenticatedSystemSettingsBenchmarkRouteImport } from './routes/_authenticated/system-settings/benchmark'
+import { Route as AuthenticatedSystemSettingsChannelMonitorRouteImport } from './routes/_authenticated/system-settings/channel-monitor'
+import { Route as AuthenticatedSystemSettingsCheckinRouteImport } from './routes/_authenticated/system-settings/checkin'
+import { Route as AuthenticatedSystemSettingsConcurrencyRouteImport } from './routes/_authenticated/system-settings/concurrency'
+import { Route as AuthenticatedSystemSettingsDocumentationRouteImport } from './routes/_authenticated/system-settings/documentation'
+import { Route as AuthenticatedSystemSettingsEmailTemplatesRouteImport } from './routes/_authenticated/system-settings/email-templates'
+import { Route as AuthenticatedSystemSettingsKeyPriceProtectionRouteImport } from './routes/_authenticated/system-settings/key-price-protection'
+import { Route as AuthenticatedSystemSettingsLeaderboardRouteImport } from './routes/_authenticated/system-settings/leaderboard'
+import { Route as AuthenticatedSystemSettingsReferralsRouteImport } from './routes/_authenticated/system-settings/referrals'
+import { Route as AuthenticatedSystemSettingsRegistrationRiskRouteImport } from './routes/_authenticated/system-settings/registration-risk'
+import { Route as AuthenticatedSystemSettingsRequestProtectionRouteImport } from './routes/_authenticated/system-settings/request-protection'
 import { Route as AuthenticatedTaskPluginsIndexRouteImport } from './routes/_authenticated/task-plugins/index'
+import { Route as AuthenticatedTicketsIndexRouteImport } from './routes/_authenticated/tickets/index'
 import { Route as AuthenticatedUsageLogsIndexRouteImport } from './routes/_authenticated/usage-logs/index'
 import { Route as AuthenticatedUsageLogsSectionRouteImport } from './routes/_authenticated/usage-logs/$section'
 import { Route as AuthenticatedUsageLogsAuditRouteImport } from './routes/_authenticated/usage-logs/audit'
 import { Route as AuthenticatedUsersIndexRouteImport } from './routes/_authenticated/users/index'
 import { Route as AuthenticatedWalletIndexRouteImport } from './routes/_authenticated/wallet/index'
+import { Route as DocsGuidesSlugRouteImport } from './routes/docs/guides/$slug'
 import { Route as PricingModelIdIndexRouteImport } from './routes/pricing/$modelId/index'
 import { Route as AuthenticatedSystemSettingsAuthIndexRouteImport } from './routes/_authenticated/system-settings/auth/index'
 import { Route as AuthenticatedSystemSettingsAuthSectionRouteImport } from './routes/_authenticated/system-settings/auth/$section'
@@ -174,6 +193,11 @@ const AboutIndexRoute = AboutIndexRouteImport.update({
   path: '/about/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DocsIndexRoute = DocsIndexRouteImport.update({
+  id: '/docs/',
+  path: '/docs/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OauthProviderRoute = OauthProviderRouteImport.update({
   id: '/oauth/$provider',
   path: '/oauth/$provider',
@@ -199,6 +223,18 @@ const authUserResetRoute = authUserResetRouteImport.update({
   path: '/user/reset',
   getParentRoute: () => authRouteRoute,
 } as any)
+const AuthenticatedBenchmarkIndexRoute =
+  AuthenticatedBenchmarkIndexRouteImport.update({
+    id: '/benchmark/',
+    path: '/benchmark/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedChannelMonitorIndexRoute =
+  AuthenticatedChannelMonitorIndexRouteImport.update({
+    id: '/channel-monitor/',
+    path: '/channel-monitor/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedChannelsIndexRoute =
   AuthenticatedChannelsIndexRouteImport.update({
     id: '/channels/',
@@ -210,6 +246,12 @@ const AuthenticatedChatChatIdRoute = AuthenticatedChatChatIdRouteImport.update({
   path: '/chat/$chatId',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedCheckinIndexRoute =
+  AuthenticatedCheckinIndexRouteImport.update({
+    id: '/checkin/',
+    path: '/checkin/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedDashboardIndexRoute =
   AuthenticatedDashboardIndexRouteImport.update({
     id: '/dashboard/',
@@ -233,6 +275,12 @@ const AuthenticatedKeysIndexRoute = AuthenticatedKeysIndexRouteImport.update({
   path: '/keys/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedLeaderboardIndexRoute =
+  AuthenticatedLeaderboardIndexRouteImport.update({
+    id: '/leaderboard/',
+    path: '/leaderboard/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedModelsIndexRoute =
   AuthenticatedModelsIndexRouteImport.update({
     id: '/models/',
@@ -263,6 +311,12 @@ const AuthenticatedRedemptionCodesIndexRoute =
     path: '/redemption-codes/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedReferralsIndexRoute =
+  AuthenticatedReferralsIndexRouteImport.update({
+    id: '/referrals/',
+    path: '/referrals/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSecurityIndexRoute =
   AuthenticatedSecurityIndexRouteImport.update({
     id: '/security/',
@@ -287,10 +341,82 @@ const AuthenticatedSystemSettingsIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
   } as any)
+const AuthenticatedSystemSettingsBenchmarkRoute =
+  AuthenticatedSystemSettingsBenchmarkRouteImport.update({
+    id: '/benchmark',
+    path: '/benchmark',
+    getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
+  } as any)
+const AuthenticatedSystemSettingsChannelMonitorRoute =
+  AuthenticatedSystemSettingsChannelMonitorRouteImport.update({
+    id: '/channel-monitor',
+    path: '/channel-monitor',
+    getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
+  } as any)
+const AuthenticatedSystemSettingsCheckinRoute =
+  AuthenticatedSystemSettingsCheckinRouteImport.update({
+    id: '/checkin',
+    path: '/checkin',
+    getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
+  } as any)
+const AuthenticatedSystemSettingsConcurrencyRoute =
+  AuthenticatedSystemSettingsConcurrencyRouteImport.update({
+    id: '/concurrency',
+    path: '/concurrency',
+    getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
+  } as any)
+const AuthenticatedSystemSettingsDocumentationRoute =
+  AuthenticatedSystemSettingsDocumentationRouteImport.update({
+    id: '/documentation',
+    path: '/documentation',
+    getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
+  } as any)
+const AuthenticatedSystemSettingsEmailTemplatesRoute =
+  AuthenticatedSystemSettingsEmailTemplatesRouteImport.update({
+    id: '/email-templates',
+    path: '/email-templates',
+    getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
+  } as any)
+const AuthenticatedSystemSettingsKeyPriceProtectionRoute =
+  AuthenticatedSystemSettingsKeyPriceProtectionRouteImport.update({
+    id: '/key-price-protection',
+    path: '/key-price-protection',
+    getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
+  } as any)
+const AuthenticatedSystemSettingsLeaderboardRoute =
+  AuthenticatedSystemSettingsLeaderboardRouteImport.update({
+    id: '/leaderboard',
+    path: '/leaderboard',
+    getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
+  } as any)
+const AuthenticatedSystemSettingsReferralsRoute =
+  AuthenticatedSystemSettingsReferralsRouteImport.update({
+    id: '/referrals',
+    path: '/referrals',
+    getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
+  } as any)
+const AuthenticatedSystemSettingsRegistrationRiskRoute =
+  AuthenticatedSystemSettingsRegistrationRiskRouteImport.update({
+    id: '/registration-risk',
+    path: '/registration-risk',
+    getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
+  } as any)
+const AuthenticatedSystemSettingsRequestProtectionRoute =
+  AuthenticatedSystemSettingsRequestProtectionRouteImport.update({
+    id: '/request-protection',
+    path: '/request-protection',
+    getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
+  } as any)
 const AuthenticatedTaskPluginsIndexRoute =
   AuthenticatedTaskPluginsIndexRouteImport.update({
     id: '/task-plugins/',
     path: '/task-plugins/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedTicketsIndexRoute =
+  AuthenticatedTicketsIndexRouteImport.update({
+    id: '/tickets/',
+    path: '/tickets/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedUsageLogsIndexRoute =
@@ -322,6 +448,11 @@ const AuthenticatedWalletIndexRoute =
     path: '/wallet/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const DocsGuidesSlugRoute = DocsGuidesSlugRouteImport.update({
+  id: '/docs/guides/$slug',
+  path: '/docs/guides/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PricingModelIdIndexRoute = PricingModelIdIndexRouteImport.update({
   id: '/pricing/$modelId/',
   path: '/pricing/$modelId/',
@@ -456,6 +587,7 @@ export interface FileRoutesByFullPath {
   '/chat2link': typeof AuthenticatedChat2linkRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about/': typeof AboutIndexRoute
+  '/docs/': typeof DocsIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
   '/setup/': typeof SetupIndexRoute
@@ -464,20 +596,38 @@ export interface FileRoutesByFullPath {
   '/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
+  '/system-settings/benchmark': typeof AuthenticatedSystemSettingsBenchmarkRoute
+  '/system-settings/channel-monitor': typeof AuthenticatedSystemSettingsChannelMonitorRoute
+  '/system-settings/checkin': typeof AuthenticatedSystemSettingsCheckinRoute
+  '/system-settings/concurrency': typeof AuthenticatedSystemSettingsConcurrencyRoute
+  '/system-settings/documentation': typeof AuthenticatedSystemSettingsDocumentationRoute
+  '/system-settings/email-templates': typeof AuthenticatedSystemSettingsEmailTemplatesRoute
+  '/system-settings/key-price-protection': typeof AuthenticatedSystemSettingsKeyPriceProtectionRoute
+  '/system-settings/leaderboard': typeof AuthenticatedSystemSettingsLeaderboardRoute
+  '/system-settings/referrals': typeof AuthenticatedSystemSettingsReferralsRoute
+  '/system-settings/registration-risk': typeof AuthenticatedSystemSettingsRegistrationRiskRoute
+  '/system-settings/request-protection': typeof AuthenticatedSystemSettingsRequestProtectionRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/usage-logs/audit': typeof AuthenticatedUsageLogsAuditRoute
+  '/docs/guides/$slug': typeof DocsGuidesSlugRoute
+  '/benchmark/': typeof AuthenticatedBenchmarkIndexRoute
+  '/channel-monitor/': typeof AuthenticatedChannelMonitorIndexRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
+  '/checkin/': typeof AuthenticatedCheckinIndexRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/keys/': typeof AuthenticatedKeysIndexRoute
+  '/leaderboard/': typeof AuthenticatedLeaderboardIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
   '/playground/': typeof AuthenticatedPlaygroundIndexRoute
   '/profile/': typeof AuthenticatedProfileIndexRoute
   '/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
+  '/referrals/': typeof AuthenticatedReferralsIndexRoute
   '/security/': typeof AuthenticatedSecurityIndexRoute
   '/subscriptions/': typeof AuthenticatedSubscriptionsIndexRoute
   '/system-info/': typeof AuthenticatedSystemInfoIndexRoute
   '/system-settings/': typeof AuthenticatedSystemSettingsIndexRoute
   '/task-plugins/': typeof AuthenticatedTaskPluginsIndexRoute
+  '/tickets/': typeof AuthenticatedTicketsIndexRoute
   '/usage-logs/': typeof AuthenticatedUsageLogsIndexRoute
   '/users/': typeof AuthenticatedUsersIndexRoute
   '/wallet/': typeof AuthenticatedWalletIndexRoute
@@ -520,6 +670,7 @@ export interface FileRoutesByTo {
   '/chat2link': typeof AuthenticatedChat2linkRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about': typeof AboutIndexRoute
+  '/docs': typeof DocsIndexRoute
   '/pricing': typeof PricingIndexRoute
   '/rankings': typeof RankingsIndexRoute
   '/setup': typeof SetupIndexRoute
@@ -528,20 +679,38 @@ export interface FileRoutesByTo {
   '/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
+  '/system-settings/benchmark': typeof AuthenticatedSystemSettingsBenchmarkRoute
+  '/system-settings/channel-monitor': typeof AuthenticatedSystemSettingsChannelMonitorRoute
+  '/system-settings/checkin': typeof AuthenticatedSystemSettingsCheckinRoute
+  '/system-settings/concurrency': typeof AuthenticatedSystemSettingsConcurrencyRoute
+  '/system-settings/documentation': typeof AuthenticatedSystemSettingsDocumentationRoute
+  '/system-settings/email-templates': typeof AuthenticatedSystemSettingsEmailTemplatesRoute
+  '/system-settings/key-price-protection': typeof AuthenticatedSystemSettingsKeyPriceProtectionRoute
+  '/system-settings/leaderboard': typeof AuthenticatedSystemSettingsLeaderboardRoute
+  '/system-settings/referrals': typeof AuthenticatedSystemSettingsReferralsRoute
+  '/system-settings/registration-risk': typeof AuthenticatedSystemSettingsRegistrationRiskRoute
+  '/system-settings/request-protection': typeof AuthenticatedSystemSettingsRequestProtectionRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/usage-logs/audit': typeof AuthenticatedUsageLogsAuditRoute
+  '/docs/guides/$slug': typeof DocsGuidesSlugRoute
+  '/benchmark': typeof AuthenticatedBenchmarkIndexRoute
+  '/channel-monitor': typeof AuthenticatedChannelMonitorIndexRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
+  '/checkin': typeof AuthenticatedCheckinIndexRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
   '/keys': typeof AuthenticatedKeysIndexRoute
+  '/leaderboard': typeof AuthenticatedLeaderboardIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
   '/playground': typeof AuthenticatedPlaygroundIndexRoute
   '/profile': typeof AuthenticatedProfileIndexRoute
   '/redemption-codes': typeof AuthenticatedRedemptionCodesIndexRoute
+  '/referrals': typeof AuthenticatedReferralsIndexRoute
   '/security': typeof AuthenticatedSecurityIndexRoute
   '/subscriptions': typeof AuthenticatedSubscriptionsIndexRoute
   '/system-info': typeof AuthenticatedSystemInfoIndexRoute
   '/system-settings': typeof AuthenticatedSystemSettingsIndexRoute
   '/task-plugins': typeof AuthenticatedTaskPluginsIndexRoute
+  '/tickets': typeof AuthenticatedTicketsIndexRoute
   '/usage-logs': typeof AuthenticatedUsageLogsIndexRoute
   '/users': typeof AuthenticatedUsersIndexRoute
   '/wallet': typeof AuthenticatedWalletIndexRoute
@@ -588,6 +757,7 @@ export interface FileRoutesById {
   '/_authenticated/chat2link': typeof AuthenticatedChat2linkRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/about/': typeof AboutIndexRoute
+  '/docs/': typeof DocsIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
   '/setup/': typeof SetupIndexRoute
@@ -596,20 +766,38 @@ export interface FileRoutesById {
   '/_authenticated/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/_authenticated/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/_authenticated/models/$section': typeof AuthenticatedModelsSectionRoute
+  '/_authenticated/system-settings/benchmark': typeof AuthenticatedSystemSettingsBenchmarkRoute
+  '/_authenticated/system-settings/channel-monitor': typeof AuthenticatedSystemSettingsChannelMonitorRoute
+  '/_authenticated/system-settings/checkin': typeof AuthenticatedSystemSettingsCheckinRoute
+  '/_authenticated/system-settings/concurrency': typeof AuthenticatedSystemSettingsConcurrencyRoute
+  '/_authenticated/system-settings/documentation': typeof AuthenticatedSystemSettingsDocumentationRoute
+  '/_authenticated/system-settings/email-templates': typeof AuthenticatedSystemSettingsEmailTemplatesRoute
+  '/_authenticated/system-settings/key-price-protection': typeof AuthenticatedSystemSettingsKeyPriceProtectionRoute
+  '/_authenticated/system-settings/leaderboard': typeof AuthenticatedSystemSettingsLeaderboardRoute
+  '/_authenticated/system-settings/referrals': typeof AuthenticatedSystemSettingsReferralsRoute
+  '/_authenticated/system-settings/registration-risk': typeof AuthenticatedSystemSettingsRegistrationRiskRoute
+  '/_authenticated/system-settings/request-protection': typeof AuthenticatedSystemSettingsRequestProtectionRoute
   '/_authenticated/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/_authenticated/usage-logs/audit': typeof AuthenticatedUsageLogsAuditRoute
+  '/docs/guides/$slug': typeof DocsGuidesSlugRoute
+  '/_authenticated/benchmark/': typeof AuthenticatedBenchmarkIndexRoute
+  '/_authenticated/channel-monitor/': typeof AuthenticatedChannelMonitorIndexRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
+  '/_authenticated/checkin/': typeof AuthenticatedCheckinIndexRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
+  '/_authenticated/leaderboard/': typeof AuthenticatedLeaderboardIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
   '/_authenticated/playground/': typeof AuthenticatedPlaygroundIndexRoute
   '/_authenticated/profile/': typeof AuthenticatedProfileIndexRoute
   '/_authenticated/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
+  '/_authenticated/referrals/': typeof AuthenticatedReferralsIndexRoute
   '/_authenticated/security/': typeof AuthenticatedSecurityIndexRoute
   '/_authenticated/subscriptions/': typeof AuthenticatedSubscriptionsIndexRoute
   '/_authenticated/system-info/': typeof AuthenticatedSystemInfoIndexRoute
   '/_authenticated/system-settings/': typeof AuthenticatedSystemSettingsIndexRoute
   '/_authenticated/task-plugins/': typeof AuthenticatedTaskPluginsIndexRoute
+  '/_authenticated/tickets/': typeof AuthenticatedTicketsIndexRoute
   '/_authenticated/usage-logs/': typeof AuthenticatedUsageLogsIndexRoute
   '/_authenticated/users/': typeof AuthenticatedUsersIndexRoute
   '/_authenticated/wallet/': typeof AuthenticatedWalletIndexRoute
@@ -655,6 +843,7 @@ export interface FileRouteTypes {
     | '/chat2link'
     | '/oauth/$provider'
     | '/about/'
+    | '/docs/'
     | '/pricing/'
     | '/rankings/'
     | '/setup/'
@@ -663,20 +852,38 @@ export interface FileRouteTypes {
     | '/dashboard/$section'
     | '/errors/$error'
     | '/models/$section'
+    | '/system-settings/benchmark'
+    | '/system-settings/channel-monitor'
+    | '/system-settings/checkin'
+    | '/system-settings/concurrency'
+    | '/system-settings/documentation'
+    | '/system-settings/email-templates'
+    | '/system-settings/key-price-protection'
+    | '/system-settings/leaderboard'
+    | '/system-settings/referrals'
+    | '/system-settings/registration-risk'
+    | '/system-settings/request-protection'
     | '/usage-logs/$section'
     | '/usage-logs/audit'
+    | '/docs/guides/$slug'
+    | '/benchmark/'
+    | '/channel-monitor/'
     | '/channels/'
+    | '/checkin/'
     | '/dashboard/'
     | '/keys/'
+    | '/leaderboard/'
     | '/models/'
     | '/playground/'
     | '/profile/'
     | '/redemption-codes/'
+    | '/referrals/'
     | '/security/'
     | '/subscriptions/'
     | '/system-info/'
     | '/system-settings/'
     | '/task-plugins/'
+    | '/tickets/'
     | '/usage-logs/'
     | '/users/'
     | '/wallet/'
@@ -719,6 +926,7 @@ export interface FileRouteTypes {
     | '/chat2link'
     | '/oauth/$provider'
     | '/about'
+    | '/docs'
     | '/pricing'
     | '/rankings'
     | '/setup'
@@ -727,20 +935,38 @@ export interface FileRouteTypes {
     | '/dashboard/$section'
     | '/errors/$error'
     | '/models/$section'
+    | '/system-settings/benchmark'
+    | '/system-settings/channel-monitor'
+    | '/system-settings/checkin'
+    | '/system-settings/concurrency'
+    | '/system-settings/documentation'
+    | '/system-settings/email-templates'
+    | '/system-settings/key-price-protection'
+    | '/system-settings/leaderboard'
+    | '/system-settings/referrals'
+    | '/system-settings/registration-risk'
+    | '/system-settings/request-protection'
     | '/usage-logs/$section'
     | '/usage-logs/audit'
+    | '/docs/guides/$slug'
+    | '/benchmark'
+    | '/channel-monitor'
     | '/channels'
+    | '/checkin'
     | '/dashboard'
     | '/keys'
+    | '/leaderboard'
     | '/models'
     | '/playground'
     | '/profile'
     | '/redemption-codes'
+    | '/referrals'
     | '/security'
     | '/subscriptions'
     | '/system-info'
     | '/system-settings'
     | '/task-plugins'
+    | '/tickets'
     | '/usage-logs'
     | '/users'
     | '/wallet'
@@ -786,6 +1012,7 @@ export interface FileRouteTypes {
     | '/_authenticated/chat2link'
     | '/oauth/$provider'
     | '/about/'
+    | '/docs/'
     | '/pricing/'
     | '/rankings/'
     | '/setup/'
@@ -794,20 +1021,38 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard/$section'
     | '/_authenticated/errors/$error'
     | '/_authenticated/models/$section'
+    | '/_authenticated/system-settings/benchmark'
+    | '/_authenticated/system-settings/channel-monitor'
+    | '/_authenticated/system-settings/checkin'
+    | '/_authenticated/system-settings/concurrency'
+    | '/_authenticated/system-settings/documentation'
+    | '/_authenticated/system-settings/email-templates'
+    | '/_authenticated/system-settings/key-price-protection'
+    | '/_authenticated/system-settings/leaderboard'
+    | '/_authenticated/system-settings/referrals'
+    | '/_authenticated/system-settings/registration-risk'
+    | '/_authenticated/system-settings/request-protection'
     | '/_authenticated/usage-logs/$section'
     | '/_authenticated/usage-logs/audit'
+    | '/docs/guides/$slug'
+    | '/_authenticated/benchmark/'
+    | '/_authenticated/channel-monitor/'
     | '/_authenticated/channels/'
+    | '/_authenticated/checkin/'
     | '/_authenticated/dashboard/'
     | '/_authenticated/keys/'
+    | '/_authenticated/leaderboard/'
     | '/_authenticated/models/'
     | '/_authenticated/playground/'
     | '/_authenticated/profile/'
     | '/_authenticated/redemption-codes/'
+    | '/_authenticated/referrals/'
     | '/_authenticated/security/'
     | '/_authenticated/subscriptions/'
     | '/_authenticated/system-info/'
     | '/_authenticated/system-settings/'
     | '/_authenticated/task-plugins/'
+    | '/_authenticated/tickets/'
     | '/_authenticated/usage-logs/'
     | '/_authenticated/users/'
     | '/_authenticated/wallet/'
@@ -845,9 +1090,11 @@ export interface RootRouteChildren {
   errors503Route: typeof errors503Route
   OauthProviderRoute: typeof OauthProviderRoute
   AboutIndexRoute: typeof AboutIndexRoute
+  DocsIndexRoute: typeof DocsIndexRoute
   PricingIndexRoute: typeof PricingIndexRoute
   RankingsIndexRoute: typeof RankingsIndexRoute
   SetupIndexRoute: typeof SetupIndexRoute
+  DocsGuidesSlugRoute: typeof DocsGuidesSlugRoute
   PricingModelIdIndexRoute: typeof PricingModelIdIndexRoute
 }
 
@@ -993,6 +1240,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AboutIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/docs/': {
+      id: '/docs/'
+      path: '/docs'
+      fullPath: '/docs/'
+      preLoaderRoute: typeof DocsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/oauth/$provider': {
       id: '/oauth/$provider'
       path: '/oauth/$provider'
@@ -1028,6 +1282,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof authUserResetRouteImport
       parentRoute: typeof authRouteRoute
     }
+    '/_authenticated/benchmark/': {
+      id: '/_authenticated/benchmark/'
+      path: '/benchmark'
+      fullPath: '/benchmark/'
+      preLoaderRoute: typeof AuthenticatedBenchmarkIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/channel-monitor/': {
+      id: '/_authenticated/channel-monitor/'
+      path: '/channel-monitor'
+      fullPath: '/channel-monitor/'
+      preLoaderRoute: typeof AuthenticatedChannelMonitorIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/channels/': {
       id: '/_authenticated/channels/'
       path: '/channels'
@@ -1040,6 +1308,13 @@ declare module '@tanstack/react-router' {
       path: '/chat/$chatId'
       fullPath: '/chat/$chatId'
       preLoaderRoute: typeof AuthenticatedChatChatIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/checkin/': {
+      id: '/_authenticated/checkin/'
+      path: '/checkin'
+      fullPath: '/checkin/'
+      preLoaderRoute: typeof AuthenticatedCheckinIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/dashboard/': {
@@ -1068,6 +1343,13 @@ declare module '@tanstack/react-router' {
       path: '/keys'
       fullPath: '/keys/'
       preLoaderRoute: typeof AuthenticatedKeysIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/leaderboard/': {
+      id: '/_authenticated/leaderboard/'
+      path: '/leaderboard'
+      fullPath: '/leaderboard/'
+      preLoaderRoute: typeof AuthenticatedLeaderboardIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/models/': {
@@ -1105,6 +1387,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRedemptionCodesIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/referrals/': {
+      id: '/_authenticated/referrals/'
+      path: '/referrals'
+      fullPath: '/referrals/'
+      preLoaderRoute: typeof AuthenticatedReferralsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/security/': {
       id: '/_authenticated/security/'
       path: '/security'
@@ -1133,11 +1422,95 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSystemSettingsIndexRouteImport
       parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
     }
+    '/_authenticated/system-settings/benchmark': {
+      id: '/_authenticated/system-settings/benchmark'
+      path: '/benchmark'
+      fullPath: '/system-settings/benchmark'
+      preLoaderRoute: typeof AuthenticatedSystemSettingsBenchmarkRouteImport
+      parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
+    }
+    '/_authenticated/system-settings/channel-monitor': {
+      id: '/_authenticated/system-settings/channel-monitor'
+      path: '/channel-monitor'
+      fullPath: '/system-settings/channel-monitor'
+      preLoaderRoute: typeof AuthenticatedSystemSettingsChannelMonitorRouteImport
+      parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
+    }
+    '/_authenticated/system-settings/checkin': {
+      id: '/_authenticated/system-settings/checkin'
+      path: '/checkin'
+      fullPath: '/system-settings/checkin'
+      preLoaderRoute: typeof AuthenticatedSystemSettingsCheckinRouteImport
+      parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
+    }
+    '/_authenticated/system-settings/concurrency': {
+      id: '/_authenticated/system-settings/concurrency'
+      path: '/concurrency'
+      fullPath: '/system-settings/concurrency'
+      preLoaderRoute: typeof AuthenticatedSystemSettingsConcurrencyRouteImport
+      parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
+    }
+    '/_authenticated/system-settings/documentation': {
+      id: '/_authenticated/system-settings/documentation'
+      path: '/documentation'
+      fullPath: '/system-settings/documentation'
+      preLoaderRoute: typeof AuthenticatedSystemSettingsDocumentationRouteImport
+      parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
+    }
+    '/_authenticated/system-settings/email-templates': {
+      id: '/_authenticated/system-settings/email-templates'
+      path: '/email-templates'
+      fullPath: '/system-settings/email-templates'
+      preLoaderRoute: typeof AuthenticatedSystemSettingsEmailTemplatesRouteImport
+      parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
+    }
+    '/_authenticated/system-settings/key-price-protection': {
+      id: '/_authenticated/system-settings/key-price-protection'
+      path: '/key-price-protection'
+      fullPath: '/system-settings/key-price-protection'
+      preLoaderRoute: typeof AuthenticatedSystemSettingsKeyPriceProtectionRouteImport
+      parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
+    }
+    '/_authenticated/system-settings/leaderboard': {
+      id: '/_authenticated/system-settings/leaderboard'
+      path: '/leaderboard'
+      fullPath: '/system-settings/leaderboard'
+      preLoaderRoute: typeof AuthenticatedSystemSettingsLeaderboardRouteImport
+      parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
+    }
+    '/_authenticated/system-settings/referrals': {
+      id: '/_authenticated/system-settings/referrals'
+      path: '/referrals'
+      fullPath: '/system-settings/referrals'
+      preLoaderRoute: typeof AuthenticatedSystemSettingsReferralsRouteImport
+      parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
+    }
+    '/_authenticated/system-settings/registration-risk': {
+      id: '/_authenticated/system-settings/registration-risk'
+      path: '/registration-risk'
+      fullPath: '/system-settings/registration-risk'
+      preLoaderRoute: typeof AuthenticatedSystemSettingsRegistrationRiskRouteImport
+      parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
+    }
+    '/_authenticated/system-settings/request-protection': {
+      id: '/_authenticated/system-settings/request-protection'
+      path: '/request-protection'
+      fullPath: '/system-settings/request-protection'
+      preLoaderRoute: typeof AuthenticatedSystemSettingsRequestProtectionRouteImport
+      parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
+    }
     '/_authenticated/task-plugins/': {
       id: '/_authenticated/task-plugins/'
       path: '/task-plugins'
       fullPath: '/task-plugins/'
       preLoaderRoute: typeof AuthenticatedTaskPluginsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/tickets/': {
+      id: '/_authenticated/tickets/'
+      path: '/tickets'
+      fullPath: '/tickets/'
+      preLoaderRoute: typeof AuthenticatedTicketsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/usage-logs/': {
@@ -1174,6 +1547,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/wallet/'
       preLoaderRoute: typeof AuthenticatedWalletIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/docs/guides/$slug': {
+      id: '/docs/guides/$slug'
+      path: '/docs/guides/$slug'
+      fullPath: '/docs/guides/$slug'
+      preLoaderRoute: typeof DocsGuidesSlugRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/pricing/$modelId/': {
       id: '/pricing/$modelId/'
@@ -1338,6 +1718,17 @@ const authRouteRouteWithChildren = authRouteRoute._addFileChildren(
 )
 
 interface AuthenticatedSystemSettingsRouteRouteChildren {
+  AuthenticatedSystemSettingsBenchmarkRoute: typeof AuthenticatedSystemSettingsBenchmarkRoute
+  AuthenticatedSystemSettingsChannelMonitorRoute: typeof AuthenticatedSystemSettingsChannelMonitorRoute
+  AuthenticatedSystemSettingsCheckinRoute: typeof AuthenticatedSystemSettingsCheckinRoute
+  AuthenticatedSystemSettingsConcurrencyRoute: typeof AuthenticatedSystemSettingsConcurrencyRoute
+  AuthenticatedSystemSettingsDocumentationRoute: typeof AuthenticatedSystemSettingsDocumentationRoute
+  AuthenticatedSystemSettingsEmailTemplatesRoute: typeof AuthenticatedSystemSettingsEmailTemplatesRoute
+  AuthenticatedSystemSettingsKeyPriceProtectionRoute: typeof AuthenticatedSystemSettingsKeyPriceProtectionRoute
+  AuthenticatedSystemSettingsLeaderboardRoute: typeof AuthenticatedSystemSettingsLeaderboardRoute
+  AuthenticatedSystemSettingsReferralsRoute: typeof AuthenticatedSystemSettingsReferralsRoute
+  AuthenticatedSystemSettingsRegistrationRiskRoute: typeof AuthenticatedSystemSettingsRegistrationRiskRoute
+  AuthenticatedSystemSettingsRequestProtectionRoute: typeof AuthenticatedSystemSettingsRequestProtectionRoute
   AuthenticatedSystemSettingsIndexRoute: typeof AuthenticatedSystemSettingsIndexRoute
   AuthenticatedSystemSettingsAuthSectionRoute: typeof AuthenticatedSystemSettingsAuthSectionRoute
   AuthenticatedSystemSettingsBillingSectionRoute: typeof AuthenticatedSystemSettingsBillingSectionRoute
@@ -1361,6 +1752,28 @@ interface AuthenticatedSystemSettingsRouteRouteChildren {
 
 const AuthenticatedSystemSettingsRouteRouteChildren: AuthenticatedSystemSettingsRouteRouteChildren =
   {
+    AuthenticatedSystemSettingsBenchmarkRoute:
+      AuthenticatedSystemSettingsBenchmarkRoute,
+    AuthenticatedSystemSettingsChannelMonitorRoute:
+      AuthenticatedSystemSettingsChannelMonitorRoute,
+    AuthenticatedSystemSettingsCheckinRoute:
+      AuthenticatedSystemSettingsCheckinRoute,
+    AuthenticatedSystemSettingsConcurrencyRoute:
+      AuthenticatedSystemSettingsConcurrencyRoute,
+    AuthenticatedSystemSettingsDocumentationRoute:
+      AuthenticatedSystemSettingsDocumentationRoute,
+    AuthenticatedSystemSettingsEmailTemplatesRoute:
+      AuthenticatedSystemSettingsEmailTemplatesRoute,
+    AuthenticatedSystemSettingsKeyPriceProtectionRoute:
+      AuthenticatedSystemSettingsKeyPriceProtectionRoute,
+    AuthenticatedSystemSettingsLeaderboardRoute:
+      AuthenticatedSystemSettingsLeaderboardRoute,
+    AuthenticatedSystemSettingsReferralsRoute:
+      AuthenticatedSystemSettingsReferralsRoute,
+    AuthenticatedSystemSettingsRegistrationRiskRoute:
+      AuthenticatedSystemSettingsRegistrationRiskRoute,
+    AuthenticatedSystemSettingsRequestProtectionRoute:
+      AuthenticatedSystemSettingsRequestProtectionRoute,
     AuthenticatedSystemSettingsIndexRoute:
       AuthenticatedSystemSettingsIndexRoute,
     AuthenticatedSystemSettingsAuthSectionRoute:
@@ -1415,17 +1828,23 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedModelsSectionRoute: typeof AuthenticatedModelsSectionRoute
   AuthenticatedUsageLogsSectionRoute: typeof AuthenticatedUsageLogsSectionRoute
   AuthenticatedUsageLogsAuditRoute: typeof AuthenticatedUsageLogsAuditRoute
+  AuthenticatedBenchmarkIndexRoute: typeof AuthenticatedBenchmarkIndexRoute
+  AuthenticatedChannelMonitorIndexRoute: typeof AuthenticatedChannelMonitorIndexRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
+  AuthenticatedCheckinIndexRoute: typeof AuthenticatedCheckinIndexRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
   AuthenticatedKeysIndexRoute: typeof AuthenticatedKeysIndexRoute
+  AuthenticatedLeaderboardIndexRoute: typeof AuthenticatedLeaderboardIndexRoute
   AuthenticatedModelsIndexRoute: typeof AuthenticatedModelsIndexRoute
   AuthenticatedPlaygroundIndexRoute: typeof AuthenticatedPlaygroundIndexRoute
   AuthenticatedProfileIndexRoute: typeof AuthenticatedProfileIndexRoute
   AuthenticatedRedemptionCodesIndexRoute: typeof AuthenticatedRedemptionCodesIndexRoute
+  AuthenticatedReferralsIndexRoute: typeof AuthenticatedReferralsIndexRoute
   AuthenticatedSecurityIndexRoute: typeof AuthenticatedSecurityIndexRoute
   AuthenticatedSubscriptionsIndexRoute: typeof AuthenticatedSubscriptionsIndexRoute
   AuthenticatedSystemInfoIndexRoute: typeof AuthenticatedSystemInfoIndexRoute
   AuthenticatedTaskPluginsIndexRoute: typeof AuthenticatedTaskPluginsIndexRoute
+  AuthenticatedTicketsIndexRoute: typeof AuthenticatedTicketsIndexRoute
   AuthenticatedUsageLogsIndexRoute: typeof AuthenticatedUsageLogsIndexRoute
   AuthenticatedUsersIndexRoute: typeof AuthenticatedUsersIndexRoute
   AuthenticatedWalletIndexRoute: typeof AuthenticatedWalletIndexRoute
@@ -1441,18 +1860,24 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedModelsSectionRoute: AuthenticatedModelsSectionRoute,
   AuthenticatedUsageLogsSectionRoute: AuthenticatedUsageLogsSectionRoute,
   AuthenticatedUsageLogsAuditRoute: AuthenticatedUsageLogsAuditRoute,
+  AuthenticatedBenchmarkIndexRoute: AuthenticatedBenchmarkIndexRoute,
+  AuthenticatedChannelMonitorIndexRoute: AuthenticatedChannelMonitorIndexRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
+  AuthenticatedCheckinIndexRoute: AuthenticatedCheckinIndexRoute,
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
   AuthenticatedKeysIndexRoute: AuthenticatedKeysIndexRoute,
+  AuthenticatedLeaderboardIndexRoute: AuthenticatedLeaderboardIndexRoute,
   AuthenticatedModelsIndexRoute: AuthenticatedModelsIndexRoute,
   AuthenticatedPlaygroundIndexRoute: AuthenticatedPlaygroundIndexRoute,
   AuthenticatedProfileIndexRoute: AuthenticatedProfileIndexRoute,
   AuthenticatedRedemptionCodesIndexRoute:
     AuthenticatedRedemptionCodesIndexRoute,
+  AuthenticatedReferralsIndexRoute: AuthenticatedReferralsIndexRoute,
   AuthenticatedSecurityIndexRoute: AuthenticatedSecurityIndexRoute,
   AuthenticatedSubscriptionsIndexRoute: AuthenticatedSubscriptionsIndexRoute,
   AuthenticatedSystemInfoIndexRoute: AuthenticatedSystemInfoIndexRoute,
   AuthenticatedTaskPluginsIndexRoute: AuthenticatedTaskPluginsIndexRoute,
+  AuthenticatedTicketsIndexRoute: AuthenticatedTicketsIndexRoute,
   AuthenticatedUsageLogsIndexRoute: AuthenticatedUsageLogsIndexRoute,
   AuthenticatedUsersIndexRoute: AuthenticatedUsersIndexRoute,
   AuthenticatedWalletIndexRoute: AuthenticatedWalletIndexRoute,
@@ -1474,9 +1899,11 @@ const rootRouteChildren: RootRouteChildren = {
   errors503Route: errors503Route,
   OauthProviderRoute: OauthProviderRoute,
   AboutIndexRoute: AboutIndexRoute,
+  DocsIndexRoute: DocsIndexRoute,
   PricingIndexRoute: PricingIndexRoute,
   RankingsIndexRoute: RankingsIndexRoute,
   SetupIndexRoute: SetupIndexRoute,
+  DocsGuidesSlugRoute: DocsGuidesSlugRoute,
   PricingModelIdIndexRoute: PricingModelIdIndexRoute,
 }
 export const routeTree = rootRouteImport

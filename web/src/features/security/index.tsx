@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Link2 } from 'lucide-react'
+import { ShieldCheck, Link2 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -138,11 +138,17 @@ export function Security() {
 
   return (
     <SectionPageLayout>
-      <SectionPageLayout.Title>
+      <SectionPageLayout.Title
+        icon={ShieldCheck}
+        eyebrow='SECURITY & ACCESS'
+        description={t(
+          'Manage account security and connected sign-in methods.'
+        )}
+      >
         {t('Security & Access')}
       </SectionPageLayout.Title>
       <SectionPageLayout.Content>
-        <div className='mx-auto w-full max-w-7xl'>{content}</div>
+        <div className='w-full'>{content}</div>
       </SectionPageLayout.Content>
     </SectionPageLayout>
   )

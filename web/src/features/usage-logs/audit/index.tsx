@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQueryClient } from '@tanstack/react-query'
+import { ShieldCheck } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -89,7 +90,13 @@ export function AuditLogs() {
   }, [queryClient, userId])
   return (
     <SectionPageLayout fixedContent>
-      <SectionPageLayout.Title>{t('Audit Logs')}</SectionPageLayout.Title>
+      <SectionPageLayout.Title
+        icon={ShieldCheck}
+        eyebrow='AUDIT LOGS'
+        description={t('Trace account activity and administrative changes.')}
+      >
+        {t('Audit Logs')}
+      </SectionPageLayout.Title>
       <SectionPageLayout.Actions>
         {canReadAll && !accessRevoked && (
           <Tabs

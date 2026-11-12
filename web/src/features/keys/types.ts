@@ -47,6 +47,14 @@ export const apiKeySchema = z.object({
   model_limits: z.string().nullish().default(''),
   allow_ips: z.string().nullish().default(''),
   allow_user_quota_query: z.boolean().optional().default(false),
+  price_protection: z
+    .object({
+      enabled: z.boolean(),
+      protected: z.boolean(),
+      paused: z.boolean(),
+      confirmation_required: z.boolean(),
+    })
+    .optional(),
 })
 
 export type ApiKey = z.infer<typeof apiKeySchema>
@@ -108,6 +116,7 @@ export interface TokenAutoGroupsConfig {
 // ============================================================================
 
 export type ApiKeysDialogType =
+  | 'price-protection'
   | 'create'
   | 'update'
   | 'delete'

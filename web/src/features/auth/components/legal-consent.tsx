@@ -29,6 +29,7 @@ interface LegalConsentProps {
   checked: boolean
   onCheckedChange: (nextValue: boolean) => void
   className?: string
+  variant?: 'default' | 'plain'
 }
 
 export function LegalConsent({
@@ -36,6 +37,7 @@ export function LegalConsent({
   checked,
   onCheckedChange,
   className,
+  variant = 'default',
 }: LegalConsentProps) {
   const { t } = useTranslation()
   const hasUserAgreement = Boolean(status?.user_agreement_enabled)
@@ -52,7 +54,9 @@ export function LegalConsent({
   return (
     <div
       className={cn(
-        'border-border/60 bg-muted/40 flex items-start gap-3 rounded-md border p-3',
+        'flex items-start gap-3',
+        variant === 'default' &&
+          'border-border/60 bg-muted/40 rounded-md border p-3',
         className
       )}
     >
@@ -78,7 +82,7 @@ export function LegalConsent({
               {t('User Agreement')}
             </a>
           )}
-          {hasUserAgreement && hasPrivacyPolicy && ` ${t('and')} `}
+          {hasUserAgreement && hasPrivacyPolicy && <> {t('and')} </>}
           {hasPrivacyPolicy && (
             <a
               href='/privacy-policy'

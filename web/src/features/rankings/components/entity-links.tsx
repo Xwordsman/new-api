@@ -35,17 +35,15 @@ type ModelLinkProps = EntityLinkBaseProps & {
  * page (`/pricing/{modelName}`). Renders the model name itself by
  * default; pass `children` to wrap arbitrary content.
  *
- * A subtle persistent underline acts as the link affordance (so
- * clickability is obvious in lists with dozens of entries) and brightens
- * on hover.
  */
 export function ModelLink(props: ModelLinkProps) {
   return (
     <Link
       to='/pricing/$modelId'
       params={{ modelId: props.modelName }}
+      title={props.modelName}
       className={cn(
-        'decoration-foreground/30 hover:decoration-foreground underline decoration-1 underline-offset-4 transition-colors',
+        'hover:text-primary focus-visible:ring-primary/50 rounded-xs transition-colors focus-visible:ring-2 focus-visible:outline-none',
         props.className
       )}
     >
@@ -62,17 +60,16 @@ type VendorLinkProps = EntityLinkBaseProps & {
 /**
  * Link wrapping a vendor name. Navigates to the pricing page filtered by
  * that vendor (`/pricing?vendor={vendor}`). Renders the vendor name
- * itself by default. Uses the same subtle persistent underline as
- * {@link ModelLink}, scaled for the smaller secondary text it usually
- * wraps.
+ * itself by default.
  */
 export function VendorLink(props: VendorLinkProps) {
   return (
     <Link
       to='/pricing'
       search={{ vendor: props.vendor }}
+      title={props.vendor}
       className={cn(
-        'hover:text-foreground underline decoration-current/40 decoration-1 underline-offset-2 transition-colors hover:decoration-current',
+        'hover:text-primary focus-visible:ring-primary/50 rounded-xs transition-colors focus-visible:ring-2 focus-visible:outline-none',
         props.className
       )}
     >

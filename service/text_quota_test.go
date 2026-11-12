@@ -10,6 +10,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/extensions/leaderboard/record"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -96,6 +97,9 @@ func TestFixedPriceBillingDatabaseMatrix(t *testing.T) {
 
 func runFixedPriceAccountingCases(t *testing.T, db, logDB *gorm.DB) {
 	t.Helper()
+	require.NoError(t, record.Migrate(db))
+	record.Configure(db, record.Policy{Enabled: true, Savings: true})
+	t.Cleanup(func() { record.Configure(nil, record.Policy{}) })
 	const mixed = `len <= 32000 ? tier("short", fixed(0.01)) : tier("long", p * 2)`
 	const flat = `tier("request", fixed(0.01))`
 	const startingQuota = 2_000_000
@@ -158,6 +162,8 @@ func runFixedPriceAccountingCases(t *testing.T, db, logDB *gorm.DB) {
 			channel := model.Channel{Name: "fixed-billing", Key: "unused", Status: common.ChannelStatusEnabled}
 			require.NoError(t, db.Create(&channel).Error)
 			t.Cleanup(func() {
+				require.NoError(t, db.Where("user_id = ?", user.Id).Delete(&record.Saving{}).Error)
+				require.NoError(t, db.Where("user_id = ?", user.Id).Delete(&record.Receipt{}).Error)
 				require.NoError(t, logDB.Where("user_id = ?", user.Id).Delete(&model.Log{}).Error)
 				require.NoError(t, db.Unscoped().Delete(&token).Error)
 				require.NoError(t, db.Unscoped().Delete(&user).Error)
@@ -176,8 +182,11 @@ func runFixedPriceAccountingCases(t *testing.T, db, logDB *gorm.DB) {
 			reservation, err := billingexpr.QuotaRoundStrict(cost / 1_000_000 * common.QuotaPerUnit * group)
 			require.NoError(t, err)
 			snapshot := &billingexpr.BillingSnapshot{BillingMode: "tiered_expr", ExprString: tc.expression, ExprHash: billingexpr.ExprHashString(tc.expression), QuotaPerUnit: common.QuotaPerUnit, GroupRatio: group, EstimatedTier: trace.MatchedTier, EstimatedBillingUnit: trace.BillingUnit, EstimatedFixedPrice: trace.FixedPrice, EstimatedQuotaAfterGroup: reservation}
+			snapshot.EstimatedQuotaBeforeGroup = cost / 1_000_000 * common.QuotaPerUnit
 			snapshot.EstimatedImageCount = trace.ImageCount
 			info := &relaycommon.RelayInfo{UserId: user.Id, TokenId: token.Id, TokenKey: token.Key, ChannelMeta: &relaycommon.ChannelMeta{ChannelId: channel.Id}, OriginModelName: "fixed-test", UsingGroup: "default", UserGroup: "default", UserSetting: dto.UserSetting{BillingPreference: "wallet_only"}, ForcePreConsume: true, StartTime: time.Now(), IsStream: tc.stream, RelayFormat: types.RelayFormatOpenAI, PriceData: hosttypes.PriceData{GroupRatioInfo: hosttypes.GroupRatioInfo{GroupRatio: group}}, TieredBillingSnapshot: snapshot, BillingRequestInput: request}
+			info.RequestId = fmt.Sprintf("leaderboard-fixed-%d", index)
+			info.LeaderboardSavings = &record.SavingsBasis{Standard: group * 2, Effective: group}
 			info.SetEstimatePromptTokens(tc.estimate)
 			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 			ctx.Request = httptest.NewRequest("POST", "/v1/chat/completions", nil)
@@ -249,7 +258,7 @@ func runFixedPriceAccountingCases(t *testing.T, db, logDB *gorm.DB) {
 					} else {
 						PostTextConsumeQuota(ctx, info, tc.usage, nil)
 					}
-					require.NoError(t, info.Billing.Settle(tc.want), "a repeated settlement must not charge again")
+					require.NoError(t, SettleBilling(ctx, info, tc.want), "a repeated settlement must not charge or count savings again")
 					var log model.Log
 					require.NoError(t, logDB.Where("user_id = ?", user.Id).Take(&log).Error)
 					assert.Equal(t, tc.want, log.Quota)
@@ -303,6 +312,18 @@ func runFixedPriceAccountingCases(t *testing.T, db, logDB *gorm.DB) {
 			assert.Equal(t, startingQuota-tc.want, token.RemainQuota)
 			assert.Equal(t, tc.want, user.UsedQuota)
 			assert.Equal(t, tc.want, token.UsedQuota)
+			var receipts []record.Receipt
+			require.NoError(t, db.Where("user_id = ?", user.Id).Find(&receipts).Error)
+			if tc.insufficient || tc.refund {
+				assert.Empty(t, receipts, "an unfulfilled reservation has no settled saving")
+			} else {
+				require.Len(t, receipts, 1)
+				wantSaving := int64(tc.want)
+				if tc.expression == imageExpression && !tc.realtime {
+					wantSaving = 4112 // Public quota 8225 minus the rounded discounted quota 4113.
+				}
+				assert.Equal(t, wantSaving, receipts[0].Savings)
+			}
 			if !tc.refund && !tc.insufficient {
 				assert.Equal(t, 1, user.RequestCount)
 			}
@@ -1704,4 +1725,32 @@ func TestPostTextConsumeQuotaLogsMissingUsageAsStructuredContent(t *testing.T) {
 	assert.Equal(t, []any{
 		map[string]any{"key": "Upstream returned no usage, so nothing was charged (possibly an upstream timeout)"},
 	}, other["content_parts"])
+}
+
+func TestLeaderboardFreeToolRequestCountsOnlyItsPublicBaselineSaving(t *testing.T) {
+	truncate(t)
+	require.NoError(t, record.Migrate(model.DB))
+	record.Configure(model.DB, record.Policy{Enabled: true, Savings: true})
+	operation_setting.SetToolPriceForTest("leaderboard-tool", 4)
+	t.Cleanup(func() {
+		operation_setting.DeleteToolPriceForTest("leaderboard-tool")
+		record.Configure(nil, record.Policy{})
+		require.NoError(t, model.DB.Where("user_id = ?", 152).Delete(&record.Saving{}).Error)
+		require.NoError(t, model.DB.Where("user_id = ?", 152).Delete(&record.Receipt{}).Error)
+	})
+	seedUser(t, 152, 10000)
+	seedToken(t, 152, 152, "leaderboard-free-token", 10000)
+	seedChannel(t, 152)
+	info := &relaycommon.RelayInfo{RequestId: "leaderboard-free-tool", UserId: 152, TokenId: 152, TokenKey: "leaderboard-free-token", ChannelMeta: &relaycommon.ChannelMeta{ChannelId: 152}, OriginModelName: "free-tool", UsingGroup: "default", UserGroup: "default", UserSetting: dto.UserSetting{BillingPreference: "wallet_only"}, ForcePreConsume: true, StartTime: time.Now(), RelayFormat: types.RelayFormatOpenAI, PriceData: hosttypes.PriceData{ModelRatio: 1, GroupRatioInfo: hosttypes.GroupRatioInfo{GroupRatio: 0}}, LeaderboardSavings: &record.SavingsBasis{Standard: 1, Effective: 0}, ResponsesUsageInfo: &relaycommon.ResponsesUsageInfo{BuiltInTools: map[string]*relaycommon.BuildInToolInfo{"leaderboard-tool": {CallCount: 1}}}}
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest("POST", "/v1/responses", nil)
+	require.Nil(t, PreConsumeBilling(ctx, 0, info))
+	PostTextConsumeQuota(ctx, info, &dto.Usage{}, nil)
+	var receipt record.Receipt
+	require.NoError(t, model.DB.Where("user_id = ?", 152).Take(&receipt).Error)
+	assert.Equal(t, int64(2000), receipt.Savings)
+	var user model.User
+	require.NoError(t, model.DB.First(&user, 152).Error)
+	assert.Equal(t, 10000, user.Quota)
+	assert.Zero(t, user.UsedQuota)
 }

@@ -17,18 +17,115 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
+import { ArrowLeft } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { LanguageSwitcher } from '@/components/language-switcher'
+import { SystemBrand } from '@/components/layout/components/system-brand'
+import { ThemeSwitch } from '@/components/theme-switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useSystemConfig } from '@/hooks/use-system-config'
 
 type AuthLayoutProps = {
   children: React.ReactNode
+  variant?: 'default' | 'split'
 }
 
-export function AuthLayout({ children }: AuthLayoutProps) {
+export function AuthLayout({ children, variant = 'default' }: AuthLayoutProps) {
   const { t } = useTranslation()
   const { systemName, logo, loading } = useSystemConfig()
+
+  if (variant === 'split') {
+    return (
+      <div className='auth-page'>
+        <main className='auth-main'>
+          <header className='auth-header'>
+            <SystemBrand variant='inline' />
+            <div className='auth-header-actions'>
+              <LanguageSwitcher />
+              <ThemeSwitch />
+            </div>
+          </header>
+
+          <div className='auth-form-container'>{children}</div>
+
+          <footer className='auth-page-footer'>
+            <Link to='/' className='auth-home-link'>
+              <ArrowLeft aria-hidden='true' />
+              {t('Back to home')}
+            </Link>
+          </footer>
+        </main>
+
+        <aside className='auth-showcase'>
+          <div className='auth-showcase-inner'>
+            <div className='auth-illustration' aria-hidden='true'>
+              <div className='auth-orbit auth-orbit-outer' />
+              <div className='auth-orbit auth-orbit-inner' />
+              <div className='auth-spotlight' />
+              <span className='auth-star auth-star-one'>✦</span>
+              <span className='auth-star auth-star-two'>✦</span>
+              <span className='auth-star auth-star-three'>✧</span>
+              <span className='auth-spark auth-spark-one' />
+              <span className='auth-spark auth-spark-two' />
+              <span className='auth-spark auth-spark-three' />
+              <div className='auth-character-ground' />
+              <div className='auth-character auth-character-violet'>
+                <div className='auth-character-face'>
+                  <span className='auth-character-eye' />
+                  <span className='auth-character-eye' />
+                  <span className='auth-character-smile' />
+                </div>
+              </div>
+              <div className='auth-character auth-character-lilac'>
+                <div className='auth-character-face'>
+                  <span className='auth-character-eye' />
+                  <span className='auth-character-eye' />
+                  <span className='auth-character-smile' />
+                </div>
+              </div>
+              <div className='auth-character auth-character-yellow'>
+                <div className='auth-character-face'>
+                  <span className='auth-character-eye' />
+                  <span className='auth-character-eye' />
+                  <span className='auth-character-smile' />
+                </div>
+              </div>
+              <div className='auth-character auth-character-coral'>
+                <div className='auth-character-face'>
+                  <span className='auth-character-eye' />
+                  <span className='auth-character-eye' />
+                  <span className='auth-character-smile' />
+                </div>
+              </div>
+            </div>
+
+            <div className='auth-showcase-copy'>
+              <p className='auth-showcase-eyebrow'>
+                <span aria-hidden='true' />
+                {t('Connect your ideas to intelligence')}
+              </p>
+              <h2>
+                <span>{t('One API key')}</span>
+                <span>{t('A world of possibilities')}</span>
+              </h2>
+              <p className='auth-showcase-description'>
+                {t(
+                  'Connect to GPT, Claude, and Gemini through one API. Less setup, more room to build.'
+                )}
+              </p>
+            </div>
+          </div>
+          <div className='auth-showcase-providers' aria-hidden='true'>
+            <span>GPT</span>
+            <span>Claude</span>
+            <span>Gemini</span>
+            <span>DeepSeek</span>
+          </div>
+        </aside>
+      </div>
+    )
+  }
 
   return (
     <div className='relative grid h-svh max-w-none'>

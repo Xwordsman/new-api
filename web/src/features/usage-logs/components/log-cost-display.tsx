@@ -93,6 +93,8 @@ export function LogCostDisplay(props: LogCostDisplayProps) {
   // showBillingSource.
   if (isSubscription) {
     source = t('Subscription')
+  } else if (props.other?.billing_source === 'promotional') {
+    source = t('Promotional credits')
   } else if (
     props.showBillingSource &&
     props.other?.billing_source === 'wallet'
@@ -129,7 +131,19 @@ export function LogCostDisplay(props: LogCostDisplayProps) {
                   </span>
                 }
               />
-              <TooltipContent>{source}</TooltipContent>
+              <TooltipContent>
+                <div>{source}</div>
+                {props.other?.billing_source === 'promotional' &&
+                  props.other.promotional_consumed !== undefined && (
+                    <div>
+                      {t('Promotional deduction')}:{' '}
+                      {formatLogQuota(props.other.promotional_consumed)}
+                      <br />
+                      {t('Paid balance deduction')}:{' '}
+                      {formatLogQuota(props.other.wallet_quota_deducted ?? 0)}
+                    </div>
+                  )}
+              </TooltipContent>
             </Tooltip>
           ) : null}
           <span className='whitespace-nowrap'>{formatLogQuota(quota)}</span>

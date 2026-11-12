@@ -135,3 +135,32 @@ const (
 	MsgChannelUpstreamUpdateFailedChannels  = "channel.upstream_update_failed_channels"
 	MsgChannelUpstreamUpdateMoreOmitted     = "channel.upstream_update_more_omitted"
 )
+
+// Concurrency admission errors returned to API clients.
+const (
+	MsgConcurrencyUnavailable     = "concurrency.unavailable"
+	MsgConcurrencyUserLimit       = "concurrency.user_limit_reached"
+	MsgConcurrencyChannelLimit    = "concurrency.channel_limit_reached"
+	MsgConcurrencyRequestCanceled = "concurrency.request_cancelled"
+)
+
+// Protection errors and alert emails translated by the backend.
+const (
+	MsgRegistrationRiskAlertSubject = "registration_risk.alert_subject"
+	MsgRequestProtectionBlocked     = "request_protection.blocked"
+	MsgRequestProtectionRestricted  = "request_protection.restricted"
+	MsgRequestProtectionUnavailable = "request_protection.unavailable"
+	MsgRequestProtectionSubject     = "request_protection.subject"
+	MsgRequestProtectionAlert       = "request_protection.alert"
+)
+
+// These English source keys are also web console message keys. Keep their
+// values stable for stored alerts and API responses; the backend translates
+// them for relay errors and alert emails.
+const (
+	MsgKeyPriceProtectionPaused      = "API key paused by group price protection. Review and accept current multipliers in the console."
+	MsgKeyPriceProtectionUnavailable = "Key price protection is temporarily unavailable"
+	MsgRegistrationRiskVolume        = "{{count}} risky attempts in {{minutes}} minutes"
+	MsgRegistrationRiskConversion    = "{{emails}} verification attempts; {{registrations}} registrations in {{minutes}} minutes"
+	MsgRegistrationRiskBudget        = "{{issued}} / {{budget}} promotional quota issued today (UTC)"
+)

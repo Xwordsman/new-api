@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { UsersRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
@@ -33,7 +34,15 @@ function UsersContent() {
   return (
     <>
       <SectionPageLayout fixedContent>
-        <SectionPageLayout.Title>{t('Users')}</SectionPageLayout.Title>
+        <SectionPageLayout.Title
+          icon={UsersRound}
+          eyebrow='USERS'
+          description={t(
+            'Manage user accounts, groups and access permissions.'
+          )}
+        >
+          {t('Users')}
+        </SectionPageLayout.Title>
         <SectionPageLayout.Actions>
           <UsersPrimaryButtons />
         </SectionPageLayout.Actions>

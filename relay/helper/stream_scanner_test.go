@@ -13,13 +13,68 @@ import (
 	"testing"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/extensions/leaderboard/record"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
+	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
+
+func TestStreamSafetyWarningSurvivesSuccessfulProtocolConversion(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	conn, err := db.DB()
+	require.NoError(t, err)
+	conn.SetMaxOpenConns(1)
+	require.NoError(t, record.Migrate(db))
+	record.Configure(db, record.Policy{Enabled: true, Cyber: true, ModelPrefixes: []string{"gpt-"}, SafetyCodes: []string{"content_filter", "content_policy_violation"}})
+	t.Cleanup(func() {
+		record.Configure(nil, record.Policy{})
+		require.NoError(t, conn.Close())
+	})
+	for _, tc := range []struct {
+		name  string
+		model string
+		data  string
+		code  string
+	}{
+		{name: "chat error", model: "gpt-5", data: `{"error":{"code":"content_policy_violation","type":"invalid_request_error","message":"private prompt"}}`, code: "content_policy_violation"},
+		{name: "responses failed after output", model: "gpt-5", data: `{"type":"response.failed","response":{"error":{"code":"content_filter","message":"private prompt"}}}`, code: "content_filter"},
+		{name: "responses error event", model: "gpt-5", data: `{"type":"error","code":"content_filter","message":"private prompt"}`, code: "content_filter"},
+		{name: "chat filtered finish", model: "gpt-5", data: `{"choices":[{"finish_reason":"content_filter","delta":{}}]}`, code: "content_filter"},
+		{name: "ordinary generated text", model: "gpt-5", data: `{"choices":[{"delta":{"content":"content_filter"},"finish_reason":"stop"}]}`},
+		{name: "non safety upstream failure", model: "gpt-5", data: `{"error":{"code":"server_error","type":"upstream_error"}}`},
+		{name: "other model", model: "claude-test", data: `{"error":{"code":"content_filter"}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := "data: " + tc.data + "\n\ndata: " + tc.data + "\n\ndata: [DONE]\n\n"
+			c, resp, info := setupStreamTest(t, strings.NewReader(body))
+			c.Set("id", 153)
+			c.Set("original_model", tc.model)
+			c.Set(common.RequestIdKey, tc.name)
+			var received []string
+			StreamScannerHandler(c, resp, info, func(data string, _ *StreamResult) { received = append(received, data) })
+			assert.Equal(t, []string{tc.data, tc.data}, received, "collection must not alter or stop the upstream stream")
+			var warnings []record.Warning
+			require.NoError(t, db.Find(&warnings).Error)
+			if tc.code == "" {
+				assert.Empty(t, warnings)
+			} else {
+				require.Len(t, warnings, 1, "repeated events count once per request")
+				assert.Equal(t, tc.code, warnings[0].Code)
+				payload, err := common.Marshal(warnings)
+				require.NoError(t, err)
+				assert.NotContains(t, string(payload), "private prompt")
+			}
+			require.NoError(t, db.Where("user_id = ?", 153).Delete(&record.Warning{}).Error)
+		})
+	}
+}
 
 type headerCommitWriter struct {
 	*httptest.ResponseRecorder

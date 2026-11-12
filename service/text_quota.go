@@ -463,6 +463,31 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		model.UpdateChannelUsedQuota(relayInfo.ChannelId, summary.Quota)
 	}
 
+	if basis := relayInfo.LeaderboardSavings; basis.Discounted() {
+		standardInfo := *relayInfo
+		standardInfo.QuotaClamp = nil
+		standardInfo.PriceData.GroupRatioInfo.GroupRatio = basis.Standard
+		standard := calculateTextQuotaSummary(ctx, &standardInfo, billingUsage)
+		if tieredBillingApplied && snap != nil {
+			standardSnapshot := *snap
+			standardSnapshot.GroupRatio = basis.Standard
+			standardInfo.TieredBillingSnapshot = &standardSnapshot
+			beforeGroup := snap.EstimatedQuotaBeforeGroup
+			if tieredResult != nil {
+				beforeGroup = tieredResult.ActualQuotaBeforeGroup
+			}
+			base, clamp := common.QuotaRoundChecked(beforeGroup * basis.Standard)
+			noteQuotaClamp(&standardInfo, clamp)
+			standard.Quota = composeTieredTextQuota(&standardInfo, standard, base, tieredResult)
+		}
+		if !summary.hasBillableUsage() && !standard.hasBillableUsage() {
+			standard.Quota = 0
+		}
+		basis.Capture(standard.Quota, standardInfo.QuotaClamp)
+		if relayInfo.QuotaClamp != nil {
+			basis.Capture(0, relayInfo.QuotaClamp)
+		}
+	}
 	if err := SettleBilling(ctx, relayInfo, summary.Quota); err != nil {
 		logger.LogError(ctx, common.LogText("error settling billing: %s", err.Error()))
 	}

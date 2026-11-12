@@ -11,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/pkg/jsplugin"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/config"
+	"github.com/QuantumNous/new-api/setting/groupdiscount"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/performance_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -232,6 +233,30 @@ func SyncOptions(frequency int) {
 }
 
 func validateOptionValue(key string, value string) error {
+	if key == "DocumentationCenterSettings" {
+		return common.NewMessage("Use Documentation center settings to manage published content")
+	}
+	if key == "ConcurrencyManagementSettings" {
+		return common.NewMessage("Use Concurrency management settings to configure concurrency limits")
+	}
+	if key == common.EmailTemplateOptionKey {
+		return common.NewMessage("Use Email templates settings to configure email appearance")
+	}
+	if key == "RequestProtectionExtensionSettings" {
+		return common.NewMessage("Use Request protection settings to configure request rules")
+	}
+	if key == "KeyPriceProtectionExtensionSettings" {
+		return common.NewMessage("Use Key price protection settings to configure price consent")
+	}
+	if key == "LeaderboardExtensionSettings" {
+		return common.NewMessage("Use leaderboard settings to configure rankings")
+	}
+	if key == "BenchmarkExtensionSettings" {
+		return common.NewMessage("Use benchmark settings to configure model checks")
+	}
+	if key == groupdiscount.OptionKey {
+		return common.NewMessage("Use Channel monitor settings to configure public group discounts")
+	}
 	if key == legacyAccessTokenRetireAtKey {
 		return errLegacyRetireAtReadOnly
 	}
@@ -374,6 +399,11 @@ func UpdateOptionsBulk(values map[string]string) error {
 }
 
 func updateOptionMap(key string, value string) (err error) {
+	if key == groupdiscount.OptionKey {
+		if err := groupdiscount.Default.Load(value); err != nil {
+			return err
+		}
+	}
 	if key == retiredThemeOptionKey || key == legacyAccessTokenRetireAtKey {
 		common.OptionMapRWMutex.Lock()
 		delete(common.OptionMap, key)

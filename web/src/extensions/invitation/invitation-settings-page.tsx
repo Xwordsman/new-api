@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Save } from 'lucide-react'
+import { MailPlus, Loader2, Save } from 'lucide-react'
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -81,7 +81,13 @@ export function InvitationSettingsPage() {
 
   return (
     <SectionPageLayout>
-      <SectionPageLayout.Title>
+      <SectionPageLayout.Title
+        icon={MailPlus}
+        eyebrow='INVITATION SETTINGS'
+        description={t(
+          'Configure invitation requirements and code generation rules.'
+        )}
+      >
         {t('Invitation Settings')}
       </SectionPageLayout.Title>
       <SectionPageLayout.Actions>

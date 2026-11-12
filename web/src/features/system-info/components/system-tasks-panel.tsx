@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 import { ErrorState } from '@/components/error-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { IconBadge } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { listSystemTasks } from '@/features/system-settings/api'
 import { createServerError } from '@/lib/server-error-message'
@@ -56,13 +57,16 @@ export function SystemTasksPanel() {
   const hasActiveTasks = activeTasks.length > 0
 
   return (
-    <section className='bg-card overflow-hidden rounded-lg border shadow-xs'>
+    <section
+      data-console-tone='warning'
+      className='console-surface bg-card overflow-hidden rounded-lg border shadow-xs'
+    >
       <div className='flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5'>
         <div className='min-w-0'>
           <div className='flex items-center gap-2'>
-            <span className='bg-muted text-muted-foreground inline-flex size-7 items-center justify-center rounded-md'>
+            <IconBadge tone='warning' size='sm'>
               <ListChecks className='size-4' aria-hidden='true' />
-            </span>
+            </IconBadge>
             <div className='min-w-0'>
               <h3 className='text-sm font-semibold'>{t('System Tasks')}</h3>
               <p className='text-muted-foreground mt-0.5 text-xs'>

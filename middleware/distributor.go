@@ -98,8 +98,13 @@ func Distribute() func(c *gin.Context) {
 			}
 		}
 		if pinned || shouldSelectChannel {
+			closeRequest, admissionErr := AdmitConcurrency(c)
+			if admissionErr != nil {
+				abortWithOpenAiMessage(c, admissionErr.StatusCode, admissionErr.Error(), admissionErr.GetErrorCode())
+				return
+			}
+			defer closeRequest()
 			usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
-			var selectErr *service.ChannelSelectError
 			if value, exists := c.Get(contextKeyTaskPluginEndpointSelection); exists && !pinned {
 				if selected, ok := value.(taskPluginEndpointSelection); ok && selected.Model == modelRequest.Model && selected.Channel != nil && selected.Channel.Status == common.ChannelStatusEnabled {
 					if matches, _ := model.ChannelSatisfiesFilters(selected.Channel, modelRequest.Model, constraints.Filters); matches {
@@ -107,31 +112,20 @@ func Distribute() func(c *gin.Context) {
 					}
 				}
 			}
-			if channel == nil {
-				channel, _, selectErr = service.SelectChannelForRequest(c, modelRequest.Model, &service.RetryParam{
-					Ctx:         c,
-					ModelName:   modelRequest.Model,
-					TokenGroup:  usingGroup,
-					RequestPath: c.Request.URL.Path,
-					Retry:       common.GetPointer(0),
-				})
-			}
-			if selectErr != nil {
-				if selectErr.FilterKind == taskdto.FilterTaskPluginIdentity {
-					logTaskPluginChannelDecision(c, selectErr.Channel, modelRequest.Model, "channel_rejected", "identity_mismatch")
-				}
-				message := selectErr.Message
-				if selectErr.NoAvailableChannel {
-					message = noAvailableChannelMessage(c, usingGroup, modelRequest.Model)
-				} else if selectErr.MessageID != "" {
-					message = i18n.T(c, selectErr.MessageID, selectErr.Params)
-				}
-				abortWithOpenAiMessage(c, selectErr.StatusCode, message, selectErr.Code)
+			channel, _, admissionErr = SelectAndSetupChannel(c, modelRequest.Model, &service.RetryParam{
+				Ctx:         c,
+				ModelName:   modelRequest.Model,
+				TokenGroup:  usingGroup,
+				RequestPath: c.Request.URL.Path,
+				Retry:       common.GetPointer(0),
+			}, channel)
+			if admissionErr != nil {
+				abortWithOpenAiMessage(c, admissionErr.StatusCode, admissionErr.Error(), admissionErr.GetErrorCode())
 				return
 			}
 		}
+		c.Set("original_model", modelRequest.Model)
 		common.SetContextKey(c, constant.ContextKeyRequestStartTime, time.Now())
-		SetupContextForSelectedChannel(c, channel, modelRequest.Model)
 		c.Next()
 		if channel != nil && c.Writer != nil && c.Writer.Status() < http.StatusBadRequest {
 			service.RecordChannelAffinity(c, channel.Id)
@@ -598,6 +592,10 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 			types.ErrOptionWithSkipRetry(),
 		)
 	}
+	key, index, newAPIError := concurrencyKey(c, channel)
+	if newAPIError != nil {
+		return newAPIError
+	}
 	if index, matched := pinnedEndpointCandidateForChannel(c, channel, expectedPlugin); matched {
 		previousPlugin := ""
 		var selected *jsplugin.LoadedPlugin
@@ -668,10 +666,6 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 	common.SetContextKey(c, constant.ContextKeyChannelModelMapping, channel.GetModelMapping())
 	common.SetContextKey(c, constant.ContextKeyChannelStatusCodeMapping, channel.GetStatusCodeMapping())
 
-	key, index, newAPIError := channel.GetNextEnabledKey()
-	if newAPIError != nil {
-		return newAPIError
-	}
 	if channel.ChannelInfo.IsMultiKey {
 		common.SetContextKey(c, constant.ContextKeyChannelIsMultiKey, true)
 		common.SetContextKey(c, constant.ContextKeyChannelMultiKeyIndex, index)

@@ -115,7 +115,9 @@ describe('log cost display', () => {
 
     expect(screen.getByText('$0.025')).toBeVisible()
     expect(screen.getByRole('img', { name: 'Subscription' })).toBeVisible()
-    expect(screen.queryByRole('img', { name: 'Wallet' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('img', { name: 'Wallet' })
+    ).not.toBeInTheDocument()
   })
 
   test('keeps legacy cost visible without inventing a funding source', () => {
@@ -125,6 +127,25 @@ describe('log cost display', () => {
     expect(screen.queryByText('Wallet')).not.toBeInTheDocument()
     expect(screen.queryByText('Subscription')).not.toBeInTheDocument()
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
+  })
+
+  test('reveals the promotional and paid shares on keyboard focus', async () => {
+    const user = userEvent.setup()
+    renderCost({
+      quota: 12500,
+      other: {
+        billing_source: 'promotional',
+        promotional_consumed: 5000,
+        wallet_quota_deducted: 7500,
+      },
+      showBillingSource: false,
+    })
+    expect(screen.getByText('$0.025')).toBeVisible()
+    await user.tab()
+    expect(
+      await screen.findByText(/Promotional deduction.*\$0.01/)
+    ).toBeVisible()
+    expect(screen.getByText(/Paid balance deduction.*\$0.015/)).toBeVisible()
   })
 
   test('keeps a large amount unabridged in a single-line cost bubble', () => {

@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -24,17 +25,22 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
-import { cn } from '@/lib/utils'
+
+import { HeaderLogo } from './header-logo'
 
 type SystemBrandProps = {
   defaultName?: string
   defaultVersion?: string
+  name?: string
+  logo?: ReactNode
+  homeUrl?: string
   /**
    * Visual layout:
    * - 'sidebar': stacked card style (used inside the sidebar header).
-   * - 'inline': compact horizontal pill (used inside the top app bar).
+   * - 'inline': shared public and console header branding.
    */
   variant?: 'sidebar' | 'inline'
 }
@@ -42,37 +48,48 @@ type SystemBrandProps = {
 /**
  * System brand component
  * Displays current system logo + name.
- * - inline: compact pill in the top app bar; clicking navigates to home (/)
+ * - inline: shared header branding with a link to home
  * - sidebar: stacked card in the sidebar header (display only)
  */
 export function SystemBrand(props: SystemBrandProps) {
   const { t } = useTranslation()
   const { status } = useStatus()
-  const { logo } = useSystemConfig()
+  const { systemName, logo, loading, logoLoaded } = useSystemConfig()
 
   const variant = props.variant ?? 'sidebar'
-  const name = status?.system_name || props.defaultName || 'New API'
+  const name =
+    props.name || status?.system_name || props.defaultName || systemName
   const version =
     status?.version || props.defaultVersion || t('Unknown version')
 
   if (variant === 'inline') {
     return (
       <Link
-        to='/'
+        to={props.homeUrl ?? '/'}
         aria-label={t('Go to home')}
-        className={cn(
-          'text-foreground inline-flex h-7 min-w-0 items-center gap-1.5 rounded-md px-1.5 text-sm font-medium transition-colors outline-none select-none',
-          'hover:bg-accent focus-visible:ring-ring/40 focus-visible:ring-2'
-        )}
+        className='group text-foreground focus-visible:ring-ring/40 inline-flex min-w-0 items-center gap-2.5 rounded-md outline-none select-none focus-visible:ring-2'
       >
-        <div className='flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-md'>
-          <img
-            src={logo}
-            alt={t('Logo')}
-            className='size-full rounded-md object-cover'
-          />
+        <div className='flex size-7 shrink-0 items-center justify-center transition-transform duration-300 group-hover:scale-105'>
+          {loading ? (
+            <Skeleton className='size-full rounded-lg' />
+          ) : (
+            props.logo || (
+              <HeaderLogo
+                src={logo}
+                alt={t('Logo')}
+                loading={loading}
+                logoLoaded={logoLoaded}
+                className='size-full rounded-lg object-contain'
+              />
+            )
+          )}
         </div>
-        <span className='max-w-[12rem] truncate'>{name}</span>
+        <span
+          className='max-w-48 truncate text-base font-semibold tracking-tight'
+          title={name}
+        >
+          {loading ? <Skeleton className='h-4 w-16' /> : name}
+        </span>
       </Link>
     )
   }

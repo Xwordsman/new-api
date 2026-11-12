@@ -96,6 +96,7 @@ export function UptimePanel() {
 
   return (
     <PanelWrapper
+      tone='success'
       title={
         <span className='flex items-center gap-2'>
           <IconBadge tone='success' size='sm'>

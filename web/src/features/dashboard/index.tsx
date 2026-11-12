@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { getRouteApi, useNavigate } from '@tanstack/react-router'
-import { Eye, EyeOff } from 'lucide-react'
+import { ChartNoAxesCombined, Eye, EyeOff } from 'lucide-react'
 import { useState, useCallback, useMemo, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -117,13 +117,13 @@ const LazyFlowCharts = lazy(() =>
 
 function LogStatCardsFallback() {
   return (
-    <div className='overflow-hidden rounded-lg border'>
+    <div className='bg-card overflow-hidden rounded-lg border'>
       <div className='divide-border/60 grid min-w-0 grid-cols-2 divide-x sm:grid-cols-3 lg:grid-cols-7'>
         {LOG_STAT_CARD_FALLBACK_KEYS.map((key, index) => (
           <div
             key={key}
             className={cn(
-              'min-w-0 px-2.5 py-1.5 sm:px-3 sm:py-4 xl:px-4',
+              'console-surface console-metric min-w-0 px-2.5 py-1.5 sm:px-3 sm:py-4 xl:px-4',
               index === LOG_STAT_CARD_FALLBACK_KEYS.length - 1 &&
                 'col-span-2 sm:col-span-1'
             )}
@@ -132,7 +132,7 @@ function LogStatCardsFallback() {
               <Skeleton className='size-4 rounded-sm sm:size-7 sm:rounded-md' />
               <Skeleton className='h-4 w-16' />
             </div>
-            <Skeleton className='mt-1 h-5 w-16 sm:mt-2 sm:h-7 sm:w-20' />
+            <Skeleton className='mt-1 h-9 w-16 sm:mt-2 sm:h-10.5 sm:w-20' />
             <Skeleton className='mt-1 hidden h-3.5 w-28 md:block' />
           </div>
         ))}
@@ -146,7 +146,7 @@ function LogStatCardsFallback() {
 
 function ModelChartsFallback() {
   return (
-    <div className='overflow-hidden rounded-lg border'>
+    <div className='console-surface bg-card overflow-hidden rounded-lg border'>
       <div className='flex items-center justify-between border-b px-4 py-3 sm:px-5'>
         <Skeleton className='h-5 w-32' />
         <Skeleton className='h-8 w-72' />
@@ -160,7 +160,10 @@ function ModelChartsFallback() {
 
 function PerformanceOverviewFallback() {
   return (
-    <div className='overflow-hidden rounded-lg border'>
+    <div
+      className='console-surface bg-card overflow-hidden rounded-lg border'
+      data-console-tone='success'
+    >
       <div className='flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 sm:px-5'>
         <div className='flex items-center gap-2'>
           <Skeleton className='h-4 w-24' />
@@ -328,7 +331,15 @@ export function Dashboard() {
 
   return (
     <SectionPageLayout>
-      <SectionPageLayout.Title>{t(meta.titleKey)}</SectionPageLayout.Title>
+      <SectionPageLayout.Title
+        icon={ChartNoAxesCombined}
+        eyebrow='ANALYTICS'
+        description={t(
+          'Explore usage, model performance and request activity.'
+        )}
+      >
+        {t(meta.titleKey)}
+      </SectionPageLayout.Title>
       <SectionPageLayout.Content>
         <div className='space-y-3 sm:space-y-4'>
           <div className='flex flex-wrap items-center justify-between gap-1.5 sm:gap-2'>

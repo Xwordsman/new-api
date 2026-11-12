@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQueryClient } from '@tanstack/react-query'
 import { getRouteApi, useNavigate } from '@tanstack/react-router'
-import { Plus } from 'lucide-react'
+import { Boxes, Plus } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -124,7 +124,15 @@ function ModelsContent() {
         fixedContent
         stackActionsOnMobile={activeSection === 'metadata'}
       >
-        <SectionPageLayout.Title>{t(meta.titleKey)}</SectionPageLayout.Title>
+        <SectionPageLayout.Title
+          icon={Boxes}
+          eyebrow='MODEL MANAGEMENT'
+          description={t(
+            'Manage models, providers and deployment configurations.'
+          )}
+        >
+          {t(meta.titleKey)}
+        </SectionPageLayout.Title>
         <SectionPageLayout.Actions>{actions}</SectionPageLayout.Actions>
         <SectionPageLayout.Content>
           <div className='flex h-full min-h-0 flex-col gap-4'>

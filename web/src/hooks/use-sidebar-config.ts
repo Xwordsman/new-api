@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useMemo } from 'react'
 
 import type { NavGroup, NavItem } from '@/components/layout/types'
+import type { ExtensionFeatures } from '@/features/auth/types'
 import { useStatus } from '@/hooks/use-status'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -45,6 +46,8 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
   console: {
     enabled: true,
     detail: true,
+    channel_monitor: true,
+    benchmark: true,
     token: true,
     log: true,
     audit: true,
@@ -54,6 +57,10 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
   personal: {
     enabled: true,
     topup: true,
+    checkin: true,
+    referrals: true,
+    tickets: true,
+    leaderboard: true,
     personal: true,
     security: true,
   },
@@ -99,6 +106,8 @@ const mergeWithDefaultSidebarModules = (
 const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/playground': { section: 'chat', module: 'playground' },
   '/dashboard': { section: 'console', module: 'detail' },
+  '/channel-monitor': { section: 'console', module: 'channel_monitor' },
+  '/benchmark': { section: 'console', module: 'benchmark' },
   '/dashboard/overview': { section: 'console', module: 'detail' },
   '/dashboard/models': { section: 'console', module: 'detail' },
   '/dashboard/users': { section: 'console', module: 'detail' },
@@ -109,6 +118,10 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/usage-logs/drawing': { section: 'console', module: 'midjourney' },
   '/usage-logs/task': { section: 'console', module: 'task' },
   '/wallet': { section: 'personal', module: 'topup' },
+  '/checkin': { section: 'personal', module: 'checkin' },
+  '/referrals': { section: 'personal', module: 'referrals' },
+  '/tickets': { section: 'personal', module: 'tickets' },
+  '/leaderboard': { section: 'personal', module: 'leaderboard' },
   '/profile': { section: 'personal', module: 'personal' },
   '/security': { section: 'personal', module: 'security' },
   '/channels': { section: 'admin', module: 'channel' },
@@ -120,6 +133,14 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/subscriptions': { section: 'admin', module: 'subscription' },
   '/system-settings': { section: 'admin', module: 'setting' },
   '/system-settings/site': { section: 'admin', module: 'setting' },
+}
+
+const URL_TO_FEATURE_MAP: Record<string, keyof ExtensionFeatures> = {
+  '/checkin': 'checkin',
+  '/channel-monitor': 'channel_monitor',
+  '/benchmark': 'benchmark',
+  '/referrals': 'referrals',
+  '/leaderboard': 'leaderboard',
 }
 
 /**
@@ -172,8 +193,12 @@ function parseUserSidebarConfig(
 function isModuleEnabled(
   url: string,
   adminConfig: SidebarModulesAdminConfig,
-  userConfig: SidebarModulesUserConfig
+  userConfig: SidebarModulesUserConfig,
+  features: ExtensionFeatures | undefined
 ): boolean {
+  const feature = URL_TO_FEATURE_MAP[url]
+  if (feature && features?.[feature] !== true) return false
+
   const mapping = URL_TO_CONFIG_MAP[url]
   if (!mapping) {
     // No mapping config, default to visible (e.g. system settings and new features)
@@ -201,7 +226,8 @@ function isModuleEnabled(
 function isNavItemVisible(
   item: NavItem,
   adminConfig: SidebarModulesAdminConfig,
-  userConfig: SidebarModulesUserConfig
+  userConfig: SidebarModulesUserConfig,
+  features: ExtensionFeatures | undefined
 ): boolean {
   // Handle dynamic chat presets type — also runs the admin × user AND gate
   if ('type' in item && item.type === 'chat-presets') {
@@ -219,7 +245,7 @@ function isNavItemVisible(
   if ('url' in item && item.url) {
     const configUrls = item.configUrls ?? [item.url]
     return configUrls.some((url) =>
-      isModuleEnabled(url as string, adminConfig, userConfig)
+      isModuleEnabled(url as string, adminConfig, userConfig, features)
     )
   }
 
@@ -227,7 +253,7 @@ function isNavItemVisible(
   if ('items' in item && item.items) {
     // If has sub-items, show this collapsible item if at least one sub-item is visible
     return item.items.some((subItem) =>
-      isModuleEnabled(subItem.url as string, adminConfig, userConfig)
+      isModuleEnabled(subItem.url as string, adminConfig, userConfig, features)
     )
   }
 
@@ -240,14 +266,20 @@ function isNavItemVisible(
 function filterNavItems(
   items: NavItem[],
   adminConfig: SidebarModulesAdminConfig,
-  userConfig: SidebarModulesUserConfig
+  userConfig: SidebarModulesUserConfig,
+  features: ExtensionFeatures | undefined
 ): NavItem[] {
   return items
     .map((item) => {
       // If collapsible item, also filter its sub-items
       if ('items' in item && item.items) {
         const filteredSubItems = item.items.filter((subItem) =>
-          isModuleEnabled(subItem.url as string, adminConfig, userConfig)
+          isModuleEnabled(
+            subItem.url as string,
+            adminConfig,
+            userConfig,
+            features
+          )
         )
 
         return {
@@ -257,13 +289,15 @@ function filterNavItems(
       }
       return item
     })
-    .filter((item) => isNavItemVisible(item, adminConfig, userConfig))
+    .filter((item) => isNavItemVisible(item, adminConfig, userConfig, features))
 }
 
 /**
  * Filter sidebar navigation groups by admin × user sidebar_modules config.
  *
- * Two layers, AND-combined:
+ * Three layers, AND-combined:
+ *   0. Extension feature switches (status.extension_features). Unknown or
+ *      disabled features stay hidden. Administrative settings remain reachable.
  *   1. Admin (status.SidebarModulesAdmin) — authoritative, falls back to
  *      DEFAULT_SIDEBAR_MODULES when empty/invalid. Disabling here hides the
  *      item for everyone regardless of user preference.
@@ -279,6 +313,7 @@ function filterNavItems(
 export function useSidebarConfig(navGroups: NavGroup[]): NavGroup[] {
   const { status } = useStatus()
   const { auth } = useAuthStore()
+  const features = status?.extension_features
 
   const adminConfig = useMemo(
     () =>
@@ -305,10 +340,10 @@ export function useSidebarConfig(navGroups: NavGroup[]): NavGroup[] {
       navGroups
         .map((group) => ({
           ...group,
-          items: filterNavItems(group.items, adminConfig, userConfig),
+          items: filterNavItems(group.items, adminConfig, userConfig, features),
         }))
         .filter((group) => group.items.length > 0), // Only show navigation groups with visible items
-    [navGroups, adminConfig, userConfig]
+    [navGroups, adminConfig, userConfig, features]
   )
 
   return filteredNavGroups
@@ -331,5 +366,10 @@ export function useIsSidebarModuleVisible(url: string): boolean {
       ? null
       : parseUserSidebarConfig(auth?.user?.sidebar_modules)
 
-  return isModuleEnabled(url, adminConfig, userConfig)
+  return isModuleEnabled(
+    url,
+    adminConfig,
+    userConfig,
+    status?.extension_features
+  )
 }

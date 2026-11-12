@@ -103,7 +103,7 @@ export function PricingTable(props: PricingTableProps) {
           <DataTableRow
             key={row.id}
             row={row}
-            className='hover:bg-muted/30 cursor-pointer transition-colors'
+            className='cursor-pointer transition-colors'
             onClick={() => handleRowClick(row.original)}
           />
         )}

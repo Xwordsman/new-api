@@ -26,12 +26,13 @@ import {
 } from '@/context/theme-customization-provider'
 import { ThemeProvider, useTheme } from '@/context/theme-provider'
 import { initializeFrontendCache } from '@/lib/frontend-cache'
+import { THEME_STORAGE_KEYS } from '@/lib/theme-storage'
 
 const savedPreferences = {
   'newapi:theme:v1:mode': 'dark',
   'newapi:theme:v1:preset': 'rose-garden',
   'newapi:theme:v1:font': 'serif',
-  'newapi:theme:v1:radius': 'lg',
+  [THEME_STORAGE_KEYS.radius]: 'lg',
   'newapi:theme:v1:scale': 'sm',
   'newapi:theme:v1:content-layout': 'centered',
 }
@@ -127,7 +128,7 @@ describe('theme preference persistence', () => {
     expect(document.documentElement).toHaveClass('light')
     expect(document.body).not.toHaveAttribute('data-theme-preset')
     expect(document.body).toHaveAttribute('data-theme-font', 'system')
-    expect(document.body).not.toHaveAttribute('data-theme-radius')
+    expect(document.body).toHaveAttribute('data-theme-radius', 'sm')
     expect(document.body).not.toHaveAttribute('data-theme-scale')
     expect(document.body).toHaveAttribute('data-theme-content-layout', 'full')
   })
@@ -173,7 +174,7 @@ describe('theme preference persistence', () => {
     expect(document.documentElement).toHaveClass('light')
     expect(document.body).not.toHaveAttribute('data-theme-preset')
     expect(document.body).toHaveAttribute('data-theme-font', 'system')
-    expect(document.body).not.toHaveAttribute('data-theme-radius')
+    expect(document.body).toHaveAttribute('data-theme-radius', 'sm')
     expect(document.body).not.toHaveAttribute('data-theme-scale')
     expect(document.body).toHaveAttribute('data-theme-content-layout', 'full')
     for (const key of Object.keys(savedPreferences)) {
@@ -195,7 +196,7 @@ describe('theme preference persistence', () => {
       expect(screen.getByLabelText('Theme mode')).toHaveTextContent('system')
       expect(document.body).not.toHaveAttribute('data-theme-preset')
       expect(document.body).toHaveAttribute('data-theme-font', 'system')
-      expect(document.body).not.toHaveAttribute('data-theme-radius')
+      expect(document.body).toHaveAttribute('data-theme-radius', 'sm')
       expect(document.body).not.toHaveAttribute('data-theme-scale')
       expect(document.body).toHaveAttribute('data-theme-content-layout', 'full')
     }
@@ -210,7 +211,24 @@ describe('theme preference persistence', () => {
 
     expect(screen.getByLabelText('Theme mode')).toHaveTextContent('system')
     expect(document.body).not.toHaveAttribute('data-theme-preset')
+    expect(document.body).toHaveAttribute('data-theme-radius', 'sm')
   })
+
+  it.each(['default', 'xl'])(
+    'uses the site radius after remounting when the retired radius preference is %j',
+    (radius) => {
+      localStorage.setItem('newapi:theme:v1:radius', radius)
+      localStorage.setItem(THEME_STORAGE_KEYS.preset, 'rose-garden')
+
+      const first = render(<ThemeFixture />)
+      first.unmount()
+      render(<ThemeFixture />)
+
+      expect(document.body).toHaveAttribute('data-theme-radius', 'sm')
+      expect(document.body).toHaveAttribute('data-theme-preset', 'rose-garden')
+      expect(localStorage.getItem(THEME_STORAGE_KEYS.mode)).toBeNull()
+    }
+  )
 
   it('still applies and resets preferences when storage writes fail', async () => {
     vi.spyOn(localStorage, 'setItem').mockImplementation(() => {

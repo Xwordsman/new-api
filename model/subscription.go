@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/extensions/referral/ledger"
 	"github.com/QuantumNous/new-api/pkg/cachex"
 	"github.com/samber/hot"
 	"github.com/shopspring/decimal"
@@ -566,7 +567,7 @@ func refreshSubscriptionUserGroupCache(userId int, operation string) {
 // Complete a subscription order (idempotent). Creates a UserSubscription snapshot from the plan.
 // expectedPaymentProvider guards against cross-gateway callback attacks (empty skips the check).
 // actualPaymentMethod updates the order's PaymentMethod to reflect the real payment type used (empty skips update).
-func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedPaymentProvider string, actualPaymentMethod string) error {
+func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedPaymentProvider string, actualPaymentMethod string, payments ...ledger.Payment) error {
 	if tradeNo == "" {
 		return errors.New("tradeNo is empty")
 	}
@@ -592,6 +593,13 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 		}
 		if order.Status != common.TopUpStatusPending {
 			return ErrSubscriptionOrderStatusInvalid
+		}
+		// Eligibility is recorded from actual verified payment facts, before
+		// locking users. This preserves settings -> user ordering with check-in.
+		if CheckinSubscriptionPaymentHook != nil && len(payments) > 0 {
+			if err := CheckinSubscriptionPaymentHook(tx, order.UserId, order.TradeNo, order.PaymentProvider, payments[0]); err != nil {
+				return err
+			}
 		}
 		plan, err := GetSubscriptionPlanById(order.PlanId)
 		if err != nil {

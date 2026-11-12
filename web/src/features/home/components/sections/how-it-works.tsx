@@ -16,74 +16,105 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Settings, Zap, BarChart3 } from 'lucide-react'
+import { ArrowRight, Check, Code2, KeyRound, UserRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { AnimateInView } from '@/components/animate-in-view'
+import { Badge } from '@/components/ui/badge'
+
+import { UsageIllustration } from '../product-preview'
 
 export function HowItWorks() {
   const { t } = useTranslation()
-
   const steps = [
     {
-      num: '1',
-      title: t('Configure'),
-      desc: t(
-        'Add your API keys, set up channels and configure access permissions'
+      title: t('Create your account'),
+      description: t('Open your workspace and get ready to build.'),
+      visual: (
+        <div className='home-step-form'>
+          <UserRound className='text-primary size-5' aria-hidden />
+          <div />
+          <div />
+          <span>
+            <Check className='size-3.5' aria-hidden />
+            {t('Your workspace awaits')}
+          </span>
+        </div>
       ),
-      icon: <Settings className='size-6' strokeWidth={1.5} />,
     },
     {
-      num: '2',
-      title: t('Connect'),
-      desc: t(
-        'Connect through OpenAI, Claude, Gemini, and other compatible API routes'
+      title: t('Configure your key'),
+      description: t('Create an API key and choose an available model.'),
+      visual: (
+        <div className='home-step-config'>
+          <KeyRound className='text-primary size-5' aria-hidden />
+          <code>
+            API_KEY=sk-••••••••
+            <br />
+            BASE_URL=/v1
+          </code>
+        </div>
       ),
-      icon: <Zap className='size-6' strokeWidth={1.5} />,
     },
     {
-      num: '3',
-      title: t('Monitor'),
-      desc: t('Track usage, costs and performance with real-time analytics'),
-      icon: <BarChart3 className='size-6' strokeWidth={1.5} />,
+      title: t('Make your first call'),
+      description: t(
+        'Update your base URL and call the API with your existing tools.'
+      ),
+      visual: (
+        <div className='home-step-response'>
+          <Code2 className='text-primary size-5' aria-hidden />
+          <code>
+            <span>response</span>
+            <br />
+            {'{ "content": "Hello!" }'}
+          </code>
+          <span className='home-step-response-line' />
+        </div>
+      ),
+    },
+    {
+      title: t('See the full picture'),
+      description: t('Review requests, token usage and costs in your console.'),
+      visual: (
+        <div className='home-step-chart'>
+          <UsageIllustration />
+        </div>
+      ),
     },
   ]
 
   return (
-    <section className='border-border/40 relative z-10 border-t px-6 py-24 md:py-32'>
-      <div className='mx-auto max-w-6xl'>
-        <AnimateInView className='mb-16 text-center md:mb-20'>
-          <p className='text-muted-foreground mb-3 text-xs font-medium tracking-widest uppercase'>
-            {t('How It Works')}
-          </p>
-          <h2 className='text-2xl font-bold tracking-tight md:text-3xl'>
-            {t('Three steps to get started')}
-          </h2>
-        </AnimateInView>
-
-        <div className='grid gap-8 md:grid-cols-3 md:gap-12'>
-          {steps.map((step, i) => (
-            <AnimateInView
-              key={step.num}
-              delay={i * 150}
-              animation='fade-up'
-              className='relative flex flex-col items-center text-center'
-            >
-              <div className='relative mb-6'>
-                <div className='text-muted-foreground border-border/50 bg-muted/30 flex size-16 items-center justify-center rounded-2xl border transition-colors'>
-                  {step.icon}
-                </div>
-                <div className='bg-foreground text-background absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full text-xs font-bold'>
-                  {step.num}
-                </div>
+    <section className='home-section home-workflow'>
+      <div className='home-container'>
+        <Badge variant='outline' className='home-eyebrow'>
+          <span className='home-badge-dot' aria-hidden />
+          {t('How It Works')}
+        </Badge>
+        <h2 className='home-section-title'>
+          {t('From an idea')} <em>{t('to your first call.')}</em>
+        </h2>
+        <p className='home-section-description'>
+          {t('A familiar workflow. A much simpler connection.')}
+        </p>
+        <ol className='home-steps'>
+          {steps.map((step, index) => (
+            <li key={step.title}>
+              <div className='home-step-visual' aria-hidden>
+                {step.visual}
               </div>
-              <h3 className='mb-2 text-base font-semibold'>{step.title}</h3>
-              <p className='text-muted-foreground max-w-[240px] text-sm leading-relaxed'>
-                {step.desc}
-              </p>
-            </AnimateInView>
+              <h3>
+                <span>0{index + 1}</span>
+                {step.title}
+              </h3>
+              <p>{step.description}</p>
+              {index < steps.length - 1 && (
+                <span className='home-step-arrow' aria-hidden>
+                  <ArrowRight className='size-4' />
+                </span>
+              )}
+            </li>
           ))}
-        </div>
+        </ol>
       </div>
     </section>
   )

@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { getRouteApi, useNavigate } from '@tanstack/react-router'
+import { ScrollText } from 'lucide-react'
 import { useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -125,7 +126,13 @@ function UsageLogsContent() {
   return (
     <>
       <SectionPageLayout fixedContent>
-        <SectionPageLayout.Title>
+        <SectionPageLayout.Title
+          icon={ScrollText}
+          eyebrow='USAGE LOGS'
+          description={t(
+            'Review request history, usage details and task progress.'
+          )}
+        >
           {t(pageMeta.titleKey)}
         </SectionPageLayout.Title>
         <SectionPageLayout.Actions>

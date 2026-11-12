@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { Settings2 } from 'lucide-react'
+import { RadioTower, Settings2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
@@ -88,7 +88,13 @@ export function Channels() {
   return (
     <ChannelsProvider>
       <SectionPageLayout fixedContent>
-        <SectionPageLayout.Title>
+        <SectionPageLayout.Title
+          icon={RadioTower}
+          eyebrow='CHANNELS'
+          description={t(
+            'Manage upstream connections, routing and channel availability.'
+          )}
+        >
           <span className='flex min-w-0 items-center gap-2'>
             <span className='truncate'>{t('Channels')}</span>
             {retryBadge}

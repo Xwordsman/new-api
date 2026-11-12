@@ -16,8 +16,18 @@ import (
 // validation. It never adds CORS response headers and must not be installed on
 // relay routes.
 func SessionCookieOriginGuard() gin.HandlerFunc {
+	return sessionCookieOriginGuard(false)
+}
+
+// StrictSessionCookieOriginGuard also protects local HTTP console mutations;
+// price consent must not be forgeable by another site in development mode.
+func StrictSessionCookieOriginGuard() gin.HandlerFunc {
+	return sessionCookieOriginGuard(true)
+}
+
+func sessionCookieOriginGuard(strict bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !common.SessionCookieSecure {
+		if !strict && !common.SessionCookieSecure {
 			c.Next()
 			return
 		}

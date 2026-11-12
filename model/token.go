@@ -304,10 +304,20 @@ func GetTokenByKey(key string, fromDB bool) (token *Token, err error) {
 	return token, nil
 }
 
+// TokenCreatedHook lets an extension bind initial consent atomically without
+// changing the token schema or its Redis authentication metadata.
+var TokenCreatedHook func(*gorm.DB, *Token) error
+
 func (token *Token) Insert() error {
-	var err error
-	err = DB.Create(token).Error
-	return err
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(token).Error; err != nil {
+			return err
+		}
+		if TokenCreatedHook != nil {
+			return TokenCreatedHook(tx, token)
+		}
+		return nil
+	})
 }
 
 // Update Make sure your token's fields is completed, because this will update non-zero values

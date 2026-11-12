@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"github.com/QuantumNous/new-api/extensions/referral/ledger"
 	"maps"
 
 	"github.com/QuantumNous/new-api/common"
@@ -174,7 +175,7 @@ func UpdatePendingTopUpStatus(tradeNo string, expectedPaymentProvider string, ta
 // 在同一个事务内完成，因此同一订单的并发/重复回调（包括多实例部署下）最多充值一次。
 // alreadyDone=true 表示订单此前已完成，本次为幂等重复回调。
 // 进程内的 LockOrder 只是优化，正确性由本函数的数据库行锁保证。
-func RechargeEpay(tradeNo string, actualPaymentMethod string, callerIp string) (alreadyDone bool, err error) {
+func RechargeEpay(tradeNo string, actualPaymentMethod string, callerIp string, payments ...ledger.Payment) (alreadyDone bool, err error) {
 	if tradeNo == "" {
 		return false, errors.New("payment order number not provided")
 	}
@@ -215,6 +216,9 @@ func RechargeEpay(tradeNo string, actualPaymentMethod string, callerIp string) (
 		if err := tx.Save(topUp).Error; err != nil {
 			return err
 		}
+		if err := recordReferralPayment(tx, topUp, payments); err != nil {
+			return err
+		}
 		return creditTopUpQuota(tx, topUp.UserId, quotaToAdd, nil)
 	})
 	if err != nil {
@@ -233,12 +237,13 @@ func RechargeEpay(tradeNo string, actualPaymentMethod string, callerIp string) (
 	return false, nil
 }
 
-func Recharge(referenceId string, customerId string, callerIp string) (err error) {
+func Recharge(referenceId string, customerId string, callerIp string, payments ...ledger.Payment) (err error) {
 	if referenceId == "" {
 		return errors.New("payment order number not provided")
 	}
 
 	var quota int
+	alreadyDone := false
 	topUp := &TopUp{}
 
 	refCol := "`trade_no`"
@@ -256,6 +261,10 @@ func Recharge(referenceId string, customerId string, callerIp string) (err error
 			return ErrPaymentMethodMismatch
 		}
 
+		if topUp.Status == common.TopUpStatusSuccess {
+			alreadyDone = true
+			return nil
+		}
 		if topUp.Status != common.TopUpStatusPending {
 			return errors.New("invalid top-up order status")
 		}
@@ -273,6 +282,9 @@ func Recharge(referenceId string, customerId string, callerIp string) (err error
 		if err != nil || quota <= 0 {
 			return ErrInvalidTopUpQuota
 		}
+		if err := recordReferralPayment(tx, topUp, payments); err != nil {
+			return err
+		}
 		return creditTopUpQuota(tx, topUp.UserId, quota, map[string]any{
 			"stripe_customer": customerId,
 		})
@@ -281,6 +293,9 @@ func Recharge(referenceId string, customerId string, callerIp string) (err error
 	if err != nil {
 		common.SysError(common.LogText("topup failed: %s", err.Error()))
 		return errors.New("top-up failed")
+	}
+	if alreadyDone {
+		return nil
 	}
 	syncCreditUserQuotaCache(topUp.UserId, quota, common.LogText("stripe topup"))
 
@@ -522,7 +537,7 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) error {
 	RecordTopupLog(userId, common.NewMessage("Administrator completed the order, amount added: {{quota}}, payment amount: {{amount}}", map[string]any{"quota": logger.FormatQuota(quotaToAdd), "amount": fmt.Sprintf("%f", payMoney)}), callerIp, paymentMethod, "admin")
 	return nil
 }
-func RechargeCreem(referenceId string, customerEmail string, customerName string, callerIp string) (err error) {
+func RechargeCreem(referenceId string, customerEmail string, customerName string, callerIp string, payments ...ledger.Payment) (err error) {
 	if referenceId == "" {
 		return errors.New("payment order number not provided")
 	}
@@ -580,6 +595,9 @@ func RechargeCreem(referenceId string, customerEmail string, customerName string
 			}
 		}
 
+		if err := recordReferralPayment(tx, topUp, payments); err != nil {
+			return err
+		}
 		return creditTopUpQuota(tx, topUp.UserId, quota, updateFields)
 	})
 
@@ -594,7 +612,7 @@ func RechargeCreem(referenceId string, customerEmail string, customerName string
 	return nil
 }
 
-func RechargeWaffo(tradeNo string, callerIp string) (err error) {
+func RechargeWaffo(tradeNo string, callerIp string, payments ...ledger.Payment) (err error) {
 	if tradeNo == "" {
 		return errors.New("payment order number not provided")
 	}
@@ -638,6 +656,9 @@ func RechargeWaffo(tradeNo string, callerIp string) (err error) {
 			return err
 		}
 
+		if err := recordReferralPayment(tx, topUp, payments); err != nil {
+			return err
+		}
 		return creditTopUpQuota(tx, topUp.UserId, quotaToAdd, nil)
 	})
 
@@ -654,7 +675,7 @@ func RechargeWaffo(tradeNo string, callerIp string) (err error) {
 	return nil
 }
 
-func RechargeWaffoPancake(tradeNo string) (err error) {
+func RechargeWaffoPancake(tradeNo string, payments ...ledger.Payment) (err error) {
 	if tradeNo == "" {
 		return errors.New("payment order number not provided")
 	}
@@ -698,6 +719,9 @@ func RechargeWaffoPancake(tradeNo string) (err error) {
 			return err
 		}
 
+		if err := recordReferralPayment(tx, topUp, payments); err != nil {
+			return err
+		}
 		return creditTopUpQuota(tx, topUp.UserId, quotaToAdd, nil)
 	})
 

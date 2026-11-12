@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CircleHelp, Upload } from 'lucide-react'
+import { Puzzle, CircleHelp, Upload } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -77,7 +77,15 @@ export function TaskPlugins() {
   return (
     <>
       <SectionPageLayout fixedContent>
-        <SectionPageLayout.Title>{t('Task Plugins')}</SectionPageLayout.Title>
+        <SectionPageLayout.Title
+          icon={Puzzle}
+          eyebrow='TASK PLUGINS'
+          description={t(
+            'Manage task plugins and their availability to channels.'
+          )}
+        >
+          {t('Task Plugins')}
+        </SectionPageLayout.Title>
         <SectionPageLayout.Actions>
           <div className='flex items-center gap-2'>
             <Switch
