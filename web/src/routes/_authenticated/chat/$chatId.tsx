@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link, createFileRoute, redirect } from '@tanstack/react-router'
-import { Loader2, MessageCircleWarning } from 'lucide-react'
+import { ExternalLink, Loader2, MessageCircleWarning } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -154,12 +154,38 @@ function ChatRouteComponent() {
   }
 
   return (
-    <iframe
-      src={iframeSrc}
-      key={iframeSrc}
-      className='h-full w-full border-0'
-      allow='camera; microphone'
-      title={`Chat preset: ${preset.name}`}
-    />
+    <div className='flex h-full min-h-0 flex-col'>
+      <div className='bg-background flex shrink-0 flex-wrap items-center justify-between gap-2 border-b px-4 py-2'>
+        <p className='text-muted-foreground min-w-0 flex-1 text-xs'>
+          {t(
+            'If the embedded chat does not work properly, open it in a new tab.'
+          )}
+        </p>
+        <Button
+          role='link'
+          variant='outline'
+          size='sm'
+          render={
+            <a
+              href={iframeSrc}
+              target='_blank'
+              rel='noopener noreferrer'
+              referrerPolicy='no-referrer'
+            />
+          }
+        >
+          <ExternalLink aria-hidden='true' />
+          {t('Open in new tab')}
+        </Button>
+      </div>
+      <iframe
+        src={iframeSrc}
+        key={iframeSrc}
+        className='min-h-0 w-full flex-1 border-0'
+        sandbox='allow-scripts allow-forms'
+        referrerPolicy='no-referrer'
+        title={t('Chat preset: {{name}}', { name: preset.name })}
+      />
+    </div>
   )
 }
