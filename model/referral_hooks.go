@@ -12,6 +12,7 @@ var ReferralPaymentHook func(tx *gorm.DB, userID int, tradeNo, provider string, 
 var RegistrationPaymentHook func(tx *gorm.DB, userID int, provider, payer string) error
 var ReferralTransferHook func(userID, quota int) error
 var CheckinPaymentHook func(tx *gorm.DB, userID int, tradeNo, provider string, payment ledger.Payment) error
+var CheckinRedemptionPaymentHook func(tx *gorm.DB, userID int, tradeNo, provider string, payment ledger.Payment) error
 var CheckinSubscriptionPaymentHook func(tx *gorm.DB, userID int, tradeNo, provider string, payment ledger.Payment) error
 var CheckinRefundHook func(tx *gorm.DB, provider, reference, totalAmount, currency string) error
 

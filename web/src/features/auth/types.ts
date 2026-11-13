@@ -90,6 +90,7 @@ export interface ApiResponse<T = unknown> {
 
 export interface ExtensionFeatures {
   checkin?: boolean
+  lucky_draw?: boolean
   documentation?: boolean
   channel_monitor?: boolean
   benchmark?: boolean

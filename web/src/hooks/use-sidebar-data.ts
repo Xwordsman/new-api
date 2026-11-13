@@ -132,6 +132,11 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             icon: Wallet,
           },
           {
+            title: t('Lucky draw'),
+            url: '/lucky-draw',
+            icon: Gift,
+          },
+          {
             title: t('Daily Check-in'),
             url: '/checkin',
             icon: CalendarCheck,

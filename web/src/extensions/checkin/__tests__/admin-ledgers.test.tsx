@@ -504,6 +504,52 @@ test('payment and audit tabs render their records and filter audit actions by st
   )
 })
 
+test('sale-code records disclose declared value and allow refunds without gateway reconciliation', async () => {
+  const user = userEvent.setup()
+  vi.mocked(api.get).mockImplementation(async (url) => ({
+    data: {
+      success: true,
+      data: {
+        items: url.endsWith('/payments')
+          ? [
+              {
+                ...checkinPayment,
+                source: 'redemption',
+                origin: 'redemption',
+                trade_no: 'redemption:7',
+                provider: 'redemption',
+              },
+            ]
+          : [],
+        total: 1,
+        page: 1,
+        page_size: 10,
+      },
+    },
+  }))
+  render(
+    <QueryClientProvider client={client}>
+      <CheckinAdminLedgers />
+    </QueryClientProvider>
+  )
+  await user.click(screen.getByRole('tab', { name: 'Payment records' }))
+  const row = await screen.findByRole('row', { name: /redemption:7/ })
+  expect(within(row).getByText('Sale-code redemption')).toBeVisible()
+  expect(within(row).getByText('Admin-declared sale value')).toBeVisible()
+  expect(within(row).getByText('Recorded sale value')).toBeVisible()
+  expect(within(row).queryByText('Verified payment')).not.toBeInTheDocument()
+  expect(
+    within(row).queryByRole('button', { name: 'Reconcile order' })
+  ).not.toBeInTheDocument()
+  await user.click(within(row).getByRole('button', { name: 'Record refund' }))
+  const dialog = await screen.findByRole('alertdialog', {
+    name: 'Record check-in payment refund',
+  })
+  expect(
+    within(dialog).getByRole('textbox', { name: 'Payment order' })
+  ).toHaveValue('redemption:7')
+})
+
 test.each(['reconcile', 'refund'] as const)(
   '%s rejects payment order identifiers above the server byte limit before making a request',
   async (action) => {

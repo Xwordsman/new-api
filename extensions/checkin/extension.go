@@ -19,6 +19,7 @@ func Enabled(db *gorm.DB) (bool, error) {
 // on later must not lose genuine payments or continue counting refunded funds.
 func Initialize(_ *gorm.DB) {
 	model.CheckinPaymentHook = policy.RecordPayment
+	model.CheckinRedemptionPaymentHook = policy.RecordRedemptionPayment
 	model.CheckinSubscriptionPaymentHook = policy.RecordSubscriptionPayment
 	model.CheckinRefundHook = policy.Refund
 }

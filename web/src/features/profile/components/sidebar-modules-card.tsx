@@ -125,6 +125,11 @@ export function SidebarModulesCard() {
           description: t('Balance and top-up management'),
         },
         {
+          key: 'lucky_draw',
+          title: t('Lucky draw'),
+          description: t('View prize probabilities and draw wallet rewards.'),
+        },
+        {
           key: 'checkin',
           title: t('Daily Check-in'),
           description: t(
@@ -157,7 +162,9 @@ export function SidebarModulesCard() {
           (module) =>
             adminSection[module.key] === true &&
             (module.key !== 'checkin' ||
-              status.extension_features?.checkin === true)
+              status.extension_features?.checkin === true) &&
+            (module.key !== 'lucky_draw' ||
+              status.extension_features?.lucky_draw === true)
         )
         return modules.length ? [{ ...section, modules }] : []
       })

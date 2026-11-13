@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/extensions/keypricing"
 	keypricepolicy "github.com/QuantumNous/new-api/extensions/keypricing/policy"
 	"github.com/QuantumNous/new-api/extensions/leaderboard"
+	"github.com/QuantumNous/new-api/extensions/luckydraw"
 	"github.com/QuantumNous/new-api/extensions/referral"
 	"github.com/QuantumNous/new-api/extensions/referral/ledger"
 	"github.com/QuantumNous/new-api/extensions/registrationrisk"
@@ -42,6 +43,9 @@ func Migrate(db *gorm.DB) error {
 		return err
 	}
 	if err := checkin.Migrate(db); err != nil {
+		return err
+	}
+	if err := luckydraw.Migrate(db); err != nil {
 		return err
 	}
 	if err := benchmark.Migrate(db); err != nil {
@@ -81,6 +85,7 @@ func RegisterRoutes(apiRouter *gin.RouterGroup) {
 	invitation.RegisterRoutes(apiRouter)
 	referral.RegisterRoutes(apiRouter)
 	checkin.RegisterRoutes(apiRouter)
+	luckydraw.RegisterRoutes(apiRouter)
 	tickets.RegisterRoutes(apiRouter)
 	leaderboard.RegisterRoutes(apiRouter)
 	registrationrisk.RegisterRoutes(apiRouter)
@@ -100,6 +105,7 @@ func FeatureStatus(db *gorm.DB) (map[string]bool, error) {
 		{"benchmark", benchmark.Enabled},
 		{"referrals", referral.Enabled},
 		{"checkin", checkin.Enabled},
+		{"lucky_draw", luckydraw.Enabled},
 		{"leaderboard", leaderboard.Enabled},
 		{"documentation", documentation.Enabled},
 	} {

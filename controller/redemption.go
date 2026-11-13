@@ -96,16 +96,24 @@ func AddRedemption(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if err := redemption.NormalizeRecharge(); err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	var keys []string
-	for i := 0; i < redemption.Count; i++ {
+	for range redemption.Count {
 		key := common.GetUUID()
 		cleanRedemption := model.Redemption{
-			UserId:      c.GetInt("id"),
-			Name:        redemption.Name,
-			Key:         key,
-			CreatedTime: common.GetTimestamp(),
-			Quota:       redemption.Quota,
-			ExpiredTime: redemption.ExpiredTime,
+			UserId:           c.GetInt("id"),
+			Name:             redemption.Name,
+			Key:              key,
+			CreatedTime:      common.GetTimestamp(),
+			Quota:            redemption.Quota,
+			ExpiredTime:      redemption.ExpiredTime,
+			CodeType:         redemption.CodeType,
+			RechargeAmount:   redemption.RechargeAmount,
+			RechargeCurrency: redemption.RechargeCurrency,
+			ReferralEnabled:  redemption.ReferralEnabled,
 		}
 		err = cleanRedemption.Insert()
 		if err != nil {
@@ -116,9 +124,13 @@ func AddRedemption(c *gin.Context) {
 		keys = append(keys, key)
 	}
 	recordManageAudit(c, "redemption.create", map[string]any{
-		"name":  redemption.Name,
-		"count": redemption.Count,
-		"quota": logger.FormatQuota(redemption.Quota),
+		"name":              redemption.Name,
+		"count":             redemption.Count,
+		"quota":             logger.FormatQuota(redemption.Quota),
+		"code_type":         redemption.CodeType,
+		"recharge_amount":   redemption.RechargeAmount,
+		"recharge_currency": redemption.RechargeCurrency,
+		"referral_enabled":  redemption.ReferralEnabled,
 	})
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -156,6 +168,10 @@ func UpdateRedemption(c *gin.Context) {
 		return
 	}
 	if statusOnly == "" {
+		if utf8.RuneCountInString(redemption.Name) == 0 || utf8.RuneCountInString(redemption.Name) > 20 {
+			common.ApiErrorT(c, "Redemption code name length must be between 1-20")
+			return
+		}
 		if redemption.Quota <= 0 {
 			common.ApiErrorT(c, "Redemption quota must be positive")
 			return
@@ -172,6 +188,10 @@ func UpdateRedemption(c *gin.Context) {
 		cleanRedemption.Name = redemption.Name
 		cleanRedemption.Quota = redemption.Quota
 		cleanRedemption.ExpiredTime = redemption.ExpiredTime
+		cleanRedemption.CodeType = redemption.CodeType
+		cleanRedemption.RechargeAmount = redemption.RechargeAmount
+		cleanRedemption.RechargeCurrency = redemption.RechargeCurrency
+		cleanRedemption.ReferralEnabled = redemption.ReferralEnabled
 	}
 	if statusOnly != "" {
 		cleanRedemption.Status = redemption.Status

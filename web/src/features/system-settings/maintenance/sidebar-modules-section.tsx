@@ -132,6 +132,10 @@ export function SidebarModulesSection({
       },
     },
     personal: {
+      lucky_draw: {
+        title: t('Lucky draw'),
+        description: t('View prize probabilities and draw wallet rewards.'),
+      },
       checkin: {
         title: t('Daily Check-in'),
         description: t(

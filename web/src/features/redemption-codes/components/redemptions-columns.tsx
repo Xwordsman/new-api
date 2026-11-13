@@ -28,7 +28,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { formatQuota, formatTimestampToDate } from '@/lib/format'
+import { toIntlLocale } from '@/i18n/languages'
+import { formatNumber, formatQuota, formatTimestampToDate } from '@/lib/format'
 
 import { REDEMPTION_FILTER_EXPIRED, REDEMPTION_STATUSES } from '../constants'
 import { isRedemptionExpired, isTimestampExpired } from '../lib'
@@ -36,7 +37,8 @@ import type { Redemption } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
 
 export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   return [
     {
       id: 'select',
@@ -80,6 +82,29 @@ export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
         <span className='font-medium'>{row.getValue('name')}</span>
       ),
       size: 180,
+    },
+    {
+      accessorKey: 'code_type',
+      header: t('Code purpose'),
+      cell: ({ row }) => {
+        const code = row.original
+        if (code.code_type !== 'sale') return <span>{t('Gift code')}</span>
+        return (
+          <div className='space-y-1 text-xs'>
+            <p>{t('Sale recharge code')}</p>
+            <p>
+              {code.recharge_currency}{' '}
+              {formatNumber(Number(code.recharge_amount), locale)}
+            </p>
+            <p className='text-muted-foreground'>
+              {code.referral_enabled
+                ? t('Commission enabled')
+                : t('No commission')}
+            </p>
+          </div>
+        )
+      },
+      size: 170,
     },
     {
       accessorKey: 'status',
@@ -233,7 +258,7 @@ export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
                   className='cursor-help'
                 />
               }
-            ></TooltipTrigger>
+            />
             <TooltipContent>
               <div className='space-y-1 text-xs'>
                 <div>

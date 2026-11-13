@@ -8,8 +8,10 @@ import (
 const (
 	PaymentSourceTopUp        = "topup"
 	PaymentSourceSubscription = "subscription"
+	PaymentSourceRedemption   = "redemption"
 	PaymentOriginProvider     = "provider"
 	PaymentOriginAdmin        = "admin"
+	PaymentOriginRedemption   = "redemption"
 	PaymentStatusPriced       = "priced"
 	PaymentStatusUnpriced     = "unpriced"
 )
@@ -81,7 +83,7 @@ func GetPayments(db *gorm.DB, input PaymentQuery) ([]PaymentRecord, int64, error
 	if input.UserID < 0 || input.Page < 1 || input.PageSize < 1 || input.PageSize > 100 || input.Page > 1000000 {
 		return nil, 0, ErrPaymentInvalid
 	}
-	if input.Source != "" && input.Source != PaymentSourceTopUp && input.Source != PaymentSourceSubscription {
+	if input.Source != "" && input.Source != PaymentSourceTopUp && input.Source != PaymentSourceSubscription && input.Source != PaymentSourceRedemption {
 		return nil, 0, ErrPaymentInvalid
 	}
 	if input.Status != "" && input.Status != PaymentStatusPriced && input.Status != PaymentStatusUnpriced {

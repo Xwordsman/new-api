@@ -73,6 +73,7 @@ import {
   transformRedemptionToFormDefaults,
 } from '../lib'
 import type { Redemption } from '../types'
+import { RedemptionRechargeFields } from './redemption-recharge-fields'
 import {
   RedemptionsExportDialog,
   type RedemptionExportData,
@@ -166,9 +167,16 @@ export function RedemptionsMutateDrawer({
     !isUpdate ||
     (redemptionLoadState === 'ready' && loadedRedemption?.id === redemptionId)
   const isLoadingRedemption = redemptionLoadState === 'loading'
+  const isUsed =
+    loadedRedemption?.status === 3 ||
+    !!loadedRedemption?.used_user_id ||
+    !!loadedRedemption?.redeemed_time
 
   const onSubmit = async (data: RedemptionFormValues) => {
-    if (isUpdate && (!currentRow || !loadedRedemption || !isUpdateReady)) {
+    if (
+      isUsed ||
+      (isUpdate && (!currentRow || !loadedRedemption || !isUpdateReady))
+    ) {
       return
     }
 
@@ -287,7 +295,7 @@ export function RedemptionsMutateDrawer({
               aria-busy={isLoadingRedemption}
             >
               <fieldset
-                disabled={!isUpdateReady || isSubmitting}
+                disabled={!isUpdateReady || isSubmitting || isUsed}
                 className='contents'
               >
                 <SideDrawerSection>
@@ -428,7 +436,13 @@ export function RedemptionsMutateDrawer({
                     />
                   )}
                 </SideDrawerSection>
+                <RedemptionRechargeFields control={form.control} />
               </fieldset>
+              {isUsed && (
+                <p className='text-muted-foreground text-sm'>
+                  {t('Used redemption codes cannot be modified')}
+                </p>
+              )}
             </form>
           </Form>
           <SheetFooter className={sideDrawerFooterClassName()}>
@@ -438,7 +452,7 @@ export function RedemptionsMutateDrawer({
             <Button
               form='redemption-form'
               type='submit'
-              disabled={isSubmitting || !isUpdateReady}
+              disabled={isSubmitting || !isUpdateReady || isUsed}
             >
               {submitButtonLabel}
             </Button>

@@ -139,8 +139,10 @@ type HostUser struct {
 
 func (HostUser) TableName() string { return "users" }
 
-// Payment must originate from a verified provider callback or an audited
-// administrator reconciliation. Amount is actual payment, excluding gifts.
+// Payment originates from a verified provider callback, an audited administrator
+// reconciliation, or consumption of an administrator-configured sale code.
+// Amount excludes gifts and bonus wallet credit; sale-code values are declared
+// by the administrator rather than verified with an external payment provider.
 type Payment struct {
 	Amount    string
 	Currency  string

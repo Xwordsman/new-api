@@ -161,27 +161,27 @@ export function CheckinAdminLedgers() {
     {
       id: 'source',
       header: t('Payment source'),
-      cell: (row) => (
-        <div className='space-y-1'>
-          <p className='text-xs'>
-            {row.source === 'subscription'
-              ? t('Subscription payment')
-              : t('Wallet recharge')}
-          </p>
-          <Badge variant='outline'>
-            {row.origin === 'admin'
-              ? t('Manual reconciliation')
-              : t('Payment provider')}
-          </Badge>
-          {row.historical && (
-            <Badge variant='warning'>{t('Historical payment')}</Badge>
-          )}
-        </div>
-      ),
+      cell: (row) => {
+        let source = t('Wallet recharge')
+        let origin = t('Payment provider')
+        if (row.source === 'subscription') source = t('Subscription payment')
+        if (row.source === 'redemption') source = t('Sale-code redemption')
+        if (row.origin === 'admin') origin = t('Manual reconciliation')
+        if (row.origin === 'redemption') origin = t('Admin-declared sale value')
+        return (
+          <div className='space-y-1'>
+            <p className='text-xs'>{source}</p>
+            <Badge variant='outline'>{origin}</Badge>
+            {row.historical && (
+              <Badge variant='warning'>{t('Historical payment')}</Badge>
+            )}
+          </div>
+        )
+      },
     },
     {
       id: 'amount',
-      header: t('Actual paid amount'),
+      header: t('Qualifying recharge amount'),
       cell: (row) => formatCheckinPayment(row.amount, row.currency, locale),
     },
     {
@@ -193,13 +193,18 @@ export function CheckinAdminLedgers() {
     {
       id: 'state',
       header: t('Status'),
-      cell: (row) => (
-        <Badge variant={row.status === 'priced' ? 'secondary' : 'warning'}>
-          {row.status === 'priced'
-            ? t('Verified payment')
-            : t('Needs reconciliation')}
-        </Badge>
-      ),
+      cell: (row) => {
+        if (row.source === 'redemption') {
+          return <Badge variant='secondary'>{t('Recorded sale value')}</Badge>
+        }
+        return (
+          <Badge variant={row.status === 'priced' ? 'secondary' : 'warning'}>
+            {row.status === 'priced'
+              ? t('Verified payment')
+              : t('Needs reconciliation')}
+          </Badge>
+        )
+      },
     },
     {
       id: 'date',
@@ -211,15 +216,17 @@ export function CheckinAdminLedgers() {
       header: t('Actions'),
       cell: (row) => (
         <div className='flex gap-2'>
-          <Button
-            variant='outline'
-            size='sm'
-            onClick={() =>
-              setPaymentAction({ mode: 'reconcile', payment: row })
-            }
-          >
-            {t('Reconcile order')}
-          </Button>
+          {row.source !== 'redemption' && (
+            <Button
+              variant='outline'
+              size='sm'
+              onClick={() =>
+                setPaymentAction({ mode: 'reconcile', payment: row })
+              }
+            >
+              {t('Reconcile order')}
+            </Button>
+          )}
           <Button
             variant='ghost'
             size='sm'

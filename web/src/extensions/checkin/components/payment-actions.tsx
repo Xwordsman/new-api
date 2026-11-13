@@ -65,7 +65,8 @@ export function CheckinReconcileDialog(props: {
     resolver: zodResolver(checkinReconcileSchema),
     defaultValues: {
       user_id: props.payment?.user_id ?? 0,
-      source: props.payment?.source ?? 'topup',
+      source:
+        props.payment?.source === 'subscription' ? 'subscription' : 'topup',
       trade_no: props.payment?.trade_no ?? '',
       reference: props.payment?.reference ?? '',
       amount: props.payment?.amount ?? '',

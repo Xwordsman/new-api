@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import type { TFunction } from 'i18next'
 
 const EXTENSION_NAV_ITEMS = [
+  { titleKey: 'Lucky draw', url: '/system-settings/lucky-draw' },
   {
     titleKey: 'Daily Check-in',
     url: '/system-settings/checkin',

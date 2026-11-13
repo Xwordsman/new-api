@@ -23,6 +23,7 @@ import {
   waitFor,
   type RenderResult,
 } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, test } from 'vitest'
 
 import type { Redemption } from '../../types'
@@ -146,6 +147,9 @@ function getSaveButton(): HTMLButtonElement {
 function getControlByLabel(labelText: 'Name'): HTMLInputElement
 function getControlByLabel(labelText: 'Quota (CNY)'): HTMLInputElement
 function getControlByLabel(labelText: 'Quota (USD)'): HTMLInputElement
+function getControlByLabel(
+  labelText: 'Qualifying sale amount'
+): HTMLInputElement
 function getControlByLabel(labelText: string): HTMLElement {
   const label = [...document.querySelectorAll<HTMLLabelElement>('label')].find(
     (candidate) => candidate.textContent?.trim() === labelText
@@ -190,6 +194,112 @@ afterEach(() => {
 })
 
 describe('redemption drawer', () => {
+  test('preserves sale qualification separately from wallet quota when saving', async () => {
+    const original: Redemption = {
+      ...redemption(1),
+      code_type: 'sale',
+      recharge_amount: '100.50',
+      recharge_currency: 'CNY',
+      referral_enabled: true,
+    }
+    const updates: unknown[] = []
+    apiClient.get = async () => ({ data: { success: true, data: original } })
+    apiClient.put = async (_url, data) => {
+      updates.push(data)
+      return { data: { success: true } }
+    }
+    await renderDrawer(original)
+    await waitForLoadedForm()
+    expect(getControlByLabel('Qualifying sale amount')).toHaveValue('100.50')
+    expect(
+      screen.getByRole('switch', { name: 'Allow referral commission' })
+    ).toBeChecked()
+    submitForm()
+    await waitFor(() =>
+      expect(updates).toEqual([
+        expect.objectContaining({
+          code_type: 'sale',
+          recharge_amount: '100.50',
+          recharge_currency: 'CNY',
+          referral_enabled: true,
+          quota: 500001,
+        }),
+      ])
+    )
+  })
+
+  test('blocks an invalid sale amount and clears sale metadata when changed to a gift', async () => {
+    const user = userEvent.setup()
+    const original: Redemption = {
+      ...redemption(1),
+      code_type: 'sale',
+      recharge_amount: '100',
+      recharge_currency: 'CNY',
+      referral_enabled: true,
+    }
+    const updates: unknown[] = []
+    apiClient.get = async () => ({ data: { success: true, data: original } })
+    apiClient.put = async (_url, data) => {
+      updates.push(data)
+      return { data: { success: true } }
+    }
+    await renderDrawer(original)
+    await waitForLoadedForm()
+    changeInput(getControlByLabel('Qualifying sale amount'), '0.001')
+    submitForm()
+    expect(
+      await screen.findByText(
+        'Sale amount must be positive, at most 1000000000, with up to two decimal places'
+      )
+    ).toBeVisible()
+    expect(updates).toHaveLength(0)
+    await user.click(screen.getByRole('combobox', { name: 'Code purpose' }))
+    await user.click(screen.getByRole('option', { name: 'Gift code' }))
+    expect(
+      screen.queryByRole('textbox', { name: 'Qualifying sale amount' })
+    ).not.toBeInTheDocument()
+    submitForm()
+    await waitFor(() =>
+      expect(updates).toEqual([
+        expect.objectContaining({
+          code_type: 'gift',
+          recharge_amount: '',
+          recharge_currency: '',
+          referral_enabled: false,
+        }),
+      ])
+    )
+  })
+
+  test('shows a used code as read-only and refuses a submitted update', async () => {
+    const original = {
+      ...redemption(1),
+      status: 3,
+      used_user_id: 7,
+      redeemed_time: 1794369600,
+    }
+    const updates: unknown[] = []
+    apiClient.get = async () => ({ data: { success: true, data: original } })
+    apiClient.put = async (_url, data) => {
+      updates.push(data)
+      return { data: { success: true } }
+    }
+    await renderDrawer(original)
+    expect(
+      await screen.findByText('Used redemption codes cannot be modified')
+    ).toBeVisible()
+    expect(getControlByLabel('Name')).toBeDisabled()
+    expect(getSaveButton()).toBeDisabled()
+    submitForm()
+    await waitFor(() =>
+      expect(document.querySelector('form')).not.toHaveAttribute(
+        'aria-busy',
+        'true'
+      )
+    )
+    expect(updates).toHaveLength(0)
+  })
+
   test('shows the reported CNY quota without floating-point noise', async () => {
     const original = redemption(1, 13888889)
     apiClient.get = async () => ({ data: { success: true, data: original } })
@@ -308,7 +418,9 @@ describe('redemption drawer', () => {
     expect(screen.getByRole('button', { name: 'Loading...' })).toBeDisabled()
     detail.resolve({ data: { success: true, data: second } })
     await waitForLoadedForm()
-    expect(screen.getByRole('button', { name: 'Never expires' })).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: 'Expiration Time' })
+    ).toHaveTextContent('Never expires')
     expect(screen.getByLabelText('Time')).toBeDisabled()
     fireEvent.click(getSaveButton())
     await waitFor(() =>
@@ -333,8 +445,8 @@ describe('redemption drawer', () => {
       await waitFor(() => expect(screen.getByLabelText('Time')).toBeEnabled())
       fireEvent.click(screen.getByRole('button', { name: action }))
       expect(
-        screen.getByRole('button', { name: 'Never expires' })
-      ).toBeVisible()
+        screen.getByRole('button', { name: 'Expiration Time' })
+      ).toHaveTextContent('Never expires')
       expect(screen.getByLabelText('Time')).toBeDisabled()
       fireEvent.click(getSaveButton())
       await waitFor(() =>

@@ -3,26 +3,63 @@ package model
 import (
 	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/extensions/referral/ledger"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/shopspring/decimal"
 
 	"gorm.io/gorm"
 )
 
 type Redemption struct {
-	Id           int            `json:"id"`
-	UserId       int            `json:"user_id"`
-	Key          string         `json:"key" gorm:"type:char(32);uniqueIndex"`
-	Status       int            `json:"status" gorm:"default:1"`
-	Name         string         `json:"name" gorm:"index"`
-	Quota        int            `json:"quota" gorm:"default:100"`
-	CreatedTime  int64          `json:"created_time" gorm:"bigint"`
-	RedeemedTime int64          `json:"redeemed_time" gorm:"bigint"`
-	Count        int            `json:"count" gorm:"-:all"` // only for api request
-	UsedUserId   int            `json:"used_user_id"`
-	DeletedAt    gorm.DeletedAt `gorm:"index"`
-	ExpiredTime  int64          `json:"expired_time" gorm:"bigint"` // 过期时间，0 表示不过期
+	Id               int            `json:"id"`
+	UserId           int            `json:"user_id"`
+	Key              string         `json:"key" gorm:"type:char(32);uniqueIndex"`
+	Status           int            `json:"status" gorm:"default:1"`
+	Name             string         `json:"name" gorm:"index"`
+	Quota            int            `json:"quota" gorm:"default:100"`
+	CreatedTime      int64          `json:"created_time" gorm:"bigint"`
+	RedeemedTime     int64          `json:"redeemed_time" gorm:"bigint"`
+	Count            int            `json:"count" gorm:"-:all"` // only for api request
+	UsedUserId       int            `json:"used_user_id"`
+	DeletedAt        gorm.DeletedAt `gorm:"index"`
+	ExpiredTime      int64          `json:"expired_time" gorm:"bigint"` // 过期时间，0 表示不过期
+	CodeType         string         `json:"code_type" gorm:"type:varchar(16)"`
+	RechargeAmount   string         `json:"recharge_amount" gorm:"type:varchar(48)"`
+	RechargeCurrency string         `json:"recharge_currency" gorm:"type:varchar(8)"`
+	ReferralEnabled  bool           `json:"referral_enabled"`
+}
+
+// NormalizeRecharge separates wallet credit from the administrator-declared
+// sale value. Legacy codes are gifts; wallet quota is never payment evidence.
+func (redemption *Redemption) NormalizeRecharge() error {
+	if redemption.CodeType == "" || redemption.CodeType == "gift" {
+		redemption.CodeType, redemption.RechargeAmount, redemption.RechargeCurrency, redemption.ReferralEnabled = "gift", "", "", false
+		return nil
+	}
+	if redemption.CodeType != "sale" || (redemption.RechargeCurrency != "CNY" && redemption.RechargeCurrency != "USD") {
+		return common.NewMessage("Invalid redemption recharge settings")
+	}
+	input := redemption.RechargeAmount
+	whole, fraction, point := strings.Cut(input, ".")
+	if len(input) > 48 || whole == "" || (point && (fraction == "" || len(fraction) > 2)) {
+		return common.NewMessage("Sale amount must be positive, at most 1000000000, with up to two decimal places")
+	}
+	for _, part := range []string{whole, fraction} {
+		for _, digit := range part {
+			if digit < '0' || digit > '9' {
+				return common.NewMessage("Sale amount must be positive, at most 1000000000, with up to two decimal places")
+			}
+		}
+	}
+	amount, err := decimal.NewFromString(input)
+	if err != nil || !amount.IsPositive() || amount.GreaterThan(decimal.NewFromInt(1000000000)) {
+		return common.NewMessage("Sale amount must be positive, at most 1000000000, with up to two decimal places")
+	}
+	redemption.RechargeAmount = amount.String()
+	return nil
 }
 
 func GetAllRedemptions(startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
@@ -158,13 +195,17 @@ func Redeem(key string, userId int) (quota int, err error) {
 		if redemption.ExpiredTime != 0 && redemption.ExpiredTime < common.GetTimestamp() {
 			return errors.New("redemption code expired")
 		}
+		if err := redemption.NormalizeRecharge(); err != nil {
+			return err
+		}
+		redeemedAt := common.GetTimestamp()
 		// Compare-and-swap on status: only the transaction that flips
 		// enabled -> used may credit quota, so a concurrent redeem of the
 		// same code loses here even without a row lock (e.g. on SQLite).
 		result := tx.Model(&Redemption{}).
 			Where("id = ? AND status = ?", redemption.Id, common.RedemptionCodeStatusEnabled).
 			Updates(map[string]any{
-				"redeemed_time": common.GetTimestamp(),
+				"redeemed_time": redeemedAt,
 				"status":        common.RedemptionCodeStatusUsed,
 				"used_user_id":  userId,
 			})
@@ -173,6 +214,22 @@ func Redeem(key string, userId int) (quota int, err error) {
 		}
 		if result.RowsAffected == 0 {
 			return errors.New("redemption code already used")
+		}
+		if redemption.CodeType == "sale" {
+			if CheckinRedemptionPaymentHook == nil || (redemption.ReferralEnabled && ReferralPaymentHook == nil) {
+				return errors.New("redemption recharge accounting is unavailable")
+			}
+			reference := strconv.Itoa(redemption.Id)
+			tradeNo := "redemption:" + reference
+			payment := ledger.Payment{Amount: redemption.RechargeAmount, Currency: redemption.RechargeCurrency, Reference: reference, PaidAt: redeemedAt}
+			if err := CheckinRedemptionPaymentHook(tx, userId, tradeNo, "redemption", payment); err != nil {
+				return err
+			}
+			if redemption.ReferralEnabled {
+				if err := ReferralPaymentHook(tx, userId, tradeNo, "redemption", payment); err != nil {
+					return err
+				}
+			}
 		}
 		return creditTopUpQuota(tx, userId, redemption.Quota, nil)
 	})
@@ -186,6 +243,9 @@ func Redeem(key string, userId int) (quota int, err error) {
 }
 
 func (redemption *Redemption) Insert() error {
+	if err := redemption.NormalizeRecharge(); err != nil {
+		return err
+	}
 	if redemption.Quota <= 0 {
 		return errors.New("redemption quota must be positive")
 	}
@@ -202,17 +262,31 @@ func (redemption *Redemption) SelectUpdate() error {
 	return DB.Model(redemption).Select("redeemed_time", "status").Updates(redemption).Error
 }
 
-// Update Make sure your token's fields is completed, because this will update non-zero values
+// Update changes unused codes only; consumed sale facts must stay immutable.
 func (redemption *Redemption) Update() error {
+	if err := redemption.NormalizeRecharge(); err != nil {
+		return err
+	}
+	if redemption.Status != common.RedemptionCodeStatusEnabled && redemption.Status != common.RedemptionCodeStatusDisabled {
+		return common.NewMessage("Used redemption codes cannot be modified")
+	}
 	if redemption.Quota <= 0 {
 		return errors.New("redemption quota must be positive")
 	}
 	if err := common.ValidateWalletQuota(redemption.Quota); err != nil {
 		return err
 	}
-	var err error
-	err = DB.Model(redemption).Select("name", "status", "quota", "redeemed_time", "expired_time").Updates(redemption).Error
-	return err
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var current Redemption
+		if err := lockForUpdate(tx).First(&current, redemption.Id).Error; err != nil {
+			return err
+		}
+		if current.Status == common.RedemptionCodeStatusUsed || current.UsedUserId != 0 || current.RedeemedTime != 0 {
+			return common.NewMessage("Used redemption codes cannot be modified")
+		}
+		return tx.Model(&current).Where("status <> ? AND used_user_id = 0 AND redeemed_time = 0", common.RedemptionCodeStatusUsed).
+			Select("name", "status", "quota", "expired_time", "code_type", "recharge_amount", "recharge_currency", "referral_enabled").Updates(redemption).Error
+	})
 }
 
 func (redemption *Redemption) Delete() error {

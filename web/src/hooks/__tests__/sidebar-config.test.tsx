@@ -102,6 +102,7 @@ function sidebarFor(
 
 const extensionEntries = [
   ['checkin', 'Daily Check-in'],
+  ['lucky_draw', 'Lucky draw'],
   ['channel_monitor', 'Channel monitor'],
   ['benchmark', 'Model benchmark'],
   ['referrals', 'Referral program'],
@@ -110,6 +111,7 @@ const extensionEntries = [
 
 const allFeaturesEnabled = {
   checkin: true,
+  lucky_draw: true,
   channel_monitor: true,
   benchmark: true,
   referrals: true,
@@ -154,6 +156,7 @@ describe('extension sidebar visibility', () => {
     ['console', 'benchmark', 'Model benchmark'],
     ['personal', 'referrals', 'Referral program'],
     ['personal', 'checkin', 'Daily Check-in'],
+    ['personal', 'lucky_draw', 'Lucky draw'],
     ['personal', 'tickets', 'Ticket center'],
     ['personal', 'leaderboard', 'Community leaderboard'],
   ])(

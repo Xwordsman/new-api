@@ -22,17 +22,30 @@ var (
 // RecordPayment joins a verified top-up completion transaction. Collection is
 // independent of check-in/referral switches and invite relationships.
 func RecordPayment(tx *gorm.DB, userID int, tradeNo, provider string, payment ledger.Payment) error {
-	if payment.USDPerUnit != "" {
+	if payment.USDPerUnit != "" || strings.EqualFold(strings.TrimSpace(provider), "redemption") {
 		return ErrPaymentInvalid
 	}
 	return recordCheckinPayment(tx, userID, tradeNo, provider, PaymentSourceTopUp, payment, 0, "")
 }
 
 func RecordSubscriptionPayment(tx *gorm.DB, userID int, tradeNo, provider string, payment ledger.Payment) error {
-	if payment.USDPerUnit != "" || provider == "balance" {
+	if payment.USDPerUnit != "" || strings.EqualFold(strings.TrimSpace(provider), "balance") || strings.EqualFold(strings.TrimSpace(provider), "redemption") {
 		return ErrPaymentInvalid
 	}
 	return recordCheckinPayment(tx, userID, tradeNo, provider, PaymentSourceSubscription, payment, 0, "")
+}
+
+// RecordRedemptionPayment records an administrator-declared sale value, not a
+// verified payment callback. Only the host's successful code redemption calls it.
+func RecordRedemptionPayment(tx *gorm.DB, userID int, tradeNo, provider string, payment ledger.Payment) error {
+	if provider != "redemption" || payment.USDPerUnit != "" || (payment.Currency != "CNY" && payment.Currency != "USD") {
+		return ErrPaymentInvalid
+	}
+	amount, err := paymentDecimal(payment.Amount, false)
+	if err != nil || amount.GreaterThan(decimal.NewFromInt(1000000000)) || !amount.Equal(amount.Truncate(2)) {
+		return ErrPaymentInvalid
+	}
+	return recordCheckinPayment(tx, userID, tradeNo, provider, PaymentSourceRedemption, payment, 0, "")
 }
 
 // ReconcilePayment records an audited real payment or prices an existing
@@ -41,7 +54,7 @@ func RecordSubscriptionPayment(tx *gorm.DB, userID int, tradeNo, provider string
 func ReconcilePayment(tx *gorm.DB, userID int, tradeNo, provider, source string, payment ledger.Payment, actorID int, reason string) error {
 	reason = strings.TrimSpace(reason)
 	reasonLength := utf8.RuneCountInString(reason)
-	if actorID <= 0 || reasonLength < 3 || reasonLength > 500 || payment.PaidAt <= 0 {
+	if actorID <= 0 || reasonLength < 3 || reasonLength > 500 || payment.PaidAt <= 0 || source == PaymentSourceRedemption || strings.EqualFold(strings.TrimSpace(provider), "redemption") {
 		return ErrPaymentInvalid
 	}
 	return recordCheckinPayment(tx, userID, tradeNo, provider, source, payment, actorID, reason)
@@ -55,7 +68,7 @@ func recordCheckinPayment(db *gorm.DB, userID int, tradeNo, provider, source str
 		payment.Reference = tradeNo
 	}
 	payment.Currency = strings.ToUpper(strings.TrimSpace(payment.Currency))
-	if userID <= 0 || tradeNo == "" || len(tradeNo) > 191 || provider == "" || len(provider) > 32 || provider == "balance" || payment.Reference == "" || len(payment.Reference) > 128 || !paymentCurrencyValid(payment.Currency) || (source != PaymentSourceTopUp && source != PaymentSourceSubscription) {
+	if userID <= 0 || tradeNo == "" || len(tradeNo) > 191 || provider == "" || len(provider) > 32 || provider == "balance" || payment.Reference == "" || len(payment.Reference) > 128 || !paymentCurrencyValid(payment.Currency) || (source != PaymentSourceTopUp && source != PaymentSourceSubscription && source != PaymentSourceRedemption) {
 		return ErrPaymentInvalid
 	}
 	amount, err := paymentDecimal(payment.Amount, true)
@@ -158,6 +171,9 @@ func recordCheckinPayment(db *gorm.DB, userID int, tradeNo, provider, source str
 		}
 		refunded = decimal.Min(refunded, amount)
 		value := PaymentRecord{UserID: userID, TradeNo: tradeNo, Provider: provider, Reference: payment.Reference, Source: source, Amount: amount.String(), Currency: payment.Currency, CNYPerUSD: cny.String(), USDPerUnit: rate.String(), RefundedAmount: refunded.String(), Status: status, Origin: PaymentOriginProvider, PaidAt: payment.PaidAt, CreatedAt: now, UpdatedAt: now}
+		if source == PaymentSourceRedemption {
+			value.Origin = PaymentOriginRedemption
+		}
 		if actorID > 0 {
 			value.Origin, value.Historical, value.ReconciledBy, value.ReconcileReason = PaymentOriginAdmin, true, actorID, reason
 		}
@@ -296,7 +312,7 @@ func PaymentSummary(tx *gorm.DB, userID int, settings Settings, now time.Time) (
 	now = now.In(location)
 	query := tx.Model(&PaymentRecord{}).Where("user_id = ? AND status = ? AND paid_at <= ?", userID, PaymentStatusPriced, now.Unix())
 	if !settings.IncludeSubscriptions {
-		query = query.Where("source = ?", PaymentSourceTopUp)
+		query = query.Where("source IN ?", []string{PaymentSourceTopUp, PaymentSourceRedemption})
 	}
 	if settings.RechargeMode == "rolling" {
 		if settings.LookbackDays < 1 || settings.LookbackDays > 36500 {

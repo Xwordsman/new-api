@@ -17,16 +17,22 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
-import { Fragment, useMemo } from 'react'
+import { Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import type { NavGroup } from '@/components/layout/types'
+import { Badge } from '@/components/ui/badge'
+import { useSidebarConfig } from '@/hooks/use-sidebar-config'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
+import { useTopNavLinks } from '@/hooks/use-top-nav-links'
+import { getDocumentationLink } from '@/lib/documentation-link'
 import { cn } from '@/lib/utils'
 
 interface FooterLink {
   text: string
   href: string
+  hash?: string
 }
 
 interface FooterColumnProps {
@@ -48,9 +54,26 @@ const NEW_API_FOOTER_ATTRIBUTION_KEY = [
   'projectAttributionSuffix',
 ].join('.')
 
+const FOOTER_ACCOUNT_LINKS: NavGroup[] = [
+  {
+    title: 'Developer resources',
+    items: [
+      { title: 'API Keys', url: '/keys' },
+      { title: 'Usage Logs', url: '/usage-logs' },
+    ],
+  },
+  {
+    title: 'Help and support',
+    items: [
+      { title: 'Wallet', url: '/wallet' },
+      { title: 'Ticket center', url: '/tickets' },
+    ],
+  },
+]
+
 function FooterLinkItem(props: { link: FooterLink }) {
   const { t } = useTranslation()
-  const isExternal = props.link.href.startsWith('http')
+  const isExternal = /^https?:\/\//i.test(props.link.href)
   const label = t(props.link.text)
 
   if (isExternal) {
@@ -59,7 +82,7 @@ function FooterLinkItem(props: { link: FooterLink }) {
         href={props.link.href}
         target='_blank'
         rel='noopener noreferrer'
-        className='text-muted-foreground hover:text-foreground text-sm transition-colors duration-200'
+        className='public-footer-link'
       >
         {label}
       </a>
@@ -69,7 +92,8 @@ function FooterLinkItem(props: { link: FooterLink }) {
   return (
     <Link
       to={props.link.href}
-      className='text-muted-foreground hover:text-foreground text-sm transition-colors duration-200'
+      hash={props.link.hash}
+      className='public-footer-link'
     >
       {label}
     </Link>
@@ -152,69 +176,45 @@ function ProjectAttribution(props: { currentYear: number; inline?: boolean }) {
 export function Footer(props: FooterProps) {
   const { t } = useTranslation()
   const { systemName, logo: systemLogo, footerHtml } = useSystemConfig()
+  const { status } = useStatus()
+  const topLinks = useTopNavLinks()
+  const accountGroups = useSidebarConfig(FOOTER_ACCOUNT_LINKS)
+  const docsLink = getDocumentationLink(status)
 
   const displayLogo = systemLogo || props.logo || '/logo.png'
   const displayName = systemName || props.name || 'New API'
   const currentYear = new Date().getFullYear()
 
-  const fallbackColumns = useMemo<FooterColumnProps[]>(
-    () => [
-      {
-        title: t('footer.columns.about.title'),
-        links: [
-          {
-            text: t('footer.columns.about.links.aboutProject'),
-            href: 'https://docs.newapi.pro/wiki/project-introduction/',
-          },
-          {
-            text: t('footer.columns.about.links.contact'),
-            href: 'https://docs.newapi.pro/support/community-interaction/',
-          },
-          {
-            text: t('footer.columns.about.links.features'),
-            href: 'https://docs.newapi.pro/wiki/features-introduction/',
-          },
-        ],
-      },
-      {
-        title: t('footer.columns.docs.title'),
-        links: [
-          {
-            text: t('footer.columns.docs.links.quickStart'),
-            href: 'https://docs.newapi.pro/getting-started/',
-          },
-          {
-            text: t('footer.columns.docs.links.installation'),
-            href: 'https://docs.newapi.pro/installation/',
-          },
-          {
-            text: t('footer.columns.docs.links.apiDocs'),
-            href: 'https://docs.newapi.pro/api/',
-          },
-        ],
-      },
-      {
-        title: t('footer.columns.related.title'),
-        links: [
-          {
-            text: t('footer.columns.related.links.oneApi'),
-            href: 'https://github.com/songquanpeng/one-api',
-          },
-          {
-            text: t('footer.columns.related.links.midjourney'),
-            href: 'https://github.com/novicezk/midjourney-proxy',
-          },
-          {
-            text: t('footer.columns.related.links.newApiKeyTool'),
-            href: 'https://github.com/Calcium-Ion/new-api-key-tool',
-          },
-        ],
-      },
-    ],
-    [t]
-  )
-
-  const displayColumns = props.columns ?? fallbackColumns
+  const platformLinks = topLinks
+    .filter((link) =>
+      ['/pricing', '/rankings', '/dashboard'].includes(link.href)
+    )
+    .map((link) => ({ text: link.title, href: link.href }))
+  const developerLinks: FooterLink[] = []
+  if (docsLink && topLinks.some((link) => link.href === docsLink.href)) {
+    developerLinks.push({
+      text: t('Documentation center'),
+      href: docsLink.href,
+    })
+  }
+  const supportLinks: FooterLink[] = [
+    { text: t('FAQ'), href: '/', hash: 'faq' },
+  ]
+  for (const group of accountGroups) {
+    const links = group.items.flatMap((item) =>
+      item.url ? [{ text: t(item.title), href: item.url }] : []
+    )
+    if (group.title === 'Developer resources') developerLinks.push(...links)
+    else supportLinks.push(...links)
+  }
+  if (topLinks.some((link) => link.href === '/about')) {
+    supportLinks.push({ text: t('About'), href: '/about' })
+  }
+  const displayColumns = props.columns ?? [
+    { title: t('Platform'), links: platformLinks },
+    { title: t('Developer resources'), links: developerLinks },
+    { title: t('Help and support'), links: supportLinks },
+  ]
 
   if (footerHtml) {
     return (
@@ -239,55 +239,90 @@ export function Footer(props: FooterProps) {
 
   return (
     <footer
-      className={cn('bg-card relative z-10 w-full border-t', props.className)}
+      className={cn(
+        'public-footer relative z-10 w-full border-t',
+        props.className
+      )}
     >
-      <div className='w-full px-5 py-14 sm:px-8 lg:px-12 lg:py-20'>
-        <div className='flex flex-col justify-between gap-10 md:flex-row md:gap-16'>
-          {/* Brand column */}
-          <div className='shrink-0'>
-            <Link to='/' className='group flex items-center gap-2.5'>
+      <div className='relative w-full px-5 pt-14 pb-6 sm:px-6 lg:px-8 lg:pt-16'>
+        <div className='grid gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] lg:gap-16'>
+          <div className='min-w-0'>
+            <Link
+              to='/'
+              className='public-footer-brand inline-flex max-w-full items-center gap-3 rounded-md'
+            >
               <img
                 src={displayLogo}
-                alt={displayName}
-                className='size-9 rounded-lg object-contain'
+                alt=''
+                className='size-9 shrink-0 rounded-lg object-contain'
               />
-              <span className='text-lg font-semibold tracking-tight'>
+              <span className='truncate text-xl font-semibold tracking-tight'>
                 {displayName}
               </span>
             </Link>
-            <p className='text-muted-foreground mt-4 max-w-64 text-sm leading-7'>
+            <p className='mt-6 text-2xl font-semibold tracking-tight sm:text-3xl'>
+              {t('One connection. More possibilities.')}
+            </p>
+            <p className='text-muted-foreground mt-3 max-w-sm text-sm leading-7'>
+              {t('Your models, tools and usage, connected in one place.')}
+            </p>
+            <p className='text-muted-foreground mt-1 text-xs leading-6'>
               {t('Powerful API Management Platform')}
             </p>
+            <div className='text-primary mt-6 flex flex-wrap gap-3 text-xs'>
+              <Badge
+                variant='outline'
+                className='border-primary/15 bg-primary/5 text-primary h-auto rounded-md px-3 py-2'
+              >
+                {t('Multi-protocol Compatible')}
+              </Badge>
+              <Badge
+                variant='outline'
+                className='border-primary/15 bg-primary/5 text-primary h-auto rounded-md px-3 py-2'
+              >
+                {t('Pay-as-you-go')}
+              </Badge>
+            </div>
           </div>
 
-          {/* Links columns */}
-          <div className='grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-3 lg:gap-20 xl:gap-28'>
-            {displayColumns.map((column) => (
-              <div key={column.title}>
-                <p className='mb-5 text-sm font-semibold'>{t(column.title)}</p>
-                <ul className='space-y-3.5'>
-                  {column.links.map((link) => (
-                    <li key={`${link.href}-${link.text}`}>
-                      <FooterLinkItem link={link} />
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
+          <nav
+            aria-label={t('Footer navigation')}
+            className='grid grid-cols-2 gap-x-6 gap-y-9 sm:grid-cols-3 sm:gap-x-10'
+          >
+            {displayColumns
+              .filter((column) => column.links.length > 0)
+              .map((column) => (
+                <div key={column.title} className='min-w-0'>
+                  <h2 className='text-foreground mb-5 flex items-center gap-2.5 text-sm font-semibold'>
+                    <span
+                      className='bg-primary/60 h-3 w-0.5 rounded-full'
+                      aria-hidden
+                    />
+                    {t(column.title)}
+                  </h2>
+                  <ul className='flex flex-col gap-3.5'>
+                    {column.links.map((link) => (
+                      <li key={`${link.href}-${link.text}`}>
+                        <FooterLinkItem link={link} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+          </nav>
         </div>
 
-        {/* Copyright + optional legal links inline on the left, project
-            attribution on the right; wraps on narrow screens. */}
-        <div className='mt-14 flex flex-col items-center justify-between gap-x-3 gap-y-3 border-t pt-6 sm:flex-row'>
-          <div className='text-muted-foreground flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs sm:justify-start'>
-            <span>
-              &copy; {currentYear} {displayName}.{' '}
-              {props.copyright ?? t('footer.defaultCopyright')}
-            </span>
-            <LegalLinks leadingSeparator />
+        <div className='mt-12 border-t pt-5 lg:mt-16'>
+          <div className='flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between'>
+            <div className='text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-2 text-xs leading-6'>
+              <span>
+                &copy; {currentYear} {displayName}.{' '}
+                {props.copyright ?? t('footer.defaultCopyright')}
+              </span>
+              <LegalLinks leadingSeparator />
+            </div>
+            <ProjectAttribution currentYear={currentYear} />
           </div>
-          <ProjectAttribution currentYear={currentYear} />
         </div>
       </div>
     </footer>

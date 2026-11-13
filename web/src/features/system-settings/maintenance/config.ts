@@ -74,6 +74,7 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     enabled: true,
     topup: true,
     checkin: true,
+    lucky_draw: true,
     tickets: true,
     leaderboard: true,
     personal: true,

@@ -45,6 +45,7 @@ import { Route as AuthenticatedDashboardSectionRouteImport } from './routes/_aut
 import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
 import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authenticated/keys/index'
 import { Route as AuthenticatedLeaderboardIndexRouteImport } from './routes/_authenticated/leaderboard/index'
+import { Route as AuthenticatedLuckyDrawIndexRouteImport } from './routes/_authenticated/lucky-draw/index'
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedModelsSectionRouteImport } from './routes/_authenticated/models/$section'
 import { Route as AuthenticatedPlaygroundIndexRouteImport } from './routes/_authenticated/playground/index'
@@ -63,6 +64,7 @@ import { Route as AuthenticatedSystemSettingsDocumentationRouteImport } from './
 import { Route as AuthenticatedSystemSettingsEmailTemplatesRouteImport } from './routes/_authenticated/system-settings/email-templates'
 import { Route as AuthenticatedSystemSettingsKeyPriceProtectionRouteImport } from './routes/_authenticated/system-settings/key-price-protection'
 import { Route as AuthenticatedSystemSettingsLeaderboardRouteImport } from './routes/_authenticated/system-settings/leaderboard'
+import { Route as AuthenticatedSystemSettingsLuckyDrawRouteImport } from './routes/_authenticated/system-settings/lucky-draw'
 import { Route as AuthenticatedSystemSettingsReferralsRouteImport } from './routes/_authenticated/system-settings/referrals'
 import { Route as AuthenticatedSystemSettingsRegistrationRiskRouteImport } from './routes/_authenticated/system-settings/registration-risk'
 import { Route as AuthenticatedSystemSettingsRequestProtectionRouteImport } from './routes/_authenticated/system-settings/request-protection'
@@ -281,6 +283,12 @@ const AuthenticatedLeaderboardIndexRoute =
     path: '/leaderboard/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedLuckyDrawIndexRoute =
+  AuthenticatedLuckyDrawIndexRouteImport.update({
+    id: '/lucky-draw/',
+    path: '/lucky-draw/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedModelsIndexRoute =
   AuthenticatedModelsIndexRouteImport.update({
     id: '/models/',
@@ -387,6 +395,12 @@ const AuthenticatedSystemSettingsLeaderboardRoute =
   AuthenticatedSystemSettingsLeaderboardRouteImport.update({
     id: '/leaderboard',
     path: '/leaderboard',
+    getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
+  } as any)
+const AuthenticatedSystemSettingsLuckyDrawRoute =
+  AuthenticatedSystemSettingsLuckyDrawRouteImport.update({
+    id: '/lucky-draw',
+    path: '/lucky-draw',
     getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
   } as any)
 const AuthenticatedSystemSettingsReferralsRoute =
@@ -604,6 +618,7 @@ export interface FileRoutesByFullPath {
   '/system-settings/email-templates': typeof AuthenticatedSystemSettingsEmailTemplatesRoute
   '/system-settings/key-price-protection': typeof AuthenticatedSystemSettingsKeyPriceProtectionRoute
   '/system-settings/leaderboard': typeof AuthenticatedSystemSettingsLeaderboardRoute
+  '/system-settings/lucky-draw': typeof AuthenticatedSystemSettingsLuckyDrawRoute
   '/system-settings/referrals': typeof AuthenticatedSystemSettingsReferralsRoute
   '/system-settings/registration-risk': typeof AuthenticatedSystemSettingsRegistrationRiskRoute
   '/system-settings/request-protection': typeof AuthenticatedSystemSettingsRequestProtectionRoute
@@ -617,6 +632,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/keys/': typeof AuthenticatedKeysIndexRoute
   '/leaderboard/': typeof AuthenticatedLeaderboardIndexRoute
+  '/lucky-draw/': typeof AuthenticatedLuckyDrawIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
   '/playground/': typeof AuthenticatedPlaygroundIndexRoute
   '/profile/': typeof AuthenticatedProfileIndexRoute
@@ -687,6 +703,7 @@ export interface FileRoutesByTo {
   '/system-settings/email-templates': typeof AuthenticatedSystemSettingsEmailTemplatesRoute
   '/system-settings/key-price-protection': typeof AuthenticatedSystemSettingsKeyPriceProtectionRoute
   '/system-settings/leaderboard': typeof AuthenticatedSystemSettingsLeaderboardRoute
+  '/system-settings/lucky-draw': typeof AuthenticatedSystemSettingsLuckyDrawRoute
   '/system-settings/referrals': typeof AuthenticatedSystemSettingsReferralsRoute
   '/system-settings/registration-risk': typeof AuthenticatedSystemSettingsRegistrationRiskRoute
   '/system-settings/request-protection': typeof AuthenticatedSystemSettingsRequestProtectionRoute
@@ -700,6 +717,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
   '/keys': typeof AuthenticatedKeysIndexRoute
   '/leaderboard': typeof AuthenticatedLeaderboardIndexRoute
+  '/lucky-draw': typeof AuthenticatedLuckyDrawIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
   '/playground': typeof AuthenticatedPlaygroundIndexRoute
   '/profile': typeof AuthenticatedProfileIndexRoute
@@ -774,6 +792,7 @@ export interface FileRoutesById {
   '/_authenticated/system-settings/email-templates': typeof AuthenticatedSystemSettingsEmailTemplatesRoute
   '/_authenticated/system-settings/key-price-protection': typeof AuthenticatedSystemSettingsKeyPriceProtectionRoute
   '/_authenticated/system-settings/leaderboard': typeof AuthenticatedSystemSettingsLeaderboardRoute
+  '/_authenticated/system-settings/lucky-draw': typeof AuthenticatedSystemSettingsLuckyDrawRoute
   '/_authenticated/system-settings/referrals': typeof AuthenticatedSystemSettingsReferralsRoute
   '/_authenticated/system-settings/registration-risk': typeof AuthenticatedSystemSettingsRegistrationRiskRoute
   '/_authenticated/system-settings/request-protection': typeof AuthenticatedSystemSettingsRequestProtectionRoute
@@ -787,6 +806,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
   '/_authenticated/leaderboard/': typeof AuthenticatedLeaderboardIndexRoute
+  '/_authenticated/lucky-draw/': typeof AuthenticatedLuckyDrawIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
   '/_authenticated/playground/': typeof AuthenticatedPlaygroundIndexRoute
   '/_authenticated/profile/': typeof AuthenticatedProfileIndexRoute
@@ -860,6 +880,7 @@ export interface FileRouteTypes {
     | '/system-settings/email-templates'
     | '/system-settings/key-price-protection'
     | '/system-settings/leaderboard'
+    | '/system-settings/lucky-draw'
     | '/system-settings/referrals'
     | '/system-settings/registration-risk'
     | '/system-settings/request-protection'
@@ -873,6 +894,7 @@ export interface FileRouteTypes {
     | '/dashboard/'
     | '/keys/'
     | '/leaderboard/'
+    | '/lucky-draw/'
     | '/models/'
     | '/playground/'
     | '/profile/'
@@ -943,6 +965,7 @@ export interface FileRouteTypes {
     | '/system-settings/email-templates'
     | '/system-settings/key-price-protection'
     | '/system-settings/leaderboard'
+    | '/system-settings/lucky-draw'
     | '/system-settings/referrals'
     | '/system-settings/registration-risk'
     | '/system-settings/request-protection'
@@ -956,6 +979,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/keys'
     | '/leaderboard'
+    | '/lucky-draw'
     | '/models'
     | '/playground'
     | '/profile'
@@ -1029,6 +1053,7 @@ export interface FileRouteTypes {
     | '/_authenticated/system-settings/email-templates'
     | '/_authenticated/system-settings/key-price-protection'
     | '/_authenticated/system-settings/leaderboard'
+    | '/_authenticated/system-settings/lucky-draw'
     | '/_authenticated/system-settings/referrals'
     | '/_authenticated/system-settings/registration-risk'
     | '/_authenticated/system-settings/request-protection'
@@ -1042,6 +1067,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard/'
     | '/_authenticated/keys/'
     | '/_authenticated/leaderboard/'
+    | '/_authenticated/lucky-draw/'
     | '/_authenticated/models/'
     | '/_authenticated/playground/'
     | '/_authenticated/profile/'
@@ -1352,6 +1378,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedLeaderboardIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/lucky-draw/': {
+      id: '/_authenticated/lucky-draw/'
+      path: '/lucky-draw'
+      fullPath: '/lucky-draw/'
+      preLoaderRoute: typeof AuthenticatedLuckyDrawIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/models/': {
       id: '/_authenticated/models/'
       path: '/models'
@@ -1476,6 +1509,13 @@ declare module '@tanstack/react-router' {
       path: '/leaderboard'
       fullPath: '/system-settings/leaderboard'
       preLoaderRoute: typeof AuthenticatedSystemSettingsLeaderboardRouteImport
+      parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
+    }
+    '/_authenticated/system-settings/lucky-draw': {
+      id: '/_authenticated/system-settings/lucky-draw'
+      path: '/lucky-draw'
+      fullPath: '/system-settings/lucky-draw'
+      preLoaderRoute: typeof AuthenticatedSystemSettingsLuckyDrawRouteImport
       parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
     }
     '/_authenticated/system-settings/referrals': {
@@ -1726,6 +1766,7 @@ interface AuthenticatedSystemSettingsRouteRouteChildren {
   AuthenticatedSystemSettingsEmailTemplatesRoute: typeof AuthenticatedSystemSettingsEmailTemplatesRoute
   AuthenticatedSystemSettingsKeyPriceProtectionRoute: typeof AuthenticatedSystemSettingsKeyPriceProtectionRoute
   AuthenticatedSystemSettingsLeaderboardRoute: typeof AuthenticatedSystemSettingsLeaderboardRoute
+  AuthenticatedSystemSettingsLuckyDrawRoute: typeof AuthenticatedSystemSettingsLuckyDrawRoute
   AuthenticatedSystemSettingsReferralsRoute: typeof AuthenticatedSystemSettingsReferralsRoute
   AuthenticatedSystemSettingsRegistrationRiskRoute: typeof AuthenticatedSystemSettingsRegistrationRiskRoute
   AuthenticatedSystemSettingsRequestProtectionRoute: typeof AuthenticatedSystemSettingsRequestProtectionRoute
@@ -1768,6 +1809,8 @@ const AuthenticatedSystemSettingsRouteRouteChildren: AuthenticatedSystemSettings
       AuthenticatedSystemSettingsKeyPriceProtectionRoute,
     AuthenticatedSystemSettingsLeaderboardRoute:
       AuthenticatedSystemSettingsLeaderboardRoute,
+    AuthenticatedSystemSettingsLuckyDrawRoute:
+      AuthenticatedSystemSettingsLuckyDrawRoute,
     AuthenticatedSystemSettingsReferralsRoute:
       AuthenticatedSystemSettingsReferralsRoute,
     AuthenticatedSystemSettingsRegistrationRiskRoute:
@@ -1835,6 +1878,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
   AuthenticatedKeysIndexRoute: typeof AuthenticatedKeysIndexRoute
   AuthenticatedLeaderboardIndexRoute: typeof AuthenticatedLeaderboardIndexRoute
+  AuthenticatedLuckyDrawIndexRoute: typeof AuthenticatedLuckyDrawIndexRoute
   AuthenticatedModelsIndexRoute: typeof AuthenticatedModelsIndexRoute
   AuthenticatedPlaygroundIndexRoute: typeof AuthenticatedPlaygroundIndexRoute
   AuthenticatedProfileIndexRoute: typeof AuthenticatedProfileIndexRoute
@@ -1867,6 +1911,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
   AuthenticatedKeysIndexRoute: AuthenticatedKeysIndexRoute,
   AuthenticatedLeaderboardIndexRoute: AuthenticatedLeaderboardIndexRoute,
+  AuthenticatedLuckyDrawIndexRoute: AuthenticatedLuckyDrawIndexRoute,
   AuthenticatedModelsIndexRoute: AuthenticatedModelsIndexRoute,
   AuthenticatedPlaygroundIndexRoute: AuthenticatedPlaygroundIndexRoute,
   AuthenticatedProfileIndexRoute: AuthenticatedProfileIndexRoute,

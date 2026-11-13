@@ -33,6 +33,10 @@ export const redemptionSchema = z.object({
   redeemed_time: z.number(),
   expired_time: z.number(), // 0 for never expires
   used_user_id: z.number(),
+  code_type: z.enum(['', 'gift', 'sale']).optional(),
+  recharge_amount: z.string().optional(),
+  recharge_currency: z.string().optional(),
+  referral_enabled: z.boolean().optional(),
 })
 
 export type Redemption = z.infer<typeof redemptionSchema>
@@ -77,6 +81,10 @@ export interface RedemptionFormData {
   expired_time: number
   count?: number // Only for create
   status?: number // Only for status update
+  code_type: 'gift' | 'sale'
+  recharge_amount: string
+  recharge_currency: string
+  referral_enabled: boolean
 }
 
 // ============================================================================

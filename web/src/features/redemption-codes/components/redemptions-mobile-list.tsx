@@ -31,7 +31,8 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatQuota } from '@/lib/format'
+import { toIntlLocale } from '@/i18n/languages'
+import { formatNumber, formatQuota } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 import { REDEMPTION_STATUS, REDEMPTION_STATUSES } from '../constants'
@@ -76,7 +77,8 @@ interface RedemptionsMobileListProps {
 }
 
 export function RedemptionsMobileList(props: RedemptionsMobileListProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const rows = props.table.getRowModel().rows
 
   if (props.isLoading) return <RedemptionsMobileSkeleton />
@@ -166,6 +168,19 @@ export function RedemptionsMobileList(props: RedemptionsMobileListProps) {
               <span className='font-medium tabular-nums'>
                 {formatQuota(redemption.quota)}
               </span>
+            </div>
+            <div className='text-muted-foreground text-xs'>
+              {redemption.code_type === 'sale' ? (
+                <>
+                  {t('Sale recharge code')} · {redemption.recharge_currency}{' '}
+                  {formatNumber(Number(redemption.recharge_amount), locale)} ·{' '}
+                  {redemption.referral_enabled
+                    ? t('Commission enabled')
+                    : t('No commission')}
+                </>
+              ) : (
+                t('Gift code')
+              )}
             </div>
           </div>
         )

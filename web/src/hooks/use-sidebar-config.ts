@@ -58,6 +58,7 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     enabled: true,
     topup: true,
     checkin: true,
+    lucky_draw: true,
     referrals: true,
     tickets: true,
     leaderboard: true,
@@ -119,6 +120,7 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/usage-logs/task': { section: 'console', module: 'task' },
   '/wallet': { section: 'personal', module: 'topup' },
   '/checkin': { section: 'personal', module: 'checkin' },
+  '/lucky-draw': { section: 'personal', module: 'lucky_draw' },
   '/referrals': { section: 'personal', module: 'referrals' },
   '/tickets': { section: 'personal', module: 'tickets' },
   '/leaderboard': { section: 'personal', module: 'leaderboard' },
@@ -137,6 +139,7 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
 
 const URL_TO_FEATURE_MAP: Record<string, keyof ExtensionFeatures> = {
   '/checkin': 'checkin',
+  '/lucky-draw': 'lucky_draw',
   '/channel-monitor': 'channel_monitor',
   '/benchmark': 'benchmark',
   '/referrals': 'referrals',

@@ -107,8 +107,8 @@ export type CheckinPayment = {
   cny_per_usd: string
   usd_per_unit: string
   status: 'priced' | 'unpriced'
-  source: 'topup' | 'subscription'
-  origin: 'provider' | 'admin'
+  source: 'topup' | 'subscription' | 'redemption'
+  origin: 'provider' | 'admin' | 'redemption'
   historical: boolean
   created_at: number
   updated_at: number
