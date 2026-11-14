@@ -53,15 +53,16 @@ export function OfferScheduleDetails(props: {
   const { t, i18n } = useTranslation()
   const [clock, setClock] = useState(Date.now)
   const schedule = props.schedule
+  const hasDailyWindow = Boolean(schedule.daily_start && schedule.daily_end)
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const now = props.receivedAt
     ? schedule.evaluated_at + Math.max(0, clock - props.receivedAt) / 1000
     : clock / 1000
   useEffect(() => {
-    if (!schedule.period_end) return
+    if (!hasDailyWindow || !schedule.period_end) return
     const timer = globalThis.setInterval(() => setClock(Date.now()), 1000)
     return () => globalThis.clearInterval(timer)
-  }, [schedule.period_end])
+  }, [hasDailyWindow, schedule.period_end])
   const timeFormat = new Intl.DateTimeFormat(locale, {
     timeZone: props.timezone,
     hour: '2-digit',
@@ -82,7 +83,7 @@ export function OfferScheduleDetails(props: {
   })
   let period = t('All day')
   let transition = ''
-  if (schedule.period_end > 0) {
+  if (hasDailyWindow && schedule.period_end > 0) {
     const end = schedule.period_end
     const dayOffset =
       pricingDay(end, props.timezone) - pricingDay(now, props.timezone)
@@ -103,10 +104,10 @@ export function OfferScheduleDetails(props: {
       endTime = `${t('Next day')} ${endTime}`
     }
     period = `${startTime}–${endTime}`
-    if (!schedule.daily_start || (!start && dayOffset > 1)) {
+    if (!start && dayOffset > 1) {
       period = `${start ? fullFormat.format(start * 1000) : t('Now')}–${fullFormat.format(end * 1000)}`
     }
-  } else if (schedule.period_start) {
+  } else if (hasDailyWindow && schedule.period_start) {
     period = `${fullFormat.format(schedule.period_start * 1000)}–${t('No end time')}`
   }
   const remaining = Math.max(0, Math.ceil(schedule.period_end - now))
@@ -119,64 +120,84 @@ export function OfferScheduleDetails(props: {
     .join(':')
   const nextDiscounted = schedule.next_factor < 1
   return (
-    <dl className='flex flex-col gap-2.5 text-sm'>
-      <div className='flex items-baseline justify-between gap-4'>
-        <dt className='text-muted-foreground shrink-0'>
-          {t('Current period')}
-        </dt>
-        <dd className='text-right tabular-nums'>{period}</dd>
-      </div>
-      {schedule.period_end > 0 ? (
-        <>
-          <div className='flex items-baseline justify-between gap-4'>
-            <dt className='text-muted-foreground shrink-0'>
-              {nextDiscounted
-                ? t('Next discount starts')
-                : t('Current period ends')}
-            </dt>
-            <dd className='text-right leading-5 tabular-nums'>
-              <time
-                dateTime={new Date(schedule.period_end * 1000).toISOString()}
-                title={fullFormat.format(schedule.period_end * 1000)}
-              >
-                {transition}
-              </time>
-              <span className='text-muted-foreground'> · </span>
-              <span
-                role='timer'
-                aria-label={t('Time until next pricing change')}
-                className='text-primary font-mono'
-              >
-                {countdown}
-              </span>
-            </dd>
-          </div>
-          <div className='flex items-baseline justify-between gap-4'>
-            <dt className='text-muted-foreground shrink-0'>
-              {t('Next period')}
-            </dt>
-            <dd
-              className={cn(
-                'text-right font-medium',
-                nextDiscounted && 'text-primary'
-              )}
-            >
-              {nextDiscounted ? t('Discount') : t('Regular price')} ×
-              {ratioFormat.format(props.baseRatio * schedule.next_factor)}
-            </dd>
-          </div>
-        </>
-      ) : (
+    <dl className='flex flex-col gap-2.5 text-[12.5px]'>
+      {hasDailyWindow && (
         <div className='flex items-baseline justify-between gap-4'>
-          <dt className='text-muted-foreground'>{t('Next period')}</dt>
-          <dd className='text-right'>{t('No upcoming change')}</dd>
+          <dt className='text-muted-foreground shrink-0'>
+            {t('Current period')}
+          </dt>
+          <dd className='text-right font-medium tabular-nums'>{period}</dd>
         </div>
       )}
-      <div className='flex items-baseline justify-between gap-4 border-t pt-2.5'>
+      {hasDailyWindow &&
+        (schedule.period_end > 0 ? (
+          <>
+            <div className='flex items-baseline justify-between gap-4'>
+              <dt className='text-muted-foreground shrink-0'>
+                {nextDiscounted
+                  ? t('Next discount starts')
+                  : t('Current period ends')}
+              </dt>
+              <dd className='text-right leading-5 font-medium tabular-nums'>
+                <time
+                  dateTime={new Date(schedule.period_end * 1000).toISOString()}
+                  title={fullFormat.format(schedule.period_end * 1000)}
+                >
+                  {transition}
+                </time>
+                <span className='text-muted-foreground'> · </span>
+                <span
+                  role='timer'
+                  aria-label={t('Time until next pricing change')}
+                  className='text-primary font-mono'
+                >
+                  {countdown}
+                </span>
+              </dd>
+            </div>
+            <div className='flex items-baseline justify-between gap-4'>
+              <dt className='text-muted-foreground shrink-0'>
+                {t('Next period')}
+              </dt>
+              <dd
+                className={cn(
+                  'text-right font-medium',
+                  nextDiscounted && 'text-primary'
+                )}
+              >
+                {nextDiscounted ? t('Discount') : t('Regular price')} ×
+                {ratioFormat.format(props.baseRatio * schedule.next_factor)}
+              </dd>
+            </div>
+          </>
+        ) : (
+          <div className='flex items-baseline justify-between gap-4'>
+            <dt className='text-muted-foreground'>{t('Next period')}</dt>
+            <dd className='text-right'>{t('No upcoming change')}</dd>
+          </div>
+        ))}
+      {!hasDailyWindow && schedule.starts_at > now && (
+        <div className='flex items-baseline justify-between gap-4'>
+          <dt className='text-muted-foreground shrink-0'>
+            {t('Next discount starts')}
+          </dt>
+          <dd className='text-right font-medium tabular-nums'>
+            <time dateTime={new Date(schedule.starts_at * 1000).toISOString()}>
+              {fullFormat.format(schedule.starts_at * 1000)}
+            </time>
+          </dd>
+        </div>
+      )}
+      <div
+        className={cn(
+          'flex items-baseline justify-between gap-4',
+          hasDailyWindow && 'border-t pt-2.5'
+        )}
+      >
         <dt className='text-muted-foreground shrink-0'>
           {t('Activity end time')}
         </dt>
-        <dd className='text-right tabular-nums'>
+        <dd className='text-right font-medium tabular-nums'>
           {schedule.ends_at > 0 ? (
             <time dateTime={new Date(schedule.ends_at * 1000).toISOString()}>
               {fullFormat.format(schedule.ends_at * 1000)}
@@ -188,7 +209,7 @@ export function OfferScheduleDetails(props: {
       </div>
       <div className='flex items-baseline justify-between gap-4'>
         <dt className='text-muted-foreground'>{t('Pricing timezone')}</dt>
-        <dd className='font-mono'>{props.timezone}</dd>
+        <dd className='font-mono font-medium'>{props.timezone}</dd>
       </div>
     </dl>
   )

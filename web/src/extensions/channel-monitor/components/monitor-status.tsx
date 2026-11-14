@@ -35,7 +35,7 @@ export function MonitorStatusBadge(props: { status: MonitorStatus }) {
       />
       <StatusBadge
         {...statuses[props.status]}
-        className='text-sm'
+        className='text-[12.5px] font-normal'
         type='text'
         copyable={false}
       />

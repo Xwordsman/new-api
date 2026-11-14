@@ -98,7 +98,7 @@ export function GroupRow(props: {
               <div className='flex items-center gap-2'>
                 <Button
                   variant='link'
-                  className='text-foreground h-auto min-w-0 shrink justify-start p-0 text-left text-base font-semibold'
+                  className='text-foreground h-auto min-w-0 shrink justify-start p-0 text-left text-sm leading-[21px] font-medium'
                   title={group.display_name || group.group}
                   aria-label={t('Details for {{group}}', {
                     group: group.display_name || group.group,
@@ -114,7 +114,7 @@ export function GroupRow(props: {
                 {(group.badge || (discounted && group.offer.label)) && (
                   <Badge
                     variant='outline'
-                    className='border-primary/25 bg-primary/5 text-primary max-w-24 shrink-0 truncate rounded-[calc(var(--radius)*0.2)] px-1.5 py-0.5 text-xs leading-4 font-normal'
+                    className='border-primary/25 bg-primary/5 text-primary max-w-24 shrink-0 truncate rounded-[calc(var(--radius)*0.2)] px-1.5 py-0.5 text-[11.5px] leading-[11.5px] font-medium'
                   >
                     <Tag className='mr-1 size-3' aria-hidden />
                     {group.badge || group.offer.label}
@@ -122,7 +122,7 @@ export function GroupRow(props: {
                 )}
               </div>
               <p
-                className='text-muted-foreground mt-1 truncate text-[13px]'
+                className='text-muted-foreground mt-1 truncate text-[11.5px]'
                 title={group.description || group.group}
               >
                 {group.group} ·{' '}
@@ -144,7 +144,7 @@ export function GroupRow(props: {
               buckets={group.timeline}
               className='h-5 w-full min-w-0 flex-1'
             />
-            <span className='w-15 shrink-0 text-right font-mono text-sm tabular-nums'>
+            <span className='w-15 shrink-0 text-right font-mono text-[12.5px] tabular-nums'>
               {group.success_rate == null
                 ? '—'
                 : `${formatNumber(group.success_rate, locale)}%`}
@@ -154,23 +154,29 @@ export function GroupRow(props: {
             <span className='text-warning text-xs'>{t('Recent sample')}</span>
           )}
         </TableCell>
-        <TableCell className='text-right font-mono text-sm tabular-nums'>
+        <TableCell className='text-right font-mono text-[13px] tabular-nums'>
           {group.ttft_seconds == null
             ? '—'
-            : `${formatNumber(group.ttft_seconds, locale)}s`}
+            : formatNumber(group.ttft_seconds, locale)}
+          {group.ttft_seconds != null && (
+            <span className='text-muted-foreground text-[10.5px]'>s</span>
+          )}
         </TableCell>
-        <TableCell className='text-right font-mono text-sm tabular-nums'>
+        <TableCell className='text-right font-mono text-[13px] tabular-nums'>
           {group.tokens_per_second == null
             ? '—'
             : `${formatNumber(group.tokens_per_second, locale)}`}
-          <span className='text-muted-foreground text-xs'>
-            {group.tokens_per_second != null && 't/s'}
-          </span>
+          {group.tokens_per_second != null && (
+            <span className='text-muted-foreground text-[10.5px]'>t/s</span>
+          )}
         </TableCell>
-        <TableCell className='text-right font-mono text-sm tabular-nums'>
+        <TableCell className='text-right font-mono text-[13px] tabular-nums'>
           {group.cache_hit_rate == null
             ? '—'
-            : `${formatNumber(group.cache_hit_rate, locale)}%`}
+            : formatNumber(group.cache_hit_rate, locale)}
+          {group.cache_hit_rate != null && (
+            <span className='text-muted-foreground text-[10.5px]'>%</span>
+          )}
         </TableCell>
         <TableCell className='px-0'>
           <Button

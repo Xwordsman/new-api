@@ -20,7 +20,7 @@ For commercial licensing, please contact support@quantumnous.com
 .monitor-controls [data-slot='native-select'],
 .monitor-controls > [data-slot='button'] {
   border-radius: calc(var(--radius) * 0.4);
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .monitor-metric {

@@ -155,22 +155,58 @@ it('shows the initial loading state and lets a failed request be retried', async
   view.client.clear()
 })
 
-it('uses legible group labels and metrics with theme-colored discount badges', async () => {
+it('uses the reference list typography without enlarging the page controls or summary cards', async () => {
   vi.spyOn(api, 'get').mockResolvedValue({
-    data: { success: true, data: snapshot },
+    data: {
+      success: true,
+      data: {
+        ...snapshot,
+        groups: [
+          {
+            ...group,
+            success_rate: 98.25,
+            ttft_seconds: 1.23,
+            tokens_per_second: 35.5,
+            cache_hit_rate: 82.4,
+          },
+        ],
+      },
+    },
   })
   const view = renderMonitor()
   const name = await screen.findByRole('button', {
     name: 'Details for Public group',
   })
-  expect(name).toHaveClass('text-base')
+  expect(name).toHaveClass('text-sm', 'font-medium', 'leading-[21px]')
   const row = name.closest('tr')
   if (!row) throw new Error('Expected group table row')
   expect(within(row).getByText('Discount')).toHaveClass(
     'text-primary',
-    'bg-primary/5'
+    'bg-primary/5',
+    'text-[11.5px]'
   )
+  expect(within(row).getByText(/public ·/)).toHaveClass('text-[11.5px]')
   expect(within(row).getByText('×0.24')).toHaveClass('text-primary')
+  expect(
+    within(row).getByText('Unknown').closest('[data-slot="status-badge"]')
+  ).toHaveClass('text-[12.5px]', 'font-normal')
+  expect(within(row).getByText('98.25%')).toHaveClass('text-[12.5px]')
+  const cells = within(row).getAllByRole('cell')
+  for (const index of [4, 5, 6]) {
+    expect(cells[index]).toHaveClass('text-[13px]')
+    expect(
+      within(cells[index]).getByText(['s', 't/s', '%'][index - 4])
+    ).toHaveClass('text-[10.5px]')
+  }
+  expect(screen.getByRole('table')).toHaveClass('[&_th]:text-xs')
+  expect(screen.getByText('Auto refresh')).toHaveClass('text-xs')
+  expect(screen.getByText('SUCCESS')).toHaveClass('text-[10px]')
+  expect(
+    screen.getByRole('textbox', { name: 'Search groups or models' })
+  ).toHaveClass('text-xs')
+  expect(
+    screen.getByText(/Model base price × public group multiplier ·/)
+  ).toHaveClass('text-[11px]')
   view.client.clear()
 })
 
@@ -363,6 +399,10 @@ it('shows public discount details on hover, keyboard focus and touch without ope
   expect(within(details).getByText('×0.3')).toBeVisible()
   expect(within(details).getByText('8/10 of base price')).toBeVisible()
   expect(within(details).getByText('Asia/Shanghai')).toBeVisible()
+  expect(within(details).getByText('Activity end time')).toBeVisible()
+  expect(
+    within(details).queryByText('Current period ends')
+  ).not.toBeInTheDocument()
   expect(within(details).getByText(/11\/15.*06:13/)).toHaveAttribute(
     'datetime',
     '2023-11-14T22:13:20.000Z'
@@ -499,6 +539,77 @@ it('opens scheduled regular pricing and distinguishes the next daily offer from 
   ).toHaveAttribute('aria-expanded', 'false')
   view.client.clear()
 })
+
+it.each([
+  { endsAt: 0, startsIn: -3600 },
+  { endsAt: Date.parse('2026-11-30T15:00:00Z') / 1000, startsIn: -3600 },
+  { endsAt: Date.parse('2026-11-30T15:00:00Z') / 1000, startsIn: 86400 },
+])(
+  'shows fixed-offer dates without daily periods when ending at $endsAt and starting in $startsIn seconds',
+  async ({ endsAt, startsIn }) => {
+    const user = userEvent.setup()
+    const now = Date.parse('2026-11-14T13:30:00Z')
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+    render(
+      <GroupRatio
+        receivedAt={now}
+        group={{
+          ...group,
+          ratio: startsIn > 0 ? group.base_ratio : group.ratio,
+          offer: {
+            ...group.offer,
+            active: startsIn <= 0,
+            timezone: 'Asia/Shanghai',
+            schedule: {
+              evaluated_at: now / 1000,
+              starts_at: now / 1000 + startsIn,
+              ends_at: endsAt,
+              daily_start: '',
+              daily_end: '',
+              period_start: startsIn > 0 ? 0 : now / 1000 + startsIn,
+              period_end: startsIn > 0 ? now / 1000 + startsIn : endsAt,
+              next_factor: startsIn > 0 ? 0.8 : 1,
+            },
+          },
+        }}
+      />
+    )
+    const detailsName = startsIn > 0 ? 'Pricing details' : 'Discount details'
+    await user.click(
+      screen.getByRole('button', { name: `${detailsName} for Public group` })
+    )
+    const details = await screen.findByRole('region', { name: detailsName })
+    expect(within(details).getByText('Activity end time')).toBeVisible()
+    expect(within(details).getByText('Asia/Shanghai')).toBeVisible()
+    if (endsAt) {
+      expect(within(details).getByText(/11\/30.*23:00/)).toHaveAttribute(
+        'datetime',
+        '2026-11-30T15:00:00.000Z'
+      )
+    } else {
+      expect(within(details).getByText('No end time')).toBeVisible()
+    }
+    if (startsIn > 0) {
+      expect(within(details).getByText('Next discount starts')).toBeVisible()
+      expect(within(details).getByText(/11\/15.*21:30/)).toHaveAttribute(
+        'datetime',
+        '2026-11-15T13:30:00.000Z'
+      )
+    } else {
+      expect(
+        within(details).queryByText('Next discount starts')
+      ).not.toBeInTheDocument()
+    }
+    for (const label of [
+      'Current period',
+      'Current period ends',
+      'Next period',
+    ]) {
+      expect(within(details).queryByText(label)).not.toBeInTheDocument()
+    }
+    expect(within(details).queryByRole('timer')).not.toBeInTheDocument()
+  }
+)
 
 it('counts down from server time while the multiplier details are open', async () => {
   vi.useFakeTimers()

@@ -89,10 +89,10 @@ export function GroupRatio(props: {
             </span>
             {discounted && (
               <>
-                <s className='text-muted-foreground text-xs font-normal'>
+                <s className='text-muted-foreground text-[11.5px] font-normal'>
                   ×{ratioFormat.format(group.base_ratio)}
                 </s>
-                <span className='bg-primary text-primary-foreground absolute -top-1.5 -right-1.5 rounded-[calc(var(--radius)*0.15)] px-0.5 text-xs leading-4'>
+                <span className='bg-primary text-primary-foreground absolute -top-1.5 -right-1.5 rounded-[calc(var(--radius)*0.15)] px-0.5 text-[10.5px] leading-4'>
                   {t('Sale')}
                 </span>
               </>
@@ -107,7 +107,7 @@ export function GroupRatio(props: {
         aria-label={discounted ? t('Discount details') : t('Pricing details')}
         className='w-96 max-w-[calc(100vw-2rem)] rounded-[calc(var(--radius)*0.6)] p-4'
       >
-        <p className='flex items-center gap-2 text-sm font-semibold'>
+        <p className='flex items-center gap-2 text-[12.5px] font-semibold'>
           <span
             className={cn(
               'size-2 rounded-full',
@@ -118,18 +118,18 @@ export function GroupRatio(props: {
           <span>
             {discounted ? t('Discount period') : t('Regular-price period')}
           </span>
-          <span className='text-muted-foreground ml-auto text-[13px] font-normal'>
+          <span className='text-muted-foreground ml-auto text-[12.5px] font-normal'>
             {discounted
               ? group.offer.label || t('Discount')
               : t('Regular price')}
           </span>
         </p>
-        <dl className='mt-3 flex flex-col gap-2.5 text-sm'>
+        <dl className='mt-3 flex flex-col gap-2.5 text-[12.5px]'>
           <div className='flex items-baseline justify-between gap-4'>
             <dt className='text-muted-foreground'>{t('Current multiplier')}</dt>
             <dd
               className={cn(
-                'font-mono font-semibold tabular-nums',
+                'font-mono font-medium tabular-nums',
                 discounted && 'text-primary'
               )}
             >
@@ -138,7 +138,7 @@ export function GroupRatio(props: {
           </div>
           <div className='flex items-baseline justify-between gap-4'>
             <dt className='text-muted-foreground'>{t('Base multiplier')}</dt>
-            <dd className='font-mono tabular-nums'>
+            <dd className='font-mono font-medium tabular-nums'>
               ×{ratioFormat.format(group.base_ratio)}
             </dd>
           </div>
@@ -162,10 +162,10 @@ export function GroupRatio(props: {
               receivedAt={props.receivedAt}
             />
           ) : (
-            <dl className='flex flex-col gap-2.5 text-sm'>
+            <dl className='flex flex-col gap-2.5 text-[12.5px]'>
               <div className='flex items-baseline justify-between gap-4'>
                 <dt className='text-muted-foreground'>
-                  {t('Current period ends')}
+                  {t('Activity end time')}
                 </dt>
                 <dd className='tabular-nums'>
                   {endsAt ? (

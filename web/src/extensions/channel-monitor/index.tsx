@@ -248,7 +248,7 @@ export function ChannelMonitorPage() {
                 checked={automatic}
                 onCheckedChange={setAutomatic}
               />
-              <Label htmlFor='monitor-auto-refresh' className='text-sm'>
+              <Label htmlFor='monitor-auto-refresh' className='text-xs'>
                 {t('Auto refresh')}
               </Label>
             </div>
@@ -267,7 +267,7 @@ export function ChannelMonitorPage() {
           </div>
         }
       >
-        <p className='text-muted-foreground flex flex-wrap items-center gap-2 border-t pt-3 text-sm'>
+        <p className='text-muted-foreground flex flex-wrap items-center gap-2 border-t pt-3 text-xs'>
           <span
             className={cn(
               'size-1.5 rounded-full',
@@ -337,14 +337,14 @@ export function ChannelMonitorPage() {
                     data-tone={card.tone}
                     className='console-surface console-metric monitor-metric relative min-w-0 rounded-xl border p-5'
                   >
-                    <div className='flex items-center justify-between gap-2 text-sm font-medium'>
+                    <div className='flex items-center justify-between gap-2 text-[13px] font-medium'>
                       <span className='flex items-center gap-2'>
                         <span className='monitor-metric-icon flex size-6.5 shrink-0 items-center justify-center rounded-[calc(var(--radius)*0.4)] border'>
                           <card.icon className='size-3.5' aria-hidden />
                         </span>
                         {card.title}
                       </span>
-                      <span className='text-muted-foreground hidden font-mono text-xs font-normal tracking-wide @min-[42rem]/monitor:inline'>
+                      <span className='text-muted-foreground hidden font-mono text-[10px] font-normal tracking-wide @min-[42rem]/monitor:inline'>
                         {card.code}
                       </span>
                     </div>
@@ -356,11 +356,11 @@ export function ChannelMonitorPage() {
                             : formatNumber(card.value, locale)
                         }
                       />
-                      <span className='monitor-metric-unit font-mono text-sm leading-none'>
+                      <span className='monitor-metric-unit font-mono text-[13px] leading-none'>
                         {card.suffix}
                       </span>
                     </div>
-                    <p className='text-muted-foreground mt-3.5 text-[13px] leading-5'>
+                    <p className='text-muted-foreground mt-3.5 font-mono text-[11px] leading-4.5'>
                       {card.description}
                     </p>
                   </section>
@@ -388,7 +388,7 @@ export function ChannelMonitorPage() {
                         aria-pressed={status === item.value}
                         onClick={() => setStatus(item.value)}
                         className={cn(
-                          'text-muted-foreground h-8 shrink-0 gap-1.5 rounded-none border-x-0 border-t-0 border-b-2 border-transparent px-3 text-sm',
+                          'text-muted-foreground h-8 shrink-0 gap-1.5 rounded-none border-x-0 border-t-0 border-b-2 border-transparent px-3 text-[13px]',
                           status === item.value && 'border-primary text-primary'
                         )}
                       >
@@ -409,7 +409,7 @@ export function ChannelMonitorPage() {
                             {item.label}
                           </>
                         )}
-                        <span className='font-mono text-xs font-normal opacity-80'>
+                        <span className='font-mono text-[10px] font-normal opacity-80'>
                           {
                             data.groups.filter(
                               (group) =>
@@ -421,7 +421,7 @@ export function ChannelMonitorPage() {
                       </Button>
                     ))}
                   </div>
-                  <span className='text-muted-foreground hidden shrink-0 font-mono text-[13px] sm:block'>
+                  <span className='text-muted-foreground hidden shrink-0 font-mono text-[11px] sm:block'>
                     {t('{{count}} groups', { count: groups.length })}
                   </span>
                 </div>
@@ -438,11 +438,11 @@ export function ChannelMonitorPage() {
                       <Button
                         variant='outline'
                         size='sm'
-                        className='h-8 gap-1.5 rounded-[calc(var(--radius)*0.4)] px-2.5 text-sm font-normal'
+                        className='h-8 gap-1.5 rounded-[calc(var(--radius)*0.4)] px-2.5 text-xs font-normal'
                       >
                         <ArrowDownUp className='size-3.5' aria-hidden />
                         <span>{currentSort?.label}</span>
-                        <span className='text-muted-foreground text-xs'>
+                        <span className='text-muted-foreground text-[10px]'>
                           {currentSort?.direction}
                         </span>
                         <ChevronDown className='size-3' aria-hidden />
@@ -459,10 +459,10 @@ export function ChannelMonitorPage() {
                           value={option.value}
                           aria-label={`${option.label} ${option.direction}`.trim()}
                           closeOnClick
-                          className='gap-3 py-1.5 text-sm'
+                          className='gap-3 py-1.5 text-[13px]'
                         >
                           <span>{option.label}</span>
-                          <span className='text-muted-foreground text-xs'>
+                          <span className='text-muted-foreground text-[10px]'>
                             {option.direction}
                           </span>
                         </DropdownMenuRadioItem>
@@ -475,7 +475,7 @@ export function ChannelMonitorPage() {
                       aria-hidden
                     />
                     <Input
-                      className='h-8 rounded-[calc(var(--radius)*0.45)] pl-8 text-sm'
+                      className='h-8 rounded-[calc(var(--radius)*0.45)] pl-8 text-xs'
                       aria-label={t('Search groups or models')}
                       placeholder={t('Search groups or models')}
                       value={search}
@@ -492,7 +492,7 @@ export function ChannelMonitorPage() {
                   />
                 ) : (
                   <StaticDataTable
-                    tableClassName='min-w-260 table-fixed [&_th]:overflow-hidden [&_th]:text-ellipsis [&_th]:h-9.5 [&_th]:text-sm [&_th]:font-normal [&_th]:text-muted-foreground'
+                    tableClassName='min-w-260 table-fixed [&_th]:overflow-hidden [&_th]:text-ellipsis [&_th]:h-9.5 [&_th]:text-xs [&_th]:font-normal [&_th]:text-muted-foreground'
                     tableProps={{ typography: 'content' }}
                     className='bg-card rounded-[calc(var(--radius)*0.7)]'
                   >
@@ -507,7 +507,7 @@ export function ChannelMonitorPage() {
                       <col className='w-8' />
                     </colgroup>
                     <TableHeader>
-                      <TableRow className='bg-muted/40 text-sm'>
+                      <TableRow className='bg-muted/40 text-xs'>
                         <TableHead
                           className='pl-4.5'
                           aria-sort={sort === 'name' ? 'ascending' : undefined}
@@ -584,7 +584,7 @@ export function ChannelMonitorPage() {
                   </StaticDataTable>
                 )}
               </Card>
-              <p className='text-muted-foreground text-center text-[13px] leading-5'>
+              <p className='text-muted-foreground text-center text-[11px] leading-5'>
                 {t(
                   'Model base price × public group multiplier · Scheduled discounts apply automatically · Success rates are weighted by real requests'
                 )}
