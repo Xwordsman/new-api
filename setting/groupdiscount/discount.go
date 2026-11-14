@@ -13,19 +13,22 @@ import (
 	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 )
 
-const OptionKey = "extension.channel_monitor.settings"
+const OptionKey = "extension.group_pricing.promotions"
+const LegacyOptionKey = "extension.channel_monitor.settings"
 
 type Rule struct {
-	Enabled    bool    `json:"enabled"`
-	Factor     float64 `json:"factor"`
-	Label      string  `json:"label"`
-	StartsAt   int64   `json:"starts_at"`
-	EndsAt     int64   `json:"ends_at"`
-	DailyStart string  `json:"daily_start"`
-	DailyEnd   string  `json:"daily_end"`
-	Timezone   string  `json:"timezone"`
+	Enabled    bool     `json:"enabled"`
+	Factor     float64  `json:"factor,omitempty"`
+	Ratio      *float64 `json:"ratio,omitempty"`
+	Label      string   `json:"label"`
+	StartsAt   int64    `json:"starts_at"`
+	EndsAt     int64    `json:"ends_at"`
+	DailyStart string   `json:"daily_start"`
+	DailyEnd   string   `json:"daily_end"`
+	Timezone   string   `json:"timezone"`
 }
 
 type Offer struct {
@@ -34,6 +37,7 @@ type Offer struct {
 	Label     string  `json:"label"`
 	NextStart int64   `json:"next_start"`
 	EndsAt    int64   `json:"ends_at"`
+	Timezone  string  `json:"timezone"`
 }
 
 type compiledRule struct {
@@ -62,7 +66,12 @@ func Normalize(rule Rule) (Rule, error) {
 	if rule.Timezone == "" {
 		rule.Timezone = "Asia/Shanghai"
 	}
-	if math.IsNaN(rule.Factor) || math.IsInf(rule.Factor, 0) || rule.Factor <= 0 || rule.Factor > 1 || utf8.RuneCountInString(rule.Label) > 80 ||
+	invalidPrice := math.IsNaN(rule.Factor) || math.IsInf(rule.Factor, 0) || rule.Factor <= 0 || rule.Factor > 1
+	if rule.Ratio != nil {
+		invalidPrice = math.IsNaN(*rule.Ratio) || math.IsInf(*rule.Ratio, 0) || *rule.Ratio <= 0
+		rule.Factor = 0
+	}
+	if invalidPrice || utf8.RuneCountInString(rule.Label) > 80 ||
 		rule.StartsAt < 0 || rule.EndsAt < 0 || rule.StartsAt > 253402300799 || rule.EndsAt > 253402300799 ||
 		(rule.EndsAt > 0 && rule.StartsAt >= rule.EndsAt) {
 		return rule, errors.New("invalid public group discount")
@@ -97,7 +106,7 @@ func (r *Runtime) Load(raw string) error {
 	if err := common.UnmarshalJsonStr(raw, &saved); err != nil {
 		return err
 	}
-	if saved.Revision < 0 || len(saved.Groups) > 24 {
+	if saved.Revision < 0 || len(saved.Groups) > 1024 {
 		return errors.New("invalid public group discount configuration")
 	}
 	next := &configuration{revision: saved.Revision, rules: make(map[string]compiledRule)}
@@ -142,11 +151,20 @@ func (r *Runtime) Offers(now time.Time) map[string]Offer {
 	if state == nil {
 		return offers
 	}
+	bases := ratio_setting.GetGroupRatioCopy()
 	for group, rule := range state.rules {
-		if !rule.Enabled {
+		base, exists := bases[group]
+		if !rule.Enabled || !exists {
 			continue
 		}
-		offer := Offer{Factor: 1, Label: rule.Label}
+		offer := Offer{Factor: 1, Label: rule.Label, Timezone: rule.Timezone}
+		factor := rule.Factor
+		if rule.Ratio != nil {
+			factor = 1
+			if base > 0 {
+				factor = max(math.SmallestNonzeroFloat64, min(1, *rule.Ratio/base))
+			}
+		}
 		epoch := now.Unix()
 		if rule.EndsAt > 0 && epoch >= rule.EndsAt {
 			offers[group] = offer
@@ -156,7 +174,7 @@ func (r *Runtime) Offers(now time.Time) map[string]Offer {
 			offer.Active = epoch >= rule.StartsAt
 			offer.EndsAt = rule.EndsAt
 			if offer.Active {
-				offer.Factor = rule.Factor
+				offer.Factor = factor
 			} else {
 				offer.NextStart = rule.StartsAt
 			}
@@ -184,7 +202,7 @@ func (r *Runtime) Offers(now time.Time) map[string]Offer {
 				continue
 			}
 			if from <= epoch {
-				offer.Active, offer.Factor, offer.EndsAt = true, rule.Factor, until
+				offer.Active, offer.Factor, offer.EndsAt = true, factor, until
 				break
 			}
 			if offer.NextStart == 0 || from < offer.NextStart {

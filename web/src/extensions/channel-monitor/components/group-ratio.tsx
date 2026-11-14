@@ -44,7 +44,7 @@ export function GroupRatio(props: { group: MonitorGroup }) {
       </span>
     )
   }
-  const timezone = group.promotion?.timezone || 'Asia/Shanghai'
+  const timezone = group.offer.timezone || 'Asia/Shanghai'
   const endsAt =
     group.offer.ends_at > 0 ? new Date(group.offer.ends_at * 1000) : null
   const timeFormat = new Intl.DateTimeFormat(locale, {

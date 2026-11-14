@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/groupdiscount"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
@@ -90,12 +91,17 @@ func adminSettings(c *gin.Context) {
 		Ratio float64 `json:"ratio"`
 	}
 	groups := make([]availableGroup, 0)
-	for group, ratio := range ratio_setting.GetGroupRatioCopy() {
+	ratios := ratio_setting.GetGroupRatioCopy()
+	names := make([]string, 0, len(ratios))
+	for group := range ratios {
+		names = append(names, group)
+	}
+	for _, group := range setting.OrderGroupNames(names) {
+		ratio := ratios[group]
 		if group != "auto" && group != "" {
 			groups = append(groups, availableGroup{Group: group, Ratio: ratio})
 		}
 	}
-	slices.SortFunc(groups, func(a, b availableGroup) int { return strings.Compare(a.Group, b.Group) })
 	respond(c, gin.H{"settings": settings, "available_groups": groups}, nil)
 }
 
@@ -136,6 +142,9 @@ func buildSnapshot(db, logDB *gorm.DB, userGroup, windowName string, window time
 	}
 	offers := groupdiscount.Default.Offers(time.Unix(now, 0))
 	for _, config := range settings.Groups {
+		if !ratio_setting.ContainsGroupRatio(config.Group) {
+			continue
+		}
 		// Publishing a group does not expand the caller's routing permissions.
 		if !service.IsUserSelectableGroup(userGroup, config.Group) {
 			continue

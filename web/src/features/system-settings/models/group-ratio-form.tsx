@@ -65,7 +65,7 @@ import {
   type GroupSettingsSection,
 } from './group-ratio-visual-editor'
 
-type GroupFormValues = {
+export type GroupFormValues = {
   GroupRatio: string
   GroupDisplayOrder: string
   TopupGroupRatio: string
@@ -81,12 +81,14 @@ type GroupRatioFormProps = {
   form: UseFormReturn<GroupFormValues>
   onSave: (values: GroupFormValues) => Promise<void>
   isSaving: boolean
+  onRename?: (original: string, name: string) => boolean
 }
 
 export const GroupRatioForm = memo(function GroupRatioForm({
   form,
   onSave,
   isSaving,
+  onRename,
 }: GroupRatioFormProps) {
   const { t } = useTranslation()
   const values = useWatch({ control: form.control })
@@ -166,6 +168,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
         </SettingsPageActionsPortal>
         {editMode === 'visual' ? (
           <GroupRatioVisualEditor
+            onRename={onRename}
             section={section}
             onSectionChange={setSection}
             groupRatio={values.GroupRatio ?? ''}

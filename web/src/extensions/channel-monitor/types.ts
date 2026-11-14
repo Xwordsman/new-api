@@ -40,23 +40,12 @@ export type MonitorMetrics = {
   max_tokens_per_second: number | null
 }
 
-export type GroupPromotion = {
-  enabled: boolean
-  factor: number
-  label: string
-  starts_at: number
-  ends_at: number
-  daily_start: string
-  daily_end: string
-  timezone: string
-}
-
 export type MonitorGroupSettings = {
   group: string
   display_name: string
   description: string
   badge: string
-  promotion: GroupPromotion | null
+  promotion: null
 }
 
 export type MonitorSettings = {
@@ -89,6 +78,7 @@ export type MonitorGroup = MonitorGroupSettings &
       label: string
       next_start: number
       ends_at: number
+      timezone?: string
     }
     status: MonitorStatus
     timeline: MonitorBucket[]

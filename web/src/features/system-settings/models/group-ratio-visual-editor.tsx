@@ -37,6 +37,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useTranslation } from 'react-i18next'
+import { z } from 'zod'
 
 import { AutoGroupOrderItem } from '@/components/auto-group-order-item'
 import { StaticDataTable } from '@/components/data-table/static/static-data-table'
@@ -85,7 +86,7 @@ import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber } from '@/lib/format'
 import { orderGroupNames } from '@/lib/group-order'
 
-import { safeJsonParse } from '../utils/json-parser'
+import { safeJsonParseWithValidation } from '../utils/json-parser'
 import { GroupSpecialUsableRulesEditor } from './group-special-usable-editor'
 
 export type GroupSettingsSection =
@@ -107,10 +108,12 @@ type GroupRatioVisualEditorProps = {
   maxTokenAutoGroupsField: ReactNode
   groupSpecialUsableGroup: string
   onChange: (field: string, value: string) => void
+  onRename?: (original: string, name: string) => boolean
 }
 
 type GroupPricingRow = {
   _id: string
+  originalName: string
   name: string
   ratio: string
   topupRatio: string
@@ -138,14 +141,18 @@ function normalizeRatio(value: unknown): number {
 }
 
 function parseRatioMap(value: string): Record<string, number> {
-  return safeJsonParse<Record<string, number>>(value, {
+  return safeJsonParseWithValidation(value, {
+    validator: (data): data is Record<string, number> =>
+      z.record(z.string(), z.number()).safeParse(data).success,
     fallback: {},
     silent: true,
   })
 }
 
 function parseUsableMap(value: string): Record<string, string> {
-  return safeJsonParse<Record<string, string>>(value, {
+  return safeJsonParseWithValidation(value, {
+    validator: (data): data is Record<string, string> =>
+      z.record(z.string(), z.string()).safeParse(data).success,
     fallback: {},
     silent: true,
   })
@@ -154,8 +161,20 @@ function parseUsableMap(value: string): Record<string, string> {
 function parseNestedRatioMap(
   value: string
 ): Record<string, Record<string, number>> {
-  return safeJsonParse<Record<string, Record<string, number>>>(value, {
+  return safeJsonParseWithValidation(value, {
+    validator: (data): data is Record<string, Record<string, number>> =>
+      z.record(z.string(), z.record(z.string(), z.number())).safeParse(data)
+        .success,
     fallback: {},
+    silent: true,
+  })
+}
+
+function parseGroupNames(value: string): string[] {
+  return safeJsonParseWithValidation(value, {
+    fallback: [],
+    validator: (data): data is string[] =>
+      z.array(z.string()).safeParse(data).success,
     silent: true,
   })
 }
@@ -175,17 +194,17 @@ function buildGroupPricingRows(
     ...Object.keys(topupMap),
   ])
 
-  return orderGroupNames(
-    [...names],
-    safeJsonParse<string[]>(groupDisplayOrder, { fallback: [], silent: true })
-  ).map((name) => ({
-    _id: createGroupPricingId(),
-    name,
-    ratio: String(normalizeRatio(ratioMap[name])),
-    topupRatio: Object.hasOwn(topupMap, name) ? String(topupMap[name]) : '',
-    selectable: Object.hasOwn(usableMap, name),
-    description: String(usableMap[name] ?? ''),
-  }))
+  return orderGroupNames([...names], parseGroupNames(groupDisplayOrder)).map(
+    (name) => ({
+      _id: createGroupPricingId(),
+      originalName: name,
+      name,
+      ratio: String(normalizeRatio(ratioMap[name])),
+      topupRatio: Object.hasOwn(topupMap, name) ? String(topupMap[name]) : '',
+      selectable: Object.hasOwn(usableMap, name),
+      description: String(usableMap[name] ?? ''),
+    })
+  )
 }
 
 function serializeGroupPricingRows(rows: GroupPricingRow[]) {
@@ -284,6 +303,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   maxTokenAutoGroupsField,
   groupSpecialUsableGroup,
   onChange,
+  onRename,
 }: GroupRatioVisualEditorProps) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
@@ -298,13 +318,12 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
       ...Object.keys(usableMap),
       ...Object.keys(topupMap),
     ])
-    return orderGroupNames(
-      [...names],
-      safeJsonParse<string[]>(groupDisplayOrder, { fallback: [], silent: true })
-    ).map((name) => ({
-      name,
-      ratio: normalizeRatio(ratioMap[name]),
-    }))
+    return orderGroupNames([...names], parseGroupNames(groupDisplayOrder)).map(
+      (name) => ({
+        name,
+        ratio: normalizeRatio(ratioMap[name]),
+      })
+    )
   }, [groupRatio, userUsableGroups, topupGroupRatio, groupDisplayOrder])
 
   const registryNames = useMemo(
@@ -314,10 +333,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
 
   // Auto groups
   const autoGroupsList = useMemo(() => {
-    return safeJsonParse<string[]>(autoGroups, {
-      fallback: [],
-      context: 'auto groups',
-    })
+    return parseGroupNames(autoGroups)
   }, [autoGroups])
 
   const handleAutoGroupAdd = useCallback(
@@ -382,6 +398,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
           topupGroupRatio={topupGroupRatio}
           onChange={onChange}
           onShowDetail={setDetailGroup}
+          onRename={onRename}
         />
       </TabsContent>
       <TabsContent value='overrides' keepMounted>
@@ -488,6 +505,7 @@ type GroupPricingTableProps = {
   topupGroupRatio: string
   onChange: (field: string, value: string) => void
   onShowDetail: (name: string) => void
+  onRename?: (original: string, name: string) => boolean
 }
 
 function GroupPricingTable({
@@ -497,6 +515,7 @@ function GroupPricingTable({
   topupGroupRatio,
   onChange,
   onShowDetail,
+  onRename,
 }: GroupPricingTableProps) {
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
@@ -540,14 +559,22 @@ function GroupPricingTable({
   const updateRow = useCallback(
     (
       id: string,
-      field: Exclude<keyof GroupPricingRow, '_id'>,
+      field: Exclude<keyof GroupPricingRow, '_id' | 'originalName'>,
       value: string | number | boolean
     ) => {
+      if (field === 'name' && onRename) {
+        setRows(
+          rows.map((row) =>
+            row._id === id ? { ...row, name: String(value) } : row
+          )
+        )
+        return
+      }
       emitRows(
         rows.map((row) => (row._id === id ? { ...row, [field]: value } : row))
       )
     },
-    [emitRows, rows]
+    [emitRows, rows, onRename]
   )
 
   const addRow = useCallback(() => {
@@ -563,6 +590,7 @@ function GroupPricingTable({
       ...rows,
       {
         _id: createGroupPricingId(),
+        originalName: name,
         name,
         ratio: '1',
         topupRatio: '',
@@ -728,6 +756,27 @@ function GroupPricingTable({
                     onChange={(event) =>
                       updateRow(row._id, 'name', event.target.value)
                     }
+                    onBlur={() => {
+                      if (!onRename) return
+                      const name = row.name.trim()
+                      const accepted =
+                        name &&
+                        !duplicateNames.includes(name) &&
+                        onRename(row.originalName, name)
+                      emitRows(
+                        rows.map((item) =>
+                          item._id === row._id
+                            ? {
+                                ...item,
+                                name: accepted ? name : row.originalName,
+                                originalName: accepted
+                                  ? name
+                                  : row.originalName,
+                              }
+                            : item
+                        )
+                      )
+                    }}
                     aria-invalid={duplicateNames.includes(row.name.trim())}
                   />
                 ),
@@ -1359,10 +1408,15 @@ function GroupDetailSheet(props: GroupDetailSheetProps) {
     const topupMap = parseRatioMap(props.topupGroupRatio)
     const usableMap = parseUsableMap(props.userUsableGroups)
     const overrideMap = parseNestedRatioMap(props.groupGroupRatio)
-    const specialMap = safeJsonParse<Record<string, Record<string, string>>>(
-      props.groupSpecialUsableGroup,
-      { fallback: {}, silent: true }
-    )
+    const specialMap = safeJsonParseWithValidation<
+      Record<string, Record<string, string>>
+    >(props.groupSpecialUsableGroup, {
+      fallback: {},
+      silent: true,
+      validator: (data): data is Record<string, Record<string, string>> =>
+        z.record(z.string(), z.record(z.string(), z.string())).safeParse(data)
+          .success,
+    })
 
     // Overrides that apply when other user groups bill as this group
     const incomingOverrides: { userGroup: string; ratio: number }[] = []

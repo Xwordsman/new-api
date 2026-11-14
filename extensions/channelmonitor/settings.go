@@ -8,13 +8,14 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/groupdiscount"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
-const settingsKey = groupdiscount.OptionKey
+const settingsKey = groupdiscount.LegacyOptionKey
 
 var (
 	errInvalid  = common.NewMessage("Invalid channel monitor settings")
@@ -33,6 +34,20 @@ type Settings struct {
 	Revision int64           `json:"revision"`
 	Enabled  bool            `json:"enabled"`
 	Groups   []GroupSettings `json:"groups"`
+}
+
+func orderGroups(groups []GroupSettings) []GroupSettings {
+	byName := make(map[string]GroupSettings, len(groups))
+	names := make([]string, 0, len(groups))
+	for _, group := range groups {
+		byName[group.Group] = group
+		names = append(names, group.Group)
+	}
+	ordered := make([]GroupSettings, 0, len(groups))
+	for _, name := range setting.OrderGroupNames(names) {
+		ordered = append(ordered, byName[name])
+	}
+	return ordered
 }
 
 // Enabled reports the user-facing feature switch without loading a snapshot.
@@ -54,9 +69,13 @@ func getSettings(db *gorm.DB) (Settings, string, error) {
 	if err = common.UnmarshalJsonStr(option.Value, &settings); err != nil {
 		return settings, "", err
 	}
+	for i := range settings.Groups {
+		settings.Groups[i].Promotion = nil
+	}
 	if settings.Groups == nil {
 		settings.Groups = []GroupSettings{}
 	}
+	settings.Groups = orderGroups(settings.Groups)
 	return settings, option.Value, nil
 }
 
@@ -75,17 +94,15 @@ func saveSettings(db *gorm.DB, settings Settings) (Settings, error) {
 			return settings, errInvalid
 		}
 		if group.Promotion != nil {
-			rule, err := groupdiscount.Normalize(*group.Promotion)
-			if err != nil {
-				return settings, errInvalid
-			}
-			group.Promotion = &rule
+			return settings, errInvalid
 		}
+
 		seen[group.Group] = true
 	}
 	if settings.Groups == nil {
 		settings.Groups = []GroupSettings{}
 	}
+	settings.Groups = orderGroups(settings.Groups)
 	var encoded []byte
 	err := db.Transaction(func(tx *gorm.DB) error {
 		// Insert the empty sentinel only if needed. Subsequent updates compare the
@@ -114,8 +131,5 @@ func saveSettings(db *gorm.DB, settings Settings) (Settings, error) {
 		}
 		return nil
 	})
-	if err == nil {
-		err = groupdiscount.Default.Load(string(encoded))
-	}
 	return settings, err
 }

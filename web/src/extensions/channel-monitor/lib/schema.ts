@@ -18,58 +18,6 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { z } from 'zod'
 
-const promotionSchema = z
-  .object({
-    enabled: z.boolean(),
-    factor: z
-      .number({
-        error: 'Enter a discount factor greater than 0 and at most 1.',
-      })
-      .gt(0, 'Enter a discount factor greater than 0 and at most 1.')
-      .max(1, 'Enter a discount factor greater than 0 and at most 1.'),
-    label: z.string().trim().max(80, 'Invalid channel monitor settings'),
-    starts_at: z.number().int().min(0).max(253402300799),
-    ends_at: z.number().int().min(0).max(253402300799),
-    daily_start: z
-      .string()
-      .regex(/^$|^(?:[01]\d|2[0-3]):[0-5]\d$/, 'Use HH:mm for daily times.'),
-    daily_end: z
-      .string()
-      .regex(/^$|^(?:[01]\d|2[0-3]):[0-5]\d$/, 'Use HH:mm for daily times.'),
-    timezone: z
-      .string()
-      .trim()
-      .refine((value) => {
-        if (!value) return true
-        try {
-          new Intl.DateTimeFormat('en', { timeZone: value })
-          return true
-        } catch {
-          return false
-        }
-      }, 'Enter a valid IANA time zone.'),
-  })
-  .superRefine((rule, context) => {
-    if (rule.ends_at > 0 && rule.starts_at >= rule.ends_at) {
-      context.addIssue({
-        code: 'custom',
-        path: ['ends_at'],
-        message: 'Offer end must be after its start.',
-      })
-    }
-    if (
-      Boolean(rule.daily_start) !== Boolean(rule.daily_end) ||
-      (rule.daily_start !== '' && rule.daily_start === rule.daily_end)
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['daily_end'],
-        message:
-          'Enter both daily times and use different start and end times.',
-      })
-    }
-  })
-
 export const monitorSettingsSchema = z.object({
   revision: z
     .number()
@@ -89,7 +37,7 @@ export const monitorSettingsSchema = z.object({
           .trim()
           .max(240, 'Invalid channel monitor settings'),
         badge: z.string().trim().max(24, 'Invalid channel monitor settings'),
-        promotion: promotionSchema.nullable(),
+        promotion: z.null(),
       })
     )
     .max(24, 'Invalid channel monitor settings'),

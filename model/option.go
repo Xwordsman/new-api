@@ -255,8 +255,8 @@ func validateOptionValue(key string, value string) error {
 	if key == "BenchmarkExtensionSettings" {
 		return common.NewMessage("Use benchmark settings to configure model checks")
 	}
-	if key == groupdiscount.OptionKey {
-		return common.NewMessage("Use Channel monitor settings to configure public group discounts")
+	if key == groupdiscount.OptionKey || key == groupdiscount.LegacyOptionKey {
+		return common.NewMessage("Use Group pricing to configure public group discounts")
 	}
 	if key == legacyAccessTokenRetireAtKey {
 		return errLegacyRetireAtReadOnly
@@ -401,6 +401,17 @@ func UpdateOptionsBulk(values map[string]string) error {
 	}
 	if policySnapshot != nil {
 		requestPolicySnapshot.Store(policySnapshot)
+	}
+	return nil
+}
+
+// PublishCommittedOptions refreshes option consumers after a validated extension
+// transaction commits. It must not be called before persistence succeeds.
+func PublishCommittedOptions(values map[string]string) error {
+	for key, value := range values {
+		if err := updateOptionMap(key, value); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/extensions/concurrency"
 	documentation "github.com/QuantumNous/new-api/extensions/documentation"
 	"github.com/QuantumNous/new-api/extensions/emailtemplate"
+	"github.com/QuantumNous/new-api/extensions/grouppricing"
 	"github.com/QuantumNous/new-api/extensions/invitation"
 	"github.com/QuantumNous/new-api/extensions/keypricing"
 	keypricepolicy "github.com/QuantumNous/new-api/extensions/keypricing/policy"
@@ -30,6 +31,9 @@ import (
 
 // Migrate runs database migrations owned by compile-time extensions.
 func Migrate(db *gorm.DB) error {
+	if err := grouppricing.Migrate(db); err != nil {
+		return err
+	}
 	if err := requestpolicy.Migrate(db); err != nil {
 		return err
 	}
@@ -75,6 +79,7 @@ func Initialize(db *gorm.DB) {
 
 // RegisterRoutes mounts routes owned by compile-time extensions.
 func RegisterRoutes(apiRouter *gin.RouterGroup) {
+	grouppricing.RegisterRoutes(apiRouter)
 	documentation.RegisterRoutes(apiRouter)
 	concurrency.RegisterRoutes(apiRouter)
 	emailtemplate.RegisterRoutes(apiRouter)

@@ -32,7 +32,7 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { toIntlLocale } from '@/i18n/languages'
 
-import type { MonitorSettings } from '../types'
+import type { PromotionForm } from './schema'
 
 export function PromotionFields(props: {
   index: number
@@ -40,7 +40,7 @@ export function PromotionFields(props: {
   disabled: boolean
 }) {
   const { t, i18n } = useTranslation()
-  const form = useFormContext<MonitorSettings>()
+  const form = useFormContext<PromotionForm>()
   const promotion = form.watch(`groups.${props.index}.promotion`)
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const formatter = new Intl.NumberFormat(locale, { maximumFractionDigits: 8 })
@@ -58,7 +58,7 @@ export function PromotionFields(props: {
               <FormLabel>{t('Enable public discount')}</FormLabel>
               <FormDescription>
                 {t(
-                  'The group base multiplier is multiplied by this discount during the scheduled period.'
+                  'Set the final public multiplier during the scheduled period.'
                 )}
               </FormDescription>
             </div>
@@ -68,7 +68,7 @@ export function PromotionFields(props: {
                 disabled={props.disabled}
                 onCheckedChange={(enabled) =>
                   field.onChange({
-                    factor: 0.8,
+                    ratio: (props.baseRatio ?? 1) * 0.8,
                     label: '',
                     starts_at: 0,
                     ends_at: 0,
@@ -89,16 +89,15 @@ export function PromotionFields(props: {
           <div className='grid gap-5 sm:grid-cols-2'>
             <FormField
               control={form.control}
-              name={`groups.${props.index}.promotion.factor`}
+              name={`groups.${props.index}.promotion.ratio`}
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('Discount factor')}</FormLabel>
+                  <FormLabel>{t('Discounted multiplier')}</FormLabel>
                   <FormControl>
                     <Input
                       {...field}
                       type='number'
                       min='0.00000001'
-                      max='1'
                       step='any'
                       value={Number.isNaN(field.value) ? '' : field.value}
                       onChange={(event) =>
@@ -109,7 +108,7 @@ export function PromotionFields(props: {
                   </FormControl>
                   <FormDescription>
                     {t(
-                      '0.8 means 20% off. A base multiplier of 0.3 becomes 0.24.'
+                      'Enter the final multiplier, for example 0.24 instead of a base multiplier of 0.3. If the base falls below it, the lower base applies.'
                     )}
                   </FormDescription>
                   <FormMessage />
@@ -212,15 +211,13 @@ export function PromotionFields(props: {
             )}
           </p>
           {props.baseRatio !== undefined &&
-            Number.isFinite(promotion.factor) &&
-            promotion.factor > 0 &&
-            promotion.factor <= 1 && (
+            Number.isFinite(promotion.ratio) &&
+            promotion.ratio > 0 && (
               <p className='rounded-lg border border-sky-500/20 bg-sky-500/5 p-3 text-sm text-sky-700 dark:text-sky-300'>
                 {t('Multiplier during offer')}:{' '}
                 <span className='font-mono tabular-nums'>
-                  ×{formatter.format(props.baseRatio)} ×{' '}
-                  {formatter.format(promotion.factor)} = ×
-                  {formatter.format(props.baseRatio * promotion.factor)}
+                  ×{formatter.format(props.baseRatio)} → ×
+                  {formatter.format(Math.min(props.baseRatio, promotion.ratio))}
                 </span>
               </p>
             )}

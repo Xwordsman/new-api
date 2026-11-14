@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/extensions/grouppricing"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -31,6 +33,7 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 )
 
@@ -83,6 +86,12 @@ func monitorTestSettings(t *testing.T) {
 	groups, userRatios := ratio_setting.GroupRatio2JSONString(), ratio_setting.GroupGroupRatio2JSONString()
 	usable := setting.UserUsableGroups2JSONString()
 	special := ratio_setting.GetGroupRatioSetting().GroupSpecialUsableGroup.MarshalJSONString()
+	order, topup := setting.GroupDisplayOrderJSONString(), common.TopupGroupRatio2JSONString()
+	auto, maxAuto, defaultAuto := setting.AutoGroups2JsonString(), setting.GetMaxTokenAutoGroups(), setting.DefaultUseAutoGroup
+	common.OptionMapRWMutex.Lock()
+	options := maps.Clone(common.OptionMap)
+	common.OptionMap = map[string]string{}
+	common.OptionMapRWMutex.Unlock()
 	consume, errors := common.LogConsumeEnabled, constant.ErrorLogEnabled
 	previousRuntime := groupdiscount.Default
 	groupdiscount.Default = &groupdiscount.Runtime{}
@@ -92,6 +101,14 @@ func monitorTestSettings(t *testing.T) {
 		require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(userRatios))
 		require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(usable))
 		require.NoError(t, ratio_setting.GetGroupRatioSetting().GroupSpecialUsableGroup.UnmarshalJSON([]byte(special)))
+		require.NoError(t, setting.UpdateGroupDisplayOrder(order))
+		require.NoError(t, common.UpdateTopupGroupRatioByJSONString(topup))
+		require.NoError(t, setting.UpdateAutoGroupsByJsonString(auto))
+		require.NoError(t, setting.UpdateMaxTokenAutoGroups(fmt.Sprint(maxAuto)))
+		setting.DefaultUseAutoGroup = defaultAuto
+		common.OptionMapRWMutex.Lock()
+		common.OptionMap = options
+		common.OptionMapRWMutex.Unlock()
 		common.LogConsumeEnabled, constant.ErrorLogEnabled = consume, errors
 		clear(statisticsCache.entries)
 	})
@@ -99,6 +116,11 @@ func monitorTestSettings(t *testing.T) {
 	require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(`{"member":{"public":0.24}}`))
 	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"public":"Public","idle":"Idle","disabled":"Disabled"}`))
 	require.NoError(t, ratio_setting.GetGroupRatioSetting().GroupSpecialUsableGroup.UnmarshalJSON([]byte(`{}`)))
+	require.NoError(t, setting.UpdateGroupDisplayOrder(`["public","idle","disabled"]`))
+	require.NoError(t, common.UpdateTopupGroupRatioByJSONString(`{}`))
+	require.NoError(t, setting.UpdateAutoGroupsByJsonString(`["public"]`))
+	require.NoError(t, setting.UpdateMaxTokenAutoGroups("5"))
+	setting.DefaultUseAutoGroup = false
 	common.LogConsumeEnabled, constant.ErrorLogEnabled = true, true
 	clear(statisticsCache.entries)
 }
@@ -135,6 +157,90 @@ func TestChannelMonitorDatabaseMatrix(t *testing.T) {
 				}
 				t.Skip("external database not configured")
 			}
+			t.Run("public pricing migrates once and renames preserve offers independently of monitoring", func(t *testing.T) {
+				for _, legacy := range []bool{false, true} {
+					t.Run(fmt.Sprint("legacy=", legacy), func(t *testing.T) {
+						monitorTestSettings(t)
+						db := monitorTestDB(t, dialect, "")
+						if dialect == "sqlite" {
+							var version string
+							require.NoError(t, db.Raw("SELECT sqlite_version()").Scan(&version).Error)
+							t.Log("SQLite", version)
+						}
+						legacyRaw := `{"revision":7,"enabled":true,"groups":[{"group":"public","display_name":"GPT","description":"Preserve me","badge":"Offer","promotion":{"enabled":true,"factor":0.8,"daily_start":"18:00","daily_end":"22:00","timezone":"Asia/Shanghai"}},{"group":"idle","display_name":"Idle"}]}`
+						if legacy {
+							require.NoError(t, db.Create(&model.Option{Key: settingsKey, Value: legacyRaw}).Error)
+						}
+						require.NoError(t, db.Create(&model.Option{Key: "unrelated", Value: "preserved"}).Error)
+						for range 2 {
+							require.NoError(t, grouppricing.Migrate(db))
+						}
+						initial, err := grouppricing.Read(db)
+						require.NoError(t, err)
+						if legacy {
+							require.Len(t, initial.Promotions.Groups, 1)
+							assert.Equal(t, "18:00", initial.Promotions.Groups[0].Promotion.DailyStart)
+							var original model.Option
+							require.NoError(t, db.Where(clause.Eq{Column: "key", Value: settingsKey}).Take(&original).Error)
+							assert.Equal(t, legacyRaw, original.Value)
+						} else {
+							assert.Empty(t, initial.Promotions.Groups)
+							_, err = saveSettings(db, Settings{Enabled: true, Groups: []GroupSettings{{Group: "public", DisplayName: "GPT", Description: "Preserve me", Badge: "Offer"}, {Group: "idle"}}})
+							require.NoError(t, err)
+						}
+						update := grouppricing.Update{Snapshot: initial, Baseline: maps.Clone(initial.Options), Renames: map[string]string{"public": "gpt"}}
+						update.Options = maps.Clone(initial.Options)
+						update.Options["GroupRatio"] = `{"gpt":0.3,"idle":0.4}`
+						update.Options["GroupDisplayOrder"] = `["idle","gpt"]`
+						update.Options["UserUsableGroups"] = `{"gpt":"Public","idle":"Idle"}`
+						update.Options["AutoGroups"] = `["gpt"]`
+						update.Options["GroupGroupRatio"] = `{"member":{"gpt":0.24}}`
+						update.Promotions.Groups = []grouppricing.Group{{Group: "gpt", Promotion: &groupdiscount.Rule{Enabled: true, Ratio: new(0.12), DailyStart: "18:00", DailyEnd: "22:00", Timezone: "Asia/Shanghai"}}}
+						saved, err := grouppricing.Save(db, update)
+						require.NoError(t, err)
+						assert.Equal(t, initial.Promotions.Revision+1, saved.Promotions.Revision)
+						monitor, _, err := getSettings(db)
+						require.NoError(t, err)
+						require.Len(t, monitor.Groups, 2)
+						assert.Equal(t, "idle", monitor.Groups[0].Group)
+						assert.Equal(t, "gpt", monitor.Groups[1].Group)
+						assert.Equal(t, "Preserve me", monitor.Groups[1].Description)
+						assert.True(t, monitor.Enabled)
+						at := time.Date(2026, 11, 14, 12, 0, 0, 0, time.UTC)
+						assert.InDelta(t, 0.4, groupdiscount.Default.Capture(at)["gpt"], 1e-12)
+						assert.Empty(t, groupdiscount.Default.Capture(at.Add(3*time.Hour)))
+						_, err = grouppricing.Save(db, update)
+						assert.ErrorIs(t, err, grouppricing.ErrConflict)
+						invalid := grouppricing.Update{Snapshot: saved, Baseline: maps.Clone(saved.Options)}
+						invalid.Options = maps.Clone(saved.Options)
+						invalid.Options["GroupDisplayOrder"] = `["gpt","idle"]`
+						invalid.Promotions = grouppricing.Promotions{Revision: saved.Promotions.Revision, Groups: []grouppricing.Group{{Group: "gpt", Promotion: &groupdiscount.Rule{Ratio: new(0.12), DailyStart: "25:00", DailyEnd: "22:00"}}}}
+						_, err = grouppricing.Save(db, invalid)
+						assert.ErrorIs(t, err, grouppricing.ErrInvalid)
+						persisted, err := grouppricing.Read(db)
+						require.NoError(t, err)
+						assert.Equal(t, saved, persisted, "invalid schedule must roll back the pricing and order as well")
+						_, err = saveSettings(db, Settings{Revision: monitor.Revision})
+						require.NoError(t, err)
+						persisted, err = grouppricing.Read(db)
+						require.NoError(t, err)
+						assert.Equal(t, saved.Promotions, persisted.Promotions, "removing monitoring must not delete pricing")
+						remove := grouppricing.Update{Snapshot: saved, Baseline: maps.Clone(saved.Options)}
+						remove.Promotions.Groups = []grouppricing.Group{}
+						_, err = grouppricing.Save(db, remove)
+						require.NoError(t, err)
+						for range 2 {
+							require.NoError(t, grouppricing.Migrate(db))
+						}
+						persisted, err = grouppricing.Read(db)
+						require.NoError(t, err)
+						assert.Empty(t, persisted.Promotions.Groups, "deleted legacy offers must never be resurrected")
+						var unrelated model.Option
+						require.NoError(t, db.Where(clause.Eq{Column: "key", Value: "unrelated"}).Take(&unrelated).Error)
+						assert.Equal(t, "preserved", unrelated.Value)
+					})
+				}
+			})
 			t.Run("settings persist atomically and stale or invalid edits leave saved values intact", func(t *testing.T) {
 				monitorTestSettings(t)
 				db := monitorTestDB(t, dialect, "")
@@ -143,7 +249,13 @@ func TestChannelMonitorDatabaseMatrix(t *testing.T) {
 				assert.False(t, initial.Enabled)
 				assert.Empty(t, initial.Groups)
 				require.NoError(t, db.Create(&model.Option{Key: "unrelated", Value: "preserved"}).Error)
-				settings := Settings{Enabled: true, Groups: []GroupSettings{{Group: "public", DisplayName: " Public ", Badge: " Discount ", Promotion: &groupdiscount.Rule{Enabled: true, Factor: 0.8}}}}
+				legacy := `{"revision":0,"enabled":false,"groups":[{"group":"public","promotion":{"enabled":true,"factor":0.8}}]}`
+				require.NoError(t, db.Create(&model.Option{Key: settingsKey, Value: legacy}).Error)
+				require.NoError(t, grouppricing.Migrate(db))
+				var promotion model.Option
+				require.NoError(t, db.Where("value <> ?", legacy).Where(clause.Eq{Column: "key", Value: groupdiscount.OptionKey}).Take(&promotion).Error)
+				require.NoError(t, groupdiscount.Default.Load(promotion.Value))
+				settings := Settings{Enabled: true, Groups: []GroupSettings{{Group: "public", DisplayName: " Public ", Badge: " Discount "}}}
 				saved, err := saveSettings(db, settings)
 				require.NoError(t, err)
 				assert.EqualValues(t, 1, saved.Revision)
@@ -174,10 +286,11 @@ func TestChannelMonitorDatabaseMatrix(t *testing.T) {
 				// options, the revision and the active pricing rule on all engines.
 				for range 2 {
 					require.NoError(t, db.AutoMigrate(&model.Option{}, &model.Ability{}))
-					persisted, raw, err := getSettings(db)
+					require.NoError(t, grouppricing.Migrate(db))
+					persisted, _, err := getSettings(db)
 					require.NoError(t, err)
 					assert.Equal(t, saved, persisted)
-					require.NoError(t, groupdiscount.Default.Load(raw))
+					require.NoError(t, groupdiscount.Default.Load(promotion.Value))
 				}
 			})
 			t.Run("real logs yield measured metrics and unknown unobserved buckets", func(t *testing.T) {
@@ -382,6 +495,7 @@ func TestChannelMonitorDatabaseMatrix(t *testing.T) {
 }
 
 func TestPublicGroupDiscountSchedules(t *testing.T) {
+	monitorTestSettings(t)
 	location, err := time.LoadLocation("Asia/Shanghai")
 	require.NoError(t, err)
 	start := time.Date(2026, 11, 8, 0, 0, 0, 0, location).Unix()
@@ -567,7 +681,7 @@ func TestChannelMonitorAPIAuthorization(t *testing.T) {
 	require.NoError(t, model.EnsureLegacyAccessTokenRetireAt(time.Now().Unix()))
 	if oldDeadline > 0 {
 		t.Cleanup(func() {
-			require.NoError(t, db.Model(&model.Option{}).Where("key = ?", "LegacyAccessTokenRetireAt").Update("value", fmt.Sprint(oldDeadline)).Error)
+			require.NoError(t, db.Model(&model.Option{}).Where(clause.Eq{Column: "key", Value: "LegacyAccessTokenRetireAt"}).Update("value", fmt.Sprint(oldDeadline)).Error)
 			require.NoError(t, model.EnsureLegacyAccessTokenRetireAt(time.Now().Unix()))
 		})
 	}
@@ -588,4 +702,13 @@ func TestChannelMonitorAPIAuthorization(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, request("GET", "/snapshot", "", member.AccessToken, "").Code)
 	require.NoError(t, db.Model(&model.UserSession{}).Where("sid = ?", root.Session.SID).Update("expires_at", time.Now().Unix()-1).Error)
 	assert.Equal(t, http.StatusUnauthorized, request("GET", "/admin/settings", "", root.AccessToken, "").Code)
+}
+
+func TestFinalPublicMultiplier(t *testing.T) {
+	monitorTestSettings(t)
+	runtime := &groupdiscount.Runtime{}
+	require.NoError(t, runtime.Load(`{"revision":1,"groups":[{"group":"public","promotion":{"enabled":true,"ratio":0.12}}]}`))
+	assert.InDelta(t, 0.4, runtime.Capture(time.Unix(monitorEpoch, 0))["public"], 1e-12)
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"public":0.1}`))
+	assert.Equal(t, 1.0, runtime.Capture(time.Unix(monitorEpoch, 0))["public"], "a falling base price must never turn a discount into a surcharge")
 }

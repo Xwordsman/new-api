@@ -24,7 +24,6 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 import { createAppQueryClient } from '@/lib/query-client'
 
-import { monitorSettingsSchema } from '../lib/schema'
 import { ChannelMonitorSettingsPage } from '../settings-page'
 import type { MonitorSettingsResponse } from '../types'
 
@@ -177,131 +176,6 @@ it('retains unsaved group fields when collapsed and saves them while collapsed',
   client.clear()
 })
 
-it('saves a scheduled public discount even when the monitor is hidden', async () => {
-  const user = userEvent.setup()
-  const client = renderSettings()
-  const saved = {
-    revision: 2,
-    enabled: false,
-    groups: [
-      {
-        group: 'public',
-        display_name: 'Public label',
-        description: '',
-        badge: 'Limited offer',
-        promotion: {
-          enabled: true,
-          factor: 0.8,
-          label: 'Evening offer',
-          starts_at: 0,
-          ends_at: 0,
-          daily_start: '18:00',
-          daily_end: '22:00',
-          timezone: 'Asia/Shanghai',
-        },
-      },
-    ],
-  }
-  const put = vi
-    .spyOn(api, 'put')
-    .mockResolvedValue({ data: { success: true, data: saved } })
-  await screen.findByRole('switch', { name: 'Enable channel monitor' })
-  await user.click(screen.getByRole('combobox', { name: 'Groups to display' }))
-  await user.click(screen.getByRole('option', { name: 'public' }))
-  await user.keyboard('{Escape}')
-  expect(screen.getByRole('button', { name: 'public' })).toHaveAttribute(
-    'aria-expanded',
-    'false'
-  )
-  await user.click(screen.getByRole('button', { name: 'public' }))
-  await user.type(
-    screen.getByRole('textbox', { name: 'Display name' }),
-    'Public label'
-  )
-  await user.type(
-    screen.getByRole('textbox', { name: 'Group badge' }),
-    'Limited offer'
-  )
-  await user.click(
-    screen.getByRole('switch', { name: 'Enable public discount' })
-  )
-  expect(
-    screen.getByRole('spinbutton', { name: 'Discount factor' })
-  ).toHaveValue(0.8)
-  await user.type(
-    screen.getByRole('textbox', { name: 'Offer label' }),
-    'Evening offer'
-  )
-  await user.type(screen.getByLabelText('Daily start time'), '18:00')
-  await user.type(screen.getByLabelText('Daily end time'), '22:00')
-  expect(
-    screen.getByRole('button', { name: 'Offer starts' })
-  ).toHaveTextContent('No time limit')
-  expect(screen.getByRole('button', { name: 'Offer ends' })).toHaveTextContent(
-    'No time limit'
-  )
-  expect(screen.getByText(/×0.3 × 0.8 = ×0.24/)).toBeVisible()
-  await user.click(screen.getByRole('button', { name: 'Save' }))
-  await waitFor(() =>
-    expect(put).toHaveBeenCalledWith(
-      '/api/extensions/channel-monitor/admin/settings',
-      { ...saved, revision: 1 }
-    )
-  )
-  client.clear()
-})
-
-it('blocks a zero discount and associates validation feedback with the input', async () => {
-  const user = userEvent.setup()
-  const client = renderSettings({
-    ...settings,
-    settings: {
-      revision: 1,
-      enabled: true,
-      groups: [
-        {
-          group: 'public',
-          display_name: '',
-          description: '',
-          badge: '',
-          promotion: {
-            enabled: true,
-            factor: 0.8,
-            label: '',
-            starts_at: 0,
-            ends_at: 0,
-            daily_start: '',
-            daily_end: '',
-            timezone: 'Asia/Shanghai',
-          },
-        },
-      ],
-    },
-  })
-  const put = vi.spyOn(api, 'put')
-  const toggle = await screen.findByRole('button', { name: 'public' })
-  await user.click(toggle)
-  const input = await screen.findByRole('spinbutton', {
-    name: 'Discount factor',
-  })
-  await user.clear(input)
-  await user.type(input, '0')
-  await user.click(toggle)
-  await user.click(screen.getByRole('button', { name: 'Save' }))
-  expect(
-    await screen.findByText(
-      'Enter a discount factor greater than 0 and at most 1.'
-    )
-  ).toBeVisible()
-  expect(toggle).toHaveAttribute('aria-expanded', 'true')
-  expect(input).toHaveAttribute('aria-invalid', 'true')
-  expect(input).toHaveAccessibleDescription(
-    /Enter a discount factor greater than 0 and at most 1\./
-  )
-  expect(put).not.toHaveBeenCalled()
-  client.clear()
-})
-
 it('preserves unsaved metadata after a rejected save and resets the revision after success', async () => {
   const user = userEvent.setup()
   const data = {
@@ -368,59 +242,32 @@ it('preserves unsaved metadata after a rejected save and resets the revision aft
   client.clear()
 })
 
-it.each([
-  {
-    patch: { factor: 1.1 },
-    message: 'Enter a discount factor greater than 0 and at most 1.',
-  },
-  {
-    patch: { starts_at: 200, ends_at: 100 },
-    message: 'Offer end must be after its start.',
-  },
-  { patch: { daily_start: '25:00' }, message: 'Use HH:mm for daily times.' },
-  {
-    patch: { daily_start: '18:00' },
-    message: 'Enter both daily times and use different start and end times.',
-  },
-  {
-    patch: { daily_start: '18:00', daily_end: '18:00' },
-    message: 'Enter both daily times and use different start and end times.',
-  },
-  {
-    patch: { timezone: 'not/a-timezone' },
-    message: 'Enter a valid IANA time zone.',
-  },
-])(
-  'rejects invalid schedule $patch before it can be saved',
-  ({ patch, message }) => {
-    const result = monitorSettingsSchema.safeParse({
-      revision: 1,
-      enabled: true,
+it('keeps promotion editing in group pricing instead of monitor metadata', async () => {
+  const client = renderSettings({
+    ...settings,
+    settings: {
+      ...settings.settings,
       groups: [
         {
           group: 'public',
           display_name: '',
-          badge: '',
           description: '',
-          promotion: {
-            enabled: true,
-            factor: 0.8,
-            label: '',
-            starts_at: 0,
-            ends_at: 0,
-            daily_start: '',
-            daily_end: '',
-            timezone: 'Asia/Shanghai',
-            ...patch,
-          },
+          badge: '',
+          promotion: null,
         },
       ],
-    })
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(result.error.issues.map((issue) => issue.message)).toContain(
-        message
-      )
-    }
-  }
-)
+    },
+  })
+  await userEvent
+    .setup()
+    .click(await screen.findByRole('button', { name: 'public' }))
+  expect(
+    screen.queryByRole('switch', { name: 'Enable public discount' })
+  ).toBeNull()
+  expect(
+    screen.getByText(
+      'Manage public discounts in Group pricing. Removing a monitor group does not remove its discount.'
+    )
+  ).toBeVisible()
+  client.clear()
+})

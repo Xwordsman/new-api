@@ -50,7 +50,6 @@ import { STATUS_QUERY_KEY } from '@/lib/status-query'
 import { saveMonitorSettings } from '../api'
 import { monitorSettingsSchema } from '../lib/schema'
 import type { MonitorSettings, MonitorSettingsResponse } from '../types'
-import { PromotionFields } from './promotion-fields'
 
 export function MonitorSettingsForm(props: { data: MonitorSettingsResponse }) {
   const { t, i18n } = useTranslation()
@@ -120,7 +119,7 @@ export function MonitorSettingsForm(props: { data: MonitorSettingsResponse }) {
               <h3 className='font-semibold'>{t('Published groups')}</h3>
               <p className='text-muted-foreground mt-2 text-sm leading-6'>
                 {t(
-                  'Publish up to 24 groups. Users only see groups their account can use. Group order follows your selection.'
+                  'Publish up to 24 groups. Users only see groups their account can use. Display order follows Group pricing.'
                 )}
               </p>
             </div>
@@ -190,7 +189,7 @@ export function MonitorSettingsForm(props: { data: MonitorSettingsResponse }) {
           <Alert>
             <AlertDescription>
               {t(
-                'Public discounts affect actual billing for everyone using the group. Hiding the monitor does not stop a discount. Removing a group here removes its discount.'
+                'Manage public discounts in Group pricing. Removing a monitor group does not remove its discount.'
               )}
             </AlertDescription>
           </Alert>
@@ -264,11 +263,6 @@ export function MonitorSettingsForm(props: { data: MonitorSettingsResponse }) {
                       />
                     ))}
                   </div>
-                  <PromotionFields
-                    index={index}
-                    baseRatio={ratio}
-                    disabled={save.isPending}
-                  />
                 </AccordionContent>
               </AccordionItem>
             )

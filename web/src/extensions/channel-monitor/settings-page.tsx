@@ -40,7 +40,7 @@ export function ChannelMonitorSettingsPage() {
         icon={RadioTower}
         eyebrow='MONITOR SETTINGS'
         description={t(
-          'Configure visible groups, monitoring and scheduled discounts.'
+          'Configure visible groups and monitoring. Public discounts are managed in Group pricing.'
         )}
       >
         {t('Channel monitor settings')}

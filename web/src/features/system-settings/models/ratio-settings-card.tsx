@@ -29,6 +29,7 @@ import { ErrorState } from '@/components/error-state'
 import { LoadingState } from '@/components/loading-state'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { GroupPricingWorkspace } from '@/extensions/group-pricing/workspace'
 import {
   buildPricingChanges,
   useModelPricing,
@@ -43,7 +44,6 @@ import { SettingsPageTitleStatusPortal } from '../components/settings-page-conte
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
 import { positiveIntegerSchema } from '../utils/numeric-field'
-import { GroupRatioForm } from './group-ratio-form'
 import { ModelRatioForm } from './model-ratio-form'
 import { ToolPriceSettings } from './tool-price-settings'
 import { UpstreamRatioSync } from './upstream-ratio-sync'
@@ -257,19 +257,6 @@ export function RatioSettingsCard({
     modelNormalizedDefaults.current
   )
 
-  const groupNormalizedDefaults = useRef({
-    GroupRatio: normalizeJsonString(groupDefaults.GroupRatio),
-    GroupDisplayOrder: normalizeJsonString(groupDefaults.GroupDisplayOrder),
-    TopupGroupRatio: normalizeJsonString(groupDefaults.TopupGroupRatio),
-    UserUsableGroups: normalizeJsonString(groupDefaults.UserUsableGroups),
-    GroupGroupRatio: normalizeJsonString(groupDefaults.GroupGroupRatio),
-    AutoGroups: normalizeJsonString(groupDefaults.AutoGroups),
-    MaxTokenAutoGroups: groupDefaults.MaxTokenAutoGroups,
-    DefaultUseAutoGroup: groupDefaults.DefaultUseAutoGroup,
-    GroupSpecialUsableGroup: normalizeJsonString(
-      groupDefaults.GroupSpecialUsableGroup
-    ),
-  })
   const modelSchema = useMemo(() => createModelSchema(t), [t])
   const groupSchema = useMemo(() => createGroupSchema(t), [t])
 
@@ -348,35 +335,6 @@ export function RatioSettingsCard({
     })
   }, [modelDefaults, modelForm])
 
-  useEffect(() => {
-    groupNormalizedDefaults.current = {
-      GroupRatio: normalizeJsonString(groupDefaults.GroupRatio),
-      GroupDisplayOrder: normalizeJsonString(groupDefaults.GroupDisplayOrder),
-      TopupGroupRatio: normalizeJsonString(groupDefaults.TopupGroupRatio),
-      UserUsableGroups: normalizeJsonString(groupDefaults.UserUsableGroups),
-      GroupGroupRatio: normalizeJsonString(groupDefaults.GroupGroupRatio),
-      AutoGroups: normalizeJsonString(groupDefaults.AutoGroups),
-      MaxTokenAutoGroups: groupDefaults.MaxTokenAutoGroups,
-      DefaultUseAutoGroup: groupDefaults.DefaultUseAutoGroup,
-      GroupSpecialUsableGroup: normalizeJsonString(
-        groupDefaults.GroupSpecialUsableGroup
-      ),
-    }
-
-    groupForm.reset({
-      ...groupDefaults,
-      GroupRatio: formatJsonForTextarea(groupDefaults.GroupRatio),
-      GroupDisplayOrder: formatJsonForTextarea(groupDefaults.GroupDisplayOrder),
-      TopupGroupRatio: formatJsonForTextarea(groupDefaults.TopupGroupRatio),
-      UserUsableGroups: formatJsonForTextarea(groupDefaults.UserUsableGroups),
-      GroupGroupRatio: formatJsonForTextarea(groupDefaults.GroupGroupRatio),
-      AutoGroups: formatJsonForTextarea(groupDefaults.AutoGroups),
-      GroupSpecialUsableGroup: formatJsonForTextarea(
-        groupDefaults.GroupSpecialUsableGroup
-      ),
-    })
-  }, [groupDefaults, groupForm])
-
   const saveModelRatios = useCallback(
     async (values: ModelFormValues) => {
       const normalized = {
@@ -425,44 +383,6 @@ export function RatioSettingsCard({
       }
     },
     [t, updateOption, pricingBaseline, savePricing, pricingQuery]
-  )
-
-  const saveGroupRatios = useCallback(
-    async (values: GroupFormValues) => {
-      const normalized = {
-        GroupRatio: normalizeJsonString(values.GroupRatio),
-        TopupGroupRatio: normalizeJsonString(values.TopupGroupRatio),
-        UserUsableGroups: normalizeJsonString(values.UserUsableGroups),
-        GroupGroupRatio: normalizeJsonString(values.GroupGroupRatio),
-        AutoGroups: normalizeJsonString(values.AutoGroups),
-        MaxTokenAutoGroups: values.MaxTokenAutoGroups,
-        DefaultUseAutoGroup: values.DefaultUseAutoGroup,
-        GroupSpecialUsableGroup: normalizeJsonString(
-          values.GroupSpecialUsableGroup
-        ),
-        GroupDisplayOrder: normalizeJsonString(values.GroupDisplayOrder),
-      }
-
-      // Map form field names to API keys (most are 1:1, except GroupSpecialUsableGroup)
-      const apiKeyMap: Record<string, string> = {
-        GroupSpecialUsableGroup:
-          'group_ratio_setting.group_special_usable_group',
-      }
-
-      const updates = (
-        Object.keys(normalized) as Array<keyof typeof normalized>
-      ).filter(
-        (key) => normalized[key] !== groupNormalizedDefaults.current[key]
-      )
-
-      for (const key of updates) {
-        const apiKey = apiKeyMap[key] || key
-        await updateOption.mutateAsync({ key: apiKey, value: normalized[key] })
-      }
-
-      groupNormalizedDefaults.current = normalized
-    },
-    [updateOption]
   )
 
   const handleResetRatios = useCallback(() => {
@@ -530,13 +450,7 @@ export function RatioSettingsCard({
       )
     }
     if (tab === 'groups') {
-      return (
-        <GroupRatioForm
-          form={groupForm}
-          onSave={saveGroupRatios}
-          isSaving={updateOption.isPending}
-        />
-      )
+      return <GroupPricingWorkspace form={groupForm} />
     }
     if (tab === 'tool-prices') {
       return <ToolPriceSettings defaultValue={toolPricesDefault} />

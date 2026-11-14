@@ -53,7 +53,7 @@ export function GroupDetails(props: {
     maximumFractionDigits: 8,
   })
   const offerTimeFormat = new Intl.DateTimeFormat(locale, {
-    timeZone: group.promotion?.timezone || 'Asia/Shanghai',
+    timeZone: group.offer.timezone || 'Asia/Shanghai',
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',

@@ -1071,7 +1071,11 @@ export const STATIC_I18N_KEYS = [
   'Enter a valid IANA time zone.',
   'Offer end must be after its start.',
   'Enter both daily times and use different start and end times.',
-  'Use Channel monitor settings to configure public group discounts',
+  'Use Group pricing to configure public group discounts',
+  'Invalid group pricing settings',
+  'Group pricing changed. Reload before saving.',
+  'Unable to save group pricing settings',
+  'Enter a positive discounted multiplier.',
   // Benchmark extension navigation, server messages, and validation.
   'Model benchmark',
   'Invalid benchmark settings',
