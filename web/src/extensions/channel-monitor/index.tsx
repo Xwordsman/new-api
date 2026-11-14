@@ -219,6 +219,23 @@ export function ChannelMonitorPage() {
       <ConsolePageHeader
         icon={Radio}
         eyebrow='CHANNEL MONITOR'
+        eyebrowMeta={
+          <p className='text-muted-foreground flex flex-wrap items-center gap-2 text-xs leading-4'>
+            <span
+              className={cn(
+                'size-1.5 rounded-full',
+                query.isError ? 'bg-destructive' : 'bg-success'
+              )}
+              aria-hidden
+            />
+            {automatic ? t('Live') : t('Manual')}
+            {data && (
+              <span>
+                · {t('Updated at')} {formatTimestamp(data.updated_at).slice(11)}
+              </span>
+            )}
+          </p>
+        }
         title={t('Channel monitor')}
         description={t(
           'Real request observations. Unobserved periods remain unknown.'
@@ -266,23 +283,7 @@ export function ChannelMonitorPage() {
             </Button>
           </div>
         }
-      >
-        <p className='text-muted-foreground flex flex-wrap items-center gap-2 border-t pt-3 text-xs'>
-          <span
-            className={cn(
-              'size-1.5 rounded-full',
-              query.isError ? 'bg-destructive' : 'bg-success'
-            )}
-            aria-hidden
-          />
-          {automatic ? t('Live') : t('Manual')}
-          {data && (
-            <span>
-              · {t('Updated at')} {formatTimestamp(data.updated_at).slice(11)}
-            </span>
-          )}
-        </p>
-      </ConsolePageHeader>
+      />
       <section
         aria-label={t('Channel monitor')}
         className='monitor-content min-h-0 flex-1 overflow-y-auto px-4 pb-6 sm:px-6 lg:px-8'
@@ -367,11 +368,11 @@ export function ChannelMonitorPage() {
                 ))}
               </div>
               <Card className='mt-1 min-w-0 gap-3 p-4 sm:p-5'>
-                <div className='flex items-center justify-between gap-3 border-b'>
+                <div className='flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b pb-2'>
                   <div
                     role='group'
                     aria-label={t('All statuses')}
-                    className='flex min-w-0 gap-0.5 overflow-x-auto'
+                    className='flex max-w-full min-w-0 flex-auto gap-0.5 overflow-x-auto'
                   >
                     {[
                       { value: 'all', label: t('All') },
@@ -421,66 +422,66 @@ export function ChannelMonitorPage() {
                       </Button>
                     ))}
                   </div>
-                  <span className='text-muted-foreground hidden shrink-0 font-mono text-[11px] sm:block'>
-                    {t('{{count}} groups', { count: groups.length })}
-                  </span>
-                </div>
-                <div
-                  role='group'
-                  aria-label={t('Filters')}
-                  className='monitor-controls flex flex-wrap items-center gap-2.5'
-                >
-                  <DataTableRowActionMenu
-                    ariaLabel={t('Sort groups')}
-                    align='start'
-                    contentClassName='w-auto min-w-56 rounded-[calc(var(--radius)*0.7)]'
-                    trigger={
-                      <Button
-                        variant='outline'
-                        size='sm'
-                        className='h-8 gap-1.5 rounded-[calc(var(--radius)*0.4)] px-2.5 text-xs font-normal'
-                      >
-                        <ArrowDownUp className='size-3.5' aria-hidden />
-                        <span>{currentSort?.label}</span>
-                        <span className='text-muted-foreground text-[10px]'>
-                          {currentSort?.direction}
-                        </span>
-                        <ChevronDown className='size-3' aria-hidden />
-                      </Button>
-                    }
+                  <div
+                    role='group'
+                    aria-label={t('Filters')}
+                    className='monitor-controls ml-auto flex w-full max-w-full flex-wrap items-center justify-end gap-2.5 sm:w-auto'
                   >
-                    <DropdownMenuRadioGroup
-                      value={sort}
-                      onValueChange={setSort}
-                    >
-                      {sortOptions.map((option) => (
-                        <DropdownMenuRadioItem
-                          key={option.value}
-                          value={option.value}
-                          aria-label={`${option.label} ${option.direction}`.trim()}
-                          closeOnClick
-                          className='gap-3 py-1.5 text-[13px]'
+                    <span className='text-muted-foreground hidden shrink-0 font-mono text-[11px] sm:block'>
+                      {t('{{count}} groups', { count: groups.length })}
+                    </span>
+                    <DataTableRowActionMenu
+                      ariaLabel={t('Sort groups')}
+                      align='start'
+                      contentClassName='w-auto min-w-56 rounded-[calc(var(--radius)*0.7)]'
+                      trigger={
+                        <Button
+                          variant='outline'
+                          size='sm'
+                          className='h-8 gap-1.5 rounded-[calc(var(--radius)*0.4)] px-2.5 text-xs font-normal'
                         >
-                          <span>{option.label}</span>
+                          <ArrowDownUp className='size-3.5' aria-hidden />
+                          <span>{currentSort?.label}</span>
                           <span className='text-muted-foreground text-[10px]'>
-                            {option.direction}
+                            {currentSort?.direction}
                           </span>
-                        </DropdownMenuRadioItem>
-                      ))}
-                    </DropdownMenuRadioGroup>
-                  </DataTableRowActionMenu>
-                  <div className='relative w-full sm:w-60'>
-                    <Search
-                      className='text-muted-foreground absolute top-2.5 left-2.5 size-3.5'
-                      aria-hidden
-                    />
-                    <Input
-                      className='h-8 rounded-[calc(var(--radius)*0.45)] pl-8 text-xs'
-                      aria-label={t('Search groups or models')}
-                      placeholder={t('Search groups or models')}
-                      value={search}
-                      onChange={(event) => setSearch(event.target.value)}
-                    />
+                          <ChevronDown className='size-3' aria-hidden />
+                        </Button>
+                      }
+                    >
+                      <DropdownMenuRadioGroup
+                        value={sort}
+                        onValueChange={setSort}
+                      >
+                        {sortOptions.map((option) => (
+                          <DropdownMenuRadioItem
+                            key={option.value}
+                            value={option.value}
+                            aria-label={`${option.label} ${option.direction}`.trim()}
+                            closeOnClick
+                            className='gap-3 py-1.5 text-[13px]'
+                          >
+                            <span>{option.label}</span>
+                            <span className='text-muted-foreground text-[10px]'>
+                              {option.direction}
+                            </span>
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DataTableRowActionMenu>
+                    <div className='relative w-full sm:w-60'>
+                      <Search
+                        className='text-muted-foreground absolute top-2.5 left-2.5 size-3.5'
+                        aria-hidden
+                      />
+                      <Input
+                        className='h-8 rounded-[calc(var(--radius)*0.45)] pl-8 text-xs'
+                        aria-label={t('Search groups or models')}
+                        placeholder={t('Search groups or models')}
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
+                      />
+                    </div>
                   </div>
                 </div>
                 {groups.length === 0 ? (

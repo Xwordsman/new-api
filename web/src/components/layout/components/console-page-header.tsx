@@ -26,6 +26,7 @@ export type ConsolePageHeaderProps = {
   title: ReactNode
   icon: LucideIcon
   eyebrow: string
+  eyebrowMeta?: ReactNode
   description: ReactNode
   actions?: ReactNode
   breadcrumb?: ReactNode
@@ -78,12 +79,15 @@ export function ConsolePageHeader(props: ConsolePageHeaderProps) {
                 <Icon className='size-5' aria-hidden='true' />
               </div>
               <div className='flex min-w-0 flex-col gap-1'>
-                <p
-                  lang='en'
-                  className='text-primary text-[10px] leading-4 font-semibold tracking-[0.16em] uppercase'
-                >
-                  {props.eyebrow}
-                </p>
+                <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
+                  <p
+                    lang='en'
+                    className='text-primary text-[10px] leading-4 font-semibold tracking-[0.16em] uppercase'
+                  >
+                    {props.eyebrow}
+                  </p>
+                  {props.eyebrowMeta}
+                </div>
                 <h1 className='text-xl leading-snug font-semibold tracking-tight sm:text-2xl'>
                   {props.title}
                 </h1>

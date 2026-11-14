@@ -45,7 +45,7 @@ export function GroupRatio(props: {
   const discounted = group.offer.active && group.ratio < group.base_ratio
   if (!discounted && !group.offer.schedule) {
     return (
-      <span className='inline-flex h-7.5 items-center rounded-[calc(var(--radius)*0.3)] border px-2.5 font-mono text-sm font-semibold'>
+      <span className='border-border inline-flex h-7.5 items-center rounded-[calc(var(--radius)*0.3)] border px-2.5 font-mono text-sm font-semibold'>
         ×{ratioFormat.format(group.ratio)}
       </span>
     )
@@ -80,7 +80,7 @@ export function GroupRatio(props: {
             aria-expanded={open}
             onClick={() => setOpen(true)}
             className={cn(
-              'relative h-7.5 gap-1.5 rounded-[calc(var(--radius)*0.3)] border px-2.5 font-mono text-sm',
+              'border-border relative h-7.5 gap-1.5 rounded-[calc(var(--radius)*0.3)] border px-2.5 font-mono text-sm',
               discounted && 'border-primary/30 bg-primary/5 hover:bg-primary/10'
             )}
           >

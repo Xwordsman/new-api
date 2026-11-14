@@ -390,6 +390,7 @@ it('shows public discount details on hover, keyboard focus and touch without ope
   const trigger = await screen.findByRole('button', {
     name: 'Discount details for Public group',
   })
+  expect(trigger).toHaveClass('border', 'border-primary/30')
   await user.hover(trigger)
   const details = await screen.findByRole('region', {
     name: 'Discount details',
@@ -720,6 +721,46 @@ it('refreshes the displayed multiplier at a period boundary even with metric aut
   view.client.clear()
 })
 
+it.each([false, true])(
+  'keeps the regular multiplier in a visible border when a schedule is %s',
+  (scheduled) => {
+    render(
+      <GroupRatio
+        group={{
+          ...group,
+          ratio: group.base_ratio,
+          offer: {
+            ...group.offer,
+            active: false,
+            factor: 1,
+            schedule: scheduled
+              ? {
+                  evaluated_at: 1700000000,
+                  starts_at: 0,
+                  ends_at: 0,
+                  daily_start: '',
+                  daily_end: '',
+                  period_start: 0,
+                  period_end: 0,
+                  next_factor: 1,
+                }
+              : undefined,
+          },
+        }}
+      />
+    )
+    const multiplier = scheduled
+      ? screen.getByRole('button', {
+          name: 'Pricing details for Public group',
+        })
+      : screen.getByText('×0.3')
+    expect(multiplier).toHaveClass('border', 'border-border', 'h-7.5', 'px-2.5')
+    expect(multiplier).not.toHaveClass('border-transparent')
+    expect(multiplier).toHaveTextContent('×0.3')
+    expect(screen.queryByText('Sale')).not.toBeInTheDocument()
+  }
+)
+
 it('only offers discount details for a currently reduced public multiplier and explains an unlimited offer', async () => {
   const user = userEvent.setup()
   vi.spyOn(api, 'get').mockResolvedValue({
@@ -799,11 +840,27 @@ it('keeps all historical bars and the success percentage on one fluid line', asy
   view.client.clear()
 })
 
+it('keeps live status and update time beside the English page label when automatic refresh is toggled', async () => {
+  const user = userEvent.setup()
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: { success: true, data: snapshot },
+  })
+  const view = renderMonitor()
+  await screen.findByText('Public group')
+  const labelRow = screen.getByText('CHANNEL MONITOR').parentElement
+  expect(labelRow).toHaveClass('flex', 'flex-wrap', 'items-center')
+  expect(labelRow).toContainElement(screen.getByText('Live'))
+  expect(labelRow).toContainElement(screen.getByText(/· Updated at/))
+  await user.click(screen.getByRole('switch', { name: 'Auto refresh' }))
+  expect(labelRow).toContainElement(screen.getByText('Manual'))
+  view.client.clear()
+})
+
 it.each([
   { state: 'populated', groups: [group] },
   { state: 'empty', groups: [] },
 ])(
-  'keeps the $state monitor filters and results on one card outside the page heading',
+  'aligns filters to the right of statuses in one wrapping toolbar for $state results',
   async ({ groups }) => {
     vi.spyOn(api, 'get').mockResolvedValue({
       data: { success: true, data: { ...snapshot, groups } },
@@ -820,6 +877,12 @@ it.each([
     expect(controls).toContainElement(
       screen.getByRole('button', { name: 'Sort groups' })
     )
+    const statuses = screen.getByRole('group', { name: 'All statuses' })
+    const toolbar = statuses.parentElement
+    expect(toolbar).toHaveClass('flex', 'flex-wrap', 'items-center')
+    expect(toolbar).toContainElement(controls)
+    expect(controls).toHaveClass('ml-auto', 'w-full', 'sm:w-auto')
+    expect(statuses).toHaveClass('min-w-0', 'overflow-x-auto')
     const surface = search.closest('[data-slot="card"]')
     expect(surface).toHaveClass('bg-card', 'rounded-xl', 'min-w-0')
     expect(surface).toContainElement(controls)
