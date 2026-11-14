@@ -271,3 +271,55 @@ it('keeps promotion editing in group pricing instead of monitor metadata', async
   ).toBeVisible()
   client.clear()
 })
+
+it('saves a selected group icon and allows clearing it to restore automatic detection', async () => {
+  const user = userEvent.setup()
+  const data: MonitorSettingsResponse = {
+    ...settings,
+    settings: {
+      ...settings.settings,
+      groups: [
+        {
+          group: 'public',
+          display_name: '',
+          description: '',
+          badge: '',
+          promotion: null,
+        },
+      ],
+    },
+  }
+  const client = renderSettings(data)
+  const saved = {
+    ...data.settings,
+    revision: 2,
+    groups: [{ ...data.settings.groups[0], icon: 'Claude.Color' }],
+  }
+  const put = vi
+    .spyOn(api, 'put')
+    .mockResolvedValue({ data: { success: true, data: saved } })
+  await user.click(await screen.findByRole('button', { name: 'public' }))
+  const input = screen.getByRole('combobox', { name: 'Group icon' })
+  await user.type(input, 'Claude.Color')
+  await user.click(await screen.findByRole('option', { name: 'Claude.Color' }))
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() =>
+    expect(put).toHaveBeenLastCalledWith(
+      '/api/extensions/channel-monitor/admin/settings',
+      { ...saved, revision: 1 }
+    )
+  )
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+  )
+  await user.click(screen.getByRole('button', { name: 'Clear' }))
+  expect(input).toHaveValue('')
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() =>
+    expect(put).toHaveBeenLastCalledWith(
+      '/api/extensions/channel-monitor/admin/settings',
+      { ...saved, groups: [{ ...saved.groups[0], icon: '' }] }
+    )
+  )
+  client.clear()
+})

@@ -28,7 +28,7 @@ import {
   RefreshCw,
   Search,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useEffectEvent, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -114,6 +114,25 @@ export function ChannelMonitorPage() {
     staleTime: 25_000,
   })
   const data = query.data
+  // Price transitions must refresh even when metric auto-refresh is off. Use
+  // server-relative time so a misconfigured client clock cannot shift a period.
+  const nextPriceChange = Math.min(
+    ...(data?.groups ?? []).map((group) => {
+      const schedule = group.offer.schedule
+      if (!schedule || !schedule.period_end) return Infinity
+      return (schedule.period_end - schedule.evaluated_at) * 1000
+    })
+  )
+  const refetchPricing = useEffectEvent(() => void query.refetch())
+  useEffect(() => {
+    if (!Number.isFinite(nextPriceChange)) return
+    const remaining = nextPriceChange - (Date.now() - query.dataUpdatedAt)
+    const timer = globalThis.setTimeout(
+      refetchPricing,
+      Math.min(Math.max(0, remaining), 2_147_483_647)
+    )
+    return () => globalThis.clearTimeout(timer)
+  }, [nextPriceChange, query.dataUpdatedAt])
   const needle = search.trim().toLowerCase()
   const groups = (data?.groups ?? []).filter(
     (group) =>
@@ -229,7 +248,7 @@ export function ChannelMonitorPage() {
                 checked={automatic}
                 onCheckedChange={setAutomatic}
               />
-              <Label htmlFor='monitor-auto-refresh' className='text-xs'>
+              <Label htmlFor='monitor-auto-refresh' className='text-sm'>
                 {t('Auto refresh')}
               </Label>
             </div>
@@ -248,7 +267,7 @@ export function ChannelMonitorPage() {
           </div>
         }
       >
-        <p className='text-muted-foreground flex flex-wrap items-center gap-2 border-t pt-3 text-xs'>
+        <p className='text-muted-foreground flex flex-wrap items-center gap-2 border-t pt-3 text-sm'>
           <span
             className={cn(
               'size-1.5 rounded-full',
@@ -318,14 +337,14 @@ export function ChannelMonitorPage() {
                     data-tone={card.tone}
                     className='console-surface console-metric monitor-metric relative min-w-0 rounded-xl border p-5'
                   >
-                    <div className='flex items-center justify-between gap-2 text-[13px] font-medium'>
+                    <div className='flex items-center justify-between gap-2 text-sm font-medium'>
                       <span className='flex items-center gap-2'>
                         <span className='monitor-metric-icon flex size-6.5 shrink-0 items-center justify-center rounded-[calc(var(--radius)*0.4)] border'>
                           <card.icon className='size-3.5' aria-hidden />
                         </span>
                         {card.title}
                       </span>
-                      <span className='text-muted-foreground hidden font-mono text-[10px] font-normal tracking-wide @min-[42rem]/monitor:inline'>
+                      <span className='text-muted-foreground hidden font-mono text-xs font-normal tracking-wide @min-[42rem]/monitor:inline'>
                         {card.code}
                       </span>
                     </div>
@@ -337,11 +356,11 @@ export function ChannelMonitorPage() {
                             : formatNumber(card.value, locale)
                         }
                       />
-                      <span className='monitor-metric-unit font-mono text-[13px] leading-none'>
+                      <span className='monitor-metric-unit font-mono text-sm leading-none'>
                         {card.suffix}
                       </span>
                     </div>
-                    <p className='text-muted-foreground mt-3.5 font-mono text-[11px] leading-4.5'>
+                    <p className='text-muted-foreground mt-3.5 text-[13px] leading-5'>
                       {card.description}
                     </p>
                   </section>
@@ -369,7 +388,7 @@ export function ChannelMonitorPage() {
                         aria-pressed={status === item.value}
                         onClick={() => setStatus(item.value)}
                         className={cn(
-                          'text-muted-foreground h-8 shrink-0 gap-1.5 rounded-none border-x-0 border-t-0 border-b-2 border-transparent px-3 text-[13px]',
+                          'text-muted-foreground h-8 shrink-0 gap-1.5 rounded-none border-x-0 border-t-0 border-b-2 border-transparent px-3 text-sm',
                           status === item.value && 'border-primary text-primary'
                         )}
                       >
@@ -390,7 +409,7 @@ export function ChannelMonitorPage() {
                             {item.label}
                           </>
                         )}
-                        <span className='font-mono text-[10px] font-normal opacity-80'>
+                        <span className='font-mono text-xs font-normal opacity-80'>
                           {
                             data.groups.filter(
                               (group) =>
@@ -402,7 +421,7 @@ export function ChannelMonitorPage() {
                       </Button>
                     ))}
                   </div>
-                  <span className='text-muted-foreground hidden shrink-0 font-mono text-[11px] sm:block'>
+                  <span className='text-muted-foreground hidden shrink-0 font-mono text-[13px] sm:block'>
                     {t('{{count}} groups', { count: groups.length })}
                   </span>
                 </div>
@@ -419,11 +438,11 @@ export function ChannelMonitorPage() {
                       <Button
                         variant='outline'
                         size='sm'
-                        className='h-8 gap-1.5 rounded-[calc(var(--radius)*0.4)] px-2.5 text-xs font-normal'
+                        className='h-8 gap-1.5 rounded-[calc(var(--radius)*0.4)] px-2.5 text-sm font-normal'
                       >
                         <ArrowDownUp className='size-3.5' aria-hidden />
                         <span>{currentSort?.label}</span>
-                        <span className='text-muted-foreground text-[10px]'>
+                        <span className='text-muted-foreground text-xs'>
                           {currentSort?.direction}
                         </span>
                         <ChevronDown className='size-3' aria-hidden />
@@ -440,10 +459,10 @@ export function ChannelMonitorPage() {
                           value={option.value}
                           aria-label={`${option.label} ${option.direction}`.trim()}
                           closeOnClick
-                          className='gap-3 py-1.5 text-[13px]'
+                          className='gap-3 py-1.5 text-sm'
                         >
                           <span>{option.label}</span>
-                          <span className='text-muted-foreground text-[10px]'>
+                          <span className='text-muted-foreground text-xs'>
                             {option.direction}
                           </span>
                         </DropdownMenuRadioItem>
@@ -456,7 +475,7 @@ export function ChannelMonitorPage() {
                       aria-hidden
                     />
                     <Input
-                      className='h-8 rounded-[calc(var(--radius)*0.45)] pl-8 text-xs'
+                      className='h-8 rounded-[calc(var(--radius)*0.45)] pl-8 text-sm'
                       aria-label={t('Search groups or models')}
                       placeholder={t('Search groups or models')}
                       value={search}
@@ -473,22 +492,22 @@ export function ChannelMonitorPage() {
                   />
                 ) : (
                   <StaticDataTable
-                    tableClassName='min-w-200 table-fixed [&_th]:overflow-hidden [&_th]:text-ellipsis [&_th]:h-9.5 [&_th]:text-xs [&_th]:font-normal [&_th]:text-muted-foreground'
+                    tableClassName='min-w-260 table-fixed [&_th]:overflow-hidden [&_th]:text-ellipsis [&_th]:h-9.5 [&_th]:text-sm [&_th]:font-normal [&_th]:text-muted-foreground'
                     tableProps={{ typography: 'content' }}
                     className='bg-card rounded-[calc(var(--radius)*0.7)]'
                   >
                     <colgroup>
-                      <col className='w-[23.5%]' />
-                      <col className='w-24' />
-                      <col className='w-26' />
+                      <col className='w-[30%]' />
+                      <col className='w-28' />
+                      <col className='w-28' />
                       <col />
-                      <col className='w-24' />
-                      <col className='w-18' />
+                      <col className='w-28' />
                       <col className='w-22' />
+                      <col className='w-24' />
                       <col className='w-8' />
                     </colgroup>
                     <TableHeader>
-                      <TableRow className='bg-muted/40 text-xs'>
+                      <TableRow className='bg-muted/40 text-sm'>
                         <TableHead
                           className='pl-4.5'
                           aria-sort={sort === 'name' ? 'ascending' : undefined}
@@ -551,6 +570,7 @@ export function ChannelMonitorPage() {
                           key={group.group}
                           group={group}
                           updatedAt={data.updated_at}
+                          receivedAt={query.dataUpdatedAt}
                           search={
                             group.models.some((model) =>
                               model.model.toLowerCase().includes(needle)
@@ -564,7 +584,7 @@ export function ChannelMonitorPage() {
                   </StaticDataTable>
                 )}
               </Card>
-              <p className='text-muted-foreground text-center text-[11px] leading-5'>
+              <p className='text-muted-foreground text-center text-[13px] leading-5'>
                 {t(
                   'Model base price × public group multiplier · Scheduled discounts apply automatically · Success rates are weighted by real requests'
                 )}

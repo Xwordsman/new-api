@@ -24,6 +24,7 @@ import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { LobeIconField } from '@/components/lobe-icon-field'
 import { MultiSelect } from '@/components/multi-select'
 import {
   Accordion,
@@ -167,6 +168,7 @@ export function MonitorSettingsForm(props: { data: MonitorSettingsResponse }) {
                               display_name: '',
                               description: '',
                               badge: '',
+                              icon: '',
                               promotion: null,
                             }
                         )
@@ -263,6 +265,30 @@ export function MonitorSettingsForm(props: { data: MonitorSettingsResponse }) {
                       />
                     ))}
                   </div>
+                  <FormField
+                    control={form.control}
+                    name={`groups.${index}.icon`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel htmlFor={`monitor-icon-${index}`}>
+                          {t('Group icon')}
+                        </FormLabel>
+                        <fieldset disabled={save.isPending} className='min-w-0'>
+                          <LobeIconField
+                            id={`monitor-icon-${index}`}
+                            value={field.value ?? ''}
+                            onChange={field.onChange}
+                          />
+                        </fieldset>
+                        <FormDescription>
+                          {t(
+                            'Choose a vendor or model icon for this group. Leave empty to detect it from enabled models; mixed or unknown providers use the default group icon.'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </AccordionContent>
               </AccordionItem>
             )

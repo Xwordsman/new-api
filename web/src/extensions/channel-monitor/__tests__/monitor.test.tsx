@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClientProvider } from '@tanstack/react-query'
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -30,6 +31,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 import { createAppQueryClient } from '@/lib/query-client'
 
+import { GroupRatio } from '../components/group-ratio'
 import { ChannelMonitorPage } from '../index'
 import type { MonitorGroup, MonitorMetrics, MonitorSnapshot } from '../types'
 
@@ -76,7 +78,10 @@ const snapshot: MonitorSnapshot = {
   summary: metrics,
 }
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+})
 
 function renderMonitor() {
   const client = createAppQueryClient()
@@ -88,6 +93,49 @@ function renderMonitor() {
   )
   return { ...result, client }
 }
+
+it.each([
+  {
+    icon: 'Claude.Color',
+    models: ['gpt-4o', 'gemini-2.5-pro'],
+    expected: 'Claude',
+  },
+  { icon: '', models: ['gpt-4o', 'o3'], expected: 'OpenAI' },
+  { icon: '', models: ['claude-sonnet-4'], expected: 'Claude' },
+  { icon: '', models: ['gemini-2.5-pro'], expected: 'Gemini' },
+  { icon: '', models: ['gpt-4o', 'gemini-2.5-pro'], expected: 'Group icon' },
+  { icon: '', models: ['custom-model'], expected: 'Group icon' },
+  { icon: '', models: [], expected: 'Group icon' },
+])(
+  'shows $expected for icon "$icon" and enabled models $models',
+  async ({ icon, models, expected }) => {
+    vi.spyOn(api, 'get').mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          ...snapshot,
+          groups: [
+            {
+              ...group,
+              icon,
+              models: [
+                ...models.map((model) => ({
+                  ...metrics,
+                  model,
+                  enabled: true,
+                })),
+                { ...metrics, model: 'grok-4', enabled: false },
+              ],
+            },
+          ],
+        },
+      },
+    })
+    const view = renderMonitor()
+    expect(await screen.findByRole('img', { name: expected })).toBeVisible()
+    view.client.clear()
+  }
+)
 
 it('shows the initial loading state and lets a failed request be retried', async () => {
   const user = userEvent.setup()
@@ -104,6 +152,25 @@ it('shows the initial loading state and lets a failed request be retried', async
   reject(new Error('Monitor unavailable'))
   await user.click(await screen.findByRole('button', { name: 'Retry' }))
   expect(await screen.findByText('Public group')).toBeVisible()
+  view.client.clear()
+})
+
+it('uses legible group labels and metrics with theme-colored discount badges', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: { success: true, data: snapshot },
+  })
+  const view = renderMonitor()
+  const name = await screen.findByRole('button', {
+    name: 'Details for Public group',
+  })
+  expect(name).toHaveClass('text-base')
+  const row = name.closest('tr')
+  if (!row) throw new Error('Expected group table row')
+  expect(within(row).getByText('Discount')).toHaveClass(
+    'text-primary',
+    'bg-primary/5'
+  )
+  expect(within(row).getByText('×0.24')).toHaveClass('text-primary')
   view.client.clear()
 })
 
@@ -379,6 +446,169 @@ it('shows the full expanded model list without a nested vertical scroll area', a
   view.client.clear()
 })
 
+it('opens scheduled regular pricing and distinguishes the next daily offer from the campaign deadline', async () => {
+  const user = userEvent.setup()
+  const now = Date.parse('2026-11-14T14:30:00Z')
+  vi.spyOn(Date, 'now').mockReturnValue(now)
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: {
+      success: true,
+      data: {
+        ...snapshot,
+        groups: [
+          {
+            ...group,
+            ratio: 0.3,
+            offer: {
+              ...group.offer,
+              active: false,
+              factor: 1,
+              timezone: 'Asia/Shanghai',
+              schedule: {
+                evaluated_at: now / 1000,
+                starts_at: 0,
+                ends_at: Date.parse('2026-11-30T15:00:00Z') / 1000,
+                daily_start: '21:00',
+                daily_end: '22:00',
+                period_start: Date.parse('2026-11-14T14:00:00Z') / 1000,
+                period_end: Date.parse('2026-11-15T13:00:00Z') / 1000,
+                next_factor: 0.1,
+              },
+            },
+          },
+        ],
+      },
+    },
+  })
+  const view = renderMonitor()
+  await user.click(
+    await screen.findByRole('button', {
+      name: 'Pricing details for Public group',
+    })
+  )
+  const details = await screen.findByRole('region', { name: 'Pricing details' })
+  expect(within(details).getByText('Regular price')).toBeVisible()
+  expect(within(details).getByText('Tomorrow 21:00')).toBeVisible()
+  expect(within(details).getByText('22:30:00')).toBeVisible()
+  expect(within(details).getByText('Discount ×0.03')).toBeVisible()
+  expect(within(details).getByText('Activity end time')).toBeVisible()
+  expect(within(details).getByText(/11\/30.*23:00/)).toBeVisible()
+  expect(within(details).queryByText('Offer end time')).not.toBeInTheDocument()
+  expect(
+    screen.getByRole('button', { name: 'Details for Public group' })
+  ).toHaveAttribute('aria-expanded', 'false')
+  view.client.clear()
+})
+
+it('counts down from server time while the multiplier details are open', async () => {
+  vi.useFakeTimers()
+  const receivedAt = Date.parse('2026-11-14T12:00:00Z')
+  const serverNow = Date.parse('2026-11-14T13:59:58Z') / 1000
+  vi.setSystemTime(receivedAt)
+  render(
+    <GroupRatio
+      receivedAt={receivedAt}
+      group={{
+        ...group,
+        offer: {
+          ...group.offer,
+          schedule: {
+            evaluated_at: serverNow,
+            starts_at: 0,
+            ends_at: Date.parse('2026-11-30T15:00:00Z') / 1000,
+            daily_start: '21:00',
+            daily_end: '22:00',
+            period_start: serverNow - 3598,
+            period_end: serverNow + 2,
+            next_factor: 1,
+          },
+        },
+      }}
+    />
+  )
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Discount details for Public group' })
+  )
+  await act(() => vi.advanceTimersByTimeAsync(100))
+  expect(screen.getByText('Today 22:00')).toBeVisible()
+  expect(screen.getByText('00:00:02')).toBeVisible()
+  expect(screen.getByText('Regular price ×0.3')).toBeVisible()
+  await act(() => vi.advanceTimersByTimeAsync(1000))
+  expect(screen.getByText('00:00:01')).toBeVisible()
+  await act(() => vi.advanceTimersByTimeAsync(1000))
+  expect(screen.getByText('00:00:00')).toBeVisible()
+})
+
+it('refreshes the displayed multiplier at a period boundary even with metric auto-refresh disabled', async () => {
+  vi.useFakeTimers()
+  const now = Date.parse('2026-11-14T13:59:58Z')
+  vi.setSystemTime(now)
+  const schedule = {
+    evaluated_at: now / 1000,
+    starts_at: 0,
+    ends_at: now / 1000 + 2,
+    daily_start: '21:00',
+    daily_end: '22:00',
+    period_start: now / 1000 - 3598,
+    period_end: now / 1000 + 2,
+    next_factor: 1,
+  }
+  const scheduled: MonitorGroup = {
+    ...group,
+    offer: {
+      ...group.offer,
+      schedule,
+    },
+  }
+  vi.spyOn(api, 'get')
+    .mockResolvedValueOnce({
+      data: { success: true, data: { ...snapshot, groups: [scheduled] } },
+    })
+    .mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          ...snapshot,
+          groups: [
+            {
+              ...scheduled,
+              ratio: 0.3,
+              offer: {
+                ...scheduled.offer,
+                active: false,
+                factor: 1,
+                schedule: {
+                  ...schedule,
+                  evaluated_at: now / 1000 + 2,
+                  period_start: now / 1000 + 2,
+                  period_end: 0,
+                },
+              },
+            },
+          ],
+        },
+      },
+    })
+  const view = renderMonitor()
+  await act(() => vi.advanceTimersByTimeAsync(100))
+  const discount = screen.getByRole('button', {
+    name: 'Discount details for Public group',
+  })
+  expect(discount).toHaveTextContent('×0.24')
+  fireEvent.click(screen.getByRole('switch', { name: 'Auto refresh' }))
+  expect(screen.getByRole('switch', { name: 'Auto refresh' })).not.toBeChecked()
+  await act(() => vi.advanceTimersByTimeAsync(2000))
+  const regular = screen.getByRole('button', {
+    name: 'Pricing details for Public group',
+  })
+  expect(regular).toHaveTextContent('×0.3')
+  fireEvent.click(regular)
+  await act(() => vi.advanceTimersByTimeAsync(100))
+  expect(screen.getByText('No upcoming change')).toBeVisible()
+  expect(screen.queryByRole('timer')).not.toBeInTheDocument()
+  view.client.clear()
+})
+
 it('only offers discount details for a currently reduced public multiplier and explains an unlimited offer', async () => {
   const user = userEvent.setup()
   vi.spyOn(api, 'get').mockResolvedValue({
@@ -449,7 +679,7 @@ it('keeps all historical bars and the success percentage on one fluid line', asy
   })
   expect(history).toHaveClass('flex-1', 'w-full', 'min-w-0')
   expect(within(history).getAllByRole('button')).toHaveLength(48)
-  expect(screen.getByRole('table')).toHaveClass('min-w-200', 'table-fixed')
+  expect(screen.getByRole('table')).toHaveClass('min-w-260', 'table-fixed')
   expect(screen.getByRole('table').parentElement).toHaveClass('overflow-x-auto')
   await user.click(within(history).getAllByRole('button')[0])
   expect(

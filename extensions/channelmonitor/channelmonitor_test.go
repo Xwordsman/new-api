@@ -167,7 +167,7 @@ func TestChannelMonitorDatabaseMatrix(t *testing.T) {
 							require.NoError(t, db.Raw("SELECT sqlite_version()").Scan(&version).Error)
 							t.Log("SQLite", version)
 						}
-						legacyRaw := `{"revision":7,"enabled":true,"groups":[{"group":"public","display_name":"GPT","description":"Preserve me","badge":"Offer","promotion":{"enabled":true,"factor":0.8,"daily_start":"18:00","daily_end":"22:00","timezone":"Asia/Shanghai"}},{"group":"idle","display_name":"Idle"}]}`
+						legacyRaw := `{"revision":7,"enabled":true,"groups":[{"group":"public","display_name":"GPT","description":"Preserve me","badge":"Offer","icon":"OpenAI","promotion":{"enabled":true,"factor":0.8,"daily_start":"18:00","daily_end":"22:00","timezone":"Asia/Shanghai"}},{"group":"idle","display_name":"Idle"}]}`
 						if legacy {
 							require.NoError(t, db.Create(&model.Option{Key: settingsKey, Value: legacyRaw}).Error)
 						}
@@ -185,7 +185,7 @@ func TestChannelMonitorDatabaseMatrix(t *testing.T) {
 							assert.Equal(t, legacyRaw, original.Value)
 						} else {
 							assert.Empty(t, initial.Promotions.Groups)
-							_, err = saveSettings(db, Settings{Enabled: true, Groups: []GroupSettings{{Group: "public", DisplayName: "GPT", Description: "Preserve me", Badge: "Offer"}, {Group: "idle"}}})
+							_, err = saveSettings(db, Settings{Enabled: true, Groups: []GroupSettings{{Group: "public", DisplayName: "GPT", Description: "Preserve me", Badge: "Offer", Icon: "OpenAI"}, {Group: "idle"}}})
 							require.NoError(t, err)
 						}
 						update := grouppricing.Update{Snapshot: initial, Baseline: maps.Clone(initial.Options), Renames: map[string]string{"public": "gpt"}}
@@ -205,6 +205,7 @@ func TestChannelMonitorDatabaseMatrix(t *testing.T) {
 						assert.Equal(t, "idle", monitor.Groups[0].Group)
 						assert.Equal(t, "gpt", monitor.Groups[1].Group)
 						assert.Equal(t, "Preserve me", monitor.Groups[1].Description)
+						assert.Equal(t, "OpenAI", monitor.Groups[1].Icon)
 						assert.True(t, monitor.Enabled)
 						at := time.Date(2026, 11, 14, 12, 0, 0, 0, time.UTC)
 						assert.InDelta(t, 0.4, groupdiscount.Default.Capture(at)["gpt"], 1e-12)
@@ -255,11 +256,12 @@ func TestChannelMonitorDatabaseMatrix(t *testing.T) {
 				var promotion model.Option
 				require.NoError(t, db.Where("value <> ?", legacy).Where(clause.Eq{Column: "key", Value: groupdiscount.OptionKey}).Take(&promotion).Error)
 				require.NoError(t, groupdiscount.Default.Load(promotion.Value))
-				settings := Settings{Enabled: true, Groups: []GroupSettings{{Group: "public", DisplayName: " Public ", Badge: " Discount "}}}
+				settings := Settings{Enabled: true, Groups: []GroupSettings{{Group: "public", DisplayName: " Public ", Badge: " Discount ", Icon: " Claude.Color "}}}
 				saved, err := saveSettings(db, settings)
 				require.NoError(t, err)
 				assert.EqualValues(t, 1, saved.Revision)
 				assert.Equal(t, "Public", saved.Groups[0].DisplayName)
+				assert.Equal(t, "Claude.Color", saved.Groups[0].Icon)
 				_, err = saveSettings(db, settings)
 				assert.ErrorIs(t, err, errConflict)
 				for _, invalid := range []Settings{
@@ -267,6 +269,7 @@ func TestChannelMonitorDatabaseMatrix(t *testing.T) {
 					{Groups: []GroupSettings{{Group: "public"}, {Group: "public"}}},
 					{Groups: []GroupSettings{{Group: "unknown"}}}, {Groups: []GroupSettings{{Group: "auto"}}},
 					{Groups: []GroupSettings{{Group: "public", Badge: strings.Repeat("x", 25)}}},
+					{Groups: []GroupSettings{{Group: "public", Icon: strings.Repeat("x", 129)}}},
 					{Groups: []GroupSettings{{Group: "public", Promotion: &groupdiscount.Rule{Factor: 0}}}},
 					{Groups: make([]GroupSettings, 25)},
 				} {
@@ -338,12 +341,13 @@ func TestChannelMonitorDatabaseMatrix(t *testing.T) {
 				db, logs := monitorTestDB(t, dialect, ""), monitorTestDB(t, dialect, "_LOG")
 				monitorLogs(t, logs)
 				require.NoError(t, db.Create(&[]model.Ability{{Group: "public", Model: "openai-test", ChannelId: 7, Enabled: true}, {Group: "public", Model: "no-traffic-model", ChannelId: 8, Enabled: true}, {Group: "idle", Model: "idle-model", ChannelId: 7, Enabled: true}}).Error)
-				_, err := saveSettings(db, Settings{Enabled: true, Groups: []GroupSettings{{Group: "private"}, {Group: "public"}, {Group: "idle"}, {Group: "disabled"}}})
+				_, err := saveSettings(db, Settings{Enabled: true, Groups: []GroupSettings{{Group: "private"}, {Group: "public", Icon: "OpenAI"}, {Group: "idle"}, {Group: "disabled"}}})
 				require.NoError(t, err)
 				data, err := buildSnapshot(db, logs, "member", "1h", time.Hour, monitorEpoch)
 				require.NoError(t, err)
 				require.Len(t, data.Groups, 3)
 				assert.Equal(t, "public", data.Groups[0].Group)
+				assert.Equal(t, "OpenAI", data.Groups[0].Icon)
 				assert.Equal(t, 0.3, data.Groups[0].Ratio)
 				assert.Equal(t, 0.3, data.Groups[0].BaseRatio)
 				assert.Equal(t, "unhealthy", data.Groups[0].Status)
@@ -545,6 +549,49 @@ func TestPublicGroupDiscountSchedules(t *testing.T) {
 	} {
 		_, err := groupdiscount.Normalize(rule)
 		assert.Error(t, err)
+	}
+}
+
+func TestPublicGroupDiscountPeriodPresentation(t *testing.T) {
+	monitorTestSettings(t)
+	location, err := time.LoadLocation("Asia/Shanghai")
+	require.NoError(t, err)
+	day := time.Date(2026, 11, 14, 0, 0, 0, 0, location).Unix()
+	deadline := time.Date(2026, 11, 30, 23, 0, 0, 0, location).Unix()
+	rule := groupdiscount.Rule{Enabled: true, Factor: 0.1, DailyStart: "21:00", DailyEnd: "22:00", EndsAt: deadline}
+	for _, tc := range []struct {
+		name            string
+		rule            groupdiscount.Rule
+		at, from, until int64
+		nextFactor      float64
+	}{
+		{"discounted period ends today", rule, day + 21*3600 + 1800, day + 21*3600, day + 22*3600, 1},
+		{"regular period ends tomorrow", rule, day + 22*3600 + 1800, day + 22*3600, day + 45*3600, 0.1},
+		{"regular period before today's offer", rule, day + 20*3600, day - 2*3600, day + 21*3600, 0.1},
+		{"deadline cuts short current discount", groupdiscount.Rule{Enabled: true, Factor: 0.1, DailyStart: "21:00", DailyEnd: "22:00", EndsAt: day + 21*3600 + 2700}, day + 21*3600 + 1800, day + 21*3600, day + 21*3600 + 2700, 1},
+		{"no next offer after deadline", groupdiscount.Rule{Enabled: true, Factor: 0.1, DailyStart: "21:00", DailyEnd: "22:00", EndsAt: day + 23*3600}, day + 22*3600, day + 22*3600, 0, 1},
+		{"no transition after expiry", rule, deadline, deadline, 0, 1},
+		{"overnight current period", groupdiscount.Rule{Enabled: true, Factor: 0.1, DailyStart: "22:00", DailyEnd: "02:00"}, day + 3600, day - 2*3600, day + 2*3600, 1},
+		{"future campaign clips next period start", groupdiscount.Rule{Enabled: true, Factor: 0.1, DailyStart: "21:00", DailyEnd: "22:00", StartsAt: day + 30*86400 + 21*3600 + 1800}, day, 0, day + 30*86400 + 21*3600 + 1800, 0.1},
+		{"absolute offer has its own deadline", groupdiscount.Rule{Enabled: true, Factor: 0.1, StartsAt: day - 3600, EndsAt: deadline}, day, day - 3600, deadline, 1},
+		{"UTC schedule does not use server timezone", groupdiscount.Rule{Enabled: true, Factor: 0.1, DailyStart: "21:00", DailyEnd: "22:00", Timezone: "UTC"}, day + 28*3600, day + 6*3600, day + 29*3600, 0.1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			runtime := &groupdiscount.Runtime{}
+			raw, err := common.Marshal(Settings{Revision: 1, Groups: []GroupSettings{{Group: "public", Promotion: &tc.rule}}})
+			require.NoError(t, err)
+			require.NoError(t, runtime.Load(string(raw)))
+			offer := runtime.Offers(time.Unix(tc.at, 0))["public"]
+			require.NotNil(t, offer.Schedule)
+			assert.Equal(t, tc.at, offer.Schedule.EvaluatedAt)
+			assert.Equal(t, tc.rule.StartsAt, offer.Schedule.StartsAt)
+			assert.Equal(t, tc.rule.EndsAt, offer.Schedule.EndsAt)
+			assert.Equal(t, tc.rule.DailyStart, offer.Schedule.DailyStart)
+			assert.Equal(t, tc.rule.DailyEnd, offer.Schedule.DailyEnd)
+			assert.Equal(t, tc.from, offer.Schedule.PeriodStart)
+			assert.Equal(t, tc.until, offer.Schedule.PeriodEnd)
+			assert.Equal(t, tc.nextFactor, offer.Schedule.NextFactor)
+		})
 	}
 }
 

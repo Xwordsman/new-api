@@ -45,6 +45,7 @@ export type MonitorGroupSettings = {
   display_name: string
   description: string
   badge: string
+  icon?: string
   promotion: null
 }
 
@@ -79,6 +80,16 @@ export type MonitorGroup = MonitorGroupSettings &
       next_start: number
       ends_at: number
       timezone?: string
+      schedule?: {
+        evaluated_at: number
+        starts_at: number
+        ends_at: number
+        daily_start: string
+        daily_end: string
+        period_start: number
+        period_end: number
+        next_factor: number
+      }
     }
     status: MonitorStatus
     timeline: MonitorBucket[]

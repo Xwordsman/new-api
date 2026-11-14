@@ -25,6 +25,8 @@ import { Button } from '@/components/ui/button'
 import { TableCell, TableRow } from '@/components/ui/table'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber } from '@/lib/format'
+import { getLobeIcon } from '@/lib/lobe-icon'
+import { resolveModelProvider } from '@/lib/model-provider'
 import { cn } from '@/lib/utils'
 
 import type { MonitorGroup } from '../types'
@@ -37,6 +39,7 @@ export function GroupRow(props: {
   group: MonitorGroup
   search: string
   updatedAt: number
+  receivedAt?: number
 }) {
   const { t, i18n } = useTranslation()
   const [expanded, setExpanded] = useState(false)
@@ -44,7 +47,16 @@ export function GroupRow(props: {
   const group = props.group
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const discounted = group.offer.active && group.ratio < group.base_ratio
-  const enabledCount = group.models.filter((model) => model.enabled).length
+  const enabledModels = group.models.filter((model) => model.enabled)
+  const providers = enabledModels.map((model) =>
+    resolveModelProvider(model.model)
+  )
+  const provider = providers[0]
+  const inferredIcon =
+    provider && providers.every((item) => item?.icon === provider.icon)
+      ? provider.icon
+      : undefined
+  const icon = group.icon || inferredIcon
   return (
     <>
       <TableRow
@@ -69,14 +81,24 @@ export function GroupRow(props: {
       >
         <TableCell className='py-3 pl-4.5'>
           <div className='flex min-w-0 items-center gap-2.5'>
-            <span className='bg-background flex size-8.5 shrink-0 items-center justify-center rounded-[calc(var(--radius)*0.4)] border shadow-xs'>
-              <Layers className='text-muted-foreground size-4' aria-hidden />
+            <span
+              role='img'
+              aria-label={icon?.split('.')[0] || t('Group icon')}
+              className='bg-background flex size-10 shrink-0 items-center justify-center rounded-[calc(var(--radius)*0.4)] border shadow-xs'
+            >
+              <span aria-hidden>
+                {icon ? (
+                  getLobeIcon(icon, 24)
+                ) : (
+                  <Layers className='text-muted-foreground size-5' />
+                )}
+              </span>
             </span>
             <div className='min-w-0'>
               <div className='flex items-center gap-2'>
                 <Button
                   variant='link'
-                  className='text-foreground h-auto min-w-0 shrink justify-start p-0 text-left text-[13px] font-semibold'
+                  className='text-foreground h-auto min-w-0 shrink justify-start p-0 text-left text-base font-semibold'
                   title={group.display_name || group.group}
                   aria-label={t('Details for {{group}}', {
                     group: group.display_name || group.group,
@@ -92,26 +114,26 @@ export function GroupRow(props: {
                 {(group.badge || (discounted && group.offer.label)) && (
                   <Badge
                     variant='outline'
-                    className='max-w-20 shrink-0 truncate rounded-[calc(var(--radius)*0.2)] border-sky-500/25 bg-sky-500/5 px-1 py-0 text-[10px] leading-4 font-normal text-sky-600 dark:text-sky-400'
+                    className='border-primary/25 bg-primary/5 text-primary max-w-24 shrink-0 truncate rounded-[calc(var(--radius)*0.2)] px-1.5 py-0.5 text-xs leading-4 font-normal'
                   >
-                    <Tag className='mr-1 size-2.5' aria-hidden />
+                    <Tag className='mr-1 size-3' aria-hidden />
                     {group.badge || group.offer.label}
                   </Badge>
                 )}
               </div>
               <p
-                className='text-muted-foreground mt-1 truncate font-mono text-[11px]'
+                className='text-muted-foreground mt-1 truncate text-[13px]'
                 title={group.description || group.group}
               >
                 {group.group} ·{' '}
-                {t('{{count}} enabled models', { count: enabledCount })} ·{' '}
-                {t('Real requests')}
+                {t('{{count}} enabled models', { count: enabledModels.length })}{' '}
+                · {t('Real requests')}
               </p>
             </div>
           </div>
         </TableCell>
         <TableCell>
-          <GroupRatio group={group} />
+          <GroupRatio group={group} receivedAt={props.receivedAt} />
         </TableCell>
         <TableCell>
           <MonitorStatusBadge status={group.status} />
@@ -122,32 +144,30 @@ export function GroupRow(props: {
               buckets={group.timeline}
               className='h-5 w-full min-w-0 flex-1'
             />
-            <span className='w-13 shrink-0 text-right font-mono text-xs tabular-nums'>
+            <span className='w-15 shrink-0 text-right font-mono text-sm tabular-nums'>
               {group.success_rate == null
                 ? '—'
                 : `${formatNumber(group.success_rate, locale)}%`}
             </span>
           </div>
           {group.sample_limited && (
-            <span className='text-warning text-[10px]'>
-              {t('Recent sample')}
-            </span>
+            <span className='text-warning text-xs'>{t('Recent sample')}</span>
           )}
         </TableCell>
-        <TableCell className='text-right font-mono text-xs tabular-nums'>
+        <TableCell className='text-right font-mono text-sm tabular-nums'>
           {group.ttft_seconds == null
             ? '—'
             : `${formatNumber(group.ttft_seconds, locale)}s`}
         </TableCell>
-        <TableCell className='text-right font-mono text-xs tabular-nums'>
+        <TableCell className='text-right font-mono text-sm tabular-nums'>
           {group.tokens_per_second == null
             ? '—'
             : `${formatNumber(group.tokens_per_second, locale)}`}
-          <span className='text-muted-foreground text-[9px]'>
+          <span className='text-muted-foreground text-xs'>
             {group.tokens_per_second != null && 't/s'}
           </span>
         </TableCell>
-        <TableCell className='text-right font-mono text-xs tabular-nums'>
+        <TableCell className='text-right font-mono text-sm tabular-nums'>
           {group.cache_hit_rate == null
             ? '—'
             : `${formatNumber(group.cache_hit_rate, locale)}%`}
@@ -177,6 +197,7 @@ export function GroupRow(props: {
               group={group}
               search={props.search}
               updatedAt={props.updatedAt}
+              receivedAt={props.receivedAt}
             />
           </TableCell>
         </TableRow>

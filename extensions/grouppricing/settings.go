@@ -280,6 +280,7 @@ func Save(db *gorm.DB, update Update) (Snapshot, error) {
 					DisplayName string `json:"display_name"`
 					Description string `json:"description"`
 					Badge       string `json:"badge"`
+					Icon        string `json:"icon,omitempty"`
 				} `json:"groups"`
 			}
 			if common.UnmarshalJsonStr(monitor.Value, &document) != nil {

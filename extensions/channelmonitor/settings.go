@@ -27,6 +27,7 @@ type GroupSettings struct {
 	DisplayName string              `json:"display_name"`
 	Description string              `json:"description"`
 	Badge       string              `json:"badge"`
+	Icon        string              `json:"icon,omitempty"`
 	Promotion   *groupdiscount.Rule `json:"promotion"`
 }
 
@@ -89,8 +90,9 @@ func saveSettings(db *gorm.DB, settings Settings) (Settings, error) {
 		group.DisplayName = strings.TrimSpace(group.DisplayName)
 		group.Description = strings.TrimSpace(group.Description)
 		group.Badge = strings.TrimSpace(group.Badge)
+		group.Icon = strings.TrimSpace(group.Icon)
 		if group.Group == "" || group.Group == "auto" || seen[group.Group] || !ratio_setting.ContainsGroupRatio(group.Group) ||
-			utf8.RuneCountInString(group.DisplayName) > 80 || utf8.RuneCountInString(group.Description) > 240 || utf8.RuneCountInString(group.Badge) > 24 {
+			utf8.RuneCountInString(group.DisplayName) > 80 || utf8.RuneCountInString(group.Description) > 240 || utf8.RuneCountInString(group.Badge) > 24 || utf8.RuneCountInString(group.Icon) > 128 {
 			return settings, errInvalid
 		}
 		if group.Promotion != nil {

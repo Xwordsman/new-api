@@ -37,6 +37,11 @@ export const monitorSettingsSchema = z.object({
           .trim()
           .max(240, 'Invalid channel monitor settings'),
         badge: z.string().trim().max(24, 'Invalid channel monitor settings'),
+        icon: z
+          .string()
+          .trim()
+          .max(128, 'Invalid channel monitor settings')
+          .optional(),
         promotion: z.null(),
       })
     )

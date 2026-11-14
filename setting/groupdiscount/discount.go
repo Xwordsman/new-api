@@ -32,12 +32,26 @@ type Rule struct {
 }
 
 type Offer struct {
-	Active    bool    `json:"active"`
-	Factor    float64 `json:"factor"`
-	Label     string  `json:"label"`
-	NextStart int64   `json:"next_start"`
-	EndsAt    int64   `json:"ends_at"`
-	Timezone  string  `json:"timezone"`
+	Active    bool      `json:"active"`
+	Factor    float64   `json:"factor"`
+	Label     string    `json:"label"`
+	NextStart int64     `json:"next_start"`
+	EndsAt    int64     `json:"ends_at"`
+	Timezone  string    `json:"timezone"`
+	Schedule  *Schedule `json:"schedule,omitempty"`
+}
+
+// Schedule separates campaign bounds from the current daily pricing period.
+// PeriodEnd is the next transition; zero means no further pricing change.
+type Schedule struct {
+	EvaluatedAt int64   `json:"evaluated_at"`
+	StartsAt    int64   `json:"starts_at"`
+	EndsAt      int64   `json:"ends_at"`
+	DailyStart  string  `json:"daily_start"`
+	DailyEnd    string  `json:"daily_end"`
+	PeriodStart int64   `json:"period_start"`
+	PeriodEnd   int64   `json:"period_end"`
+	NextFactor  float64 `json:"next_factor"`
 }
 
 type compiledRule struct {
@@ -157,7 +171,9 @@ func (r *Runtime) Offers(now time.Time) map[string]Offer {
 		if !rule.Enabled || !exists {
 			continue
 		}
-		offer := Offer{Factor: 1, Label: rule.Label, Timezone: rule.Timezone}
+		schedule := &Schedule{EvaluatedAt: now.Unix(), StartsAt: rule.StartsAt, EndsAt: rule.EndsAt,
+			DailyStart: rule.DailyStart, DailyEnd: rule.DailyEnd, NextFactor: 1}
+		offer := Offer{Factor: 1, Label: rule.Label, Timezone: rule.Timezone, Schedule: schedule}
 		factor := rule.Factor
 		if rule.Ratio != nil {
 			factor = 1
@@ -167,6 +183,7 @@ func (r *Runtime) Offers(now time.Time) map[string]Offer {
 		}
 		epoch := now.Unix()
 		if rule.EndsAt > 0 && epoch >= rule.EndsAt {
+			schedule.PeriodStart = rule.EndsAt
 			offers[group] = offer
 			continue
 		}
@@ -175,8 +192,10 @@ func (r *Runtime) Offers(now time.Time) map[string]Offer {
 			offer.EndsAt = rule.EndsAt
 			if offer.Active {
 				offer.Factor = factor
+				schedule.PeriodStart, schedule.PeriodEnd = rule.StartsAt, rule.EndsAt
 			} else {
 				offer.NextStart = rule.StartsAt
+				schedule.PeriodEnd, schedule.NextFactor = rule.StartsAt, factor
 			}
 			offers[group] = offer
 			continue
@@ -198,16 +217,22 @@ func (r *Runtime) Offers(now time.Time) map[string]Offer {
 			if rule.EndsAt > 0 {
 				until = min(until, rule.EndsAt)
 			}
-			if from >= until || until <= epoch {
+			if from >= until {
+				continue
+			}
+			if until <= epoch {
+				schedule.PeriodStart = max(schedule.PeriodStart, until)
 				continue
 			}
 			if from <= epoch {
 				offer.Active, offer.Factor, offer.EndsAt = true, factor, until
+				schedule.PeriodStart, schedule.PeriodEnd = from, until
 				break
 			}
 			if offer.NextStart == 0 || from < offer.NextStart {
 				offer.NextStart = from
 				offer.EndsAt = until
+				schedule.PeriodEnd, schedule.NextFactor = from, factor
 			}
 		}
 		offers[group] = offer
