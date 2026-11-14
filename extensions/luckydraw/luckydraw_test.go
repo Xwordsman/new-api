@@ -481,6 +481,12 @@ func TestLuckyHTTPAuthorityHistoryIsolationAndReplay(t *testing.T) {
 		assert.NotEqual(t, 200, request("GET", path, token, nil).Code)
 		assert.Equal(t, 200, request("GET", path, rootToken, nil).Code)
 	}
+	settings := request("GET", "settings", rootToken, nil)
+	var settingsResponse struct {
+		Data policy.Settings `json:"data"`
+	}
+	require.NoError(t, common.Unmarshal(settings.Body.Bytes(), &settingsResponse))
+	assert.Equal(t, s.Prizes, settingsResponse.Data.Prizes, "administrators retain exact prize weights")
 	body, err := common.Marshal(map[string]any{"request_key": "http-request-0001", "version": s.Version})
 	require.NoError(t, err)
 	for _, origin := range []string{"", "http://untrusted.example"} {
@@ -499,6 +505,55 @@ func TestLuckyHTTPAuthorityHistoryIsolationAndReplay(t *testing.T) {
 	assert.Contains(t, awarded.Body.String(), `"success":true`)
 	replay := request("POST", "draw", token, body)
 	assert.Contains(t, replay.Body.String(), `"replay":true`)
+	for _, response := range []*httptest.ResponseRecorder{
+		request("GET", "dashboard", token, nil),
+		awarded,
+		replay,
+		request("GET", "result/http-request-0001", token, nil),
+	} {
+		require.Equal(t, http.StatusOK, response.Code)
+		var payload struct {
+			Success bool `json:"success"`
+			Data    struct {
+				Rules struct {
+					Version int              `json:"version"`
+					Prizes  []map[string]any `json:"prizes"`
+				} `json:"rules"`
+				Prizes []map[string]any `json:"prizes"`
+			} `json:"data"`
+		}
+		require.NoError(t, common.Unmarshal(response.Body.Bytes(), &payload))
+		require.True(t, payload.Success)
+		prizes := payload.Data.Prizes
+		if payload.Data.Rules.Prizes != nil {
+			assert.Equal(t, s.Version, payload.Data.Rules.Version)
+			prizes = payload.Data.Rules.Prizes
+		}
+		require.Len(t, prizes, len(s.Prizes))
+		for i, prize := range prizes {
+			assert.NotContains(t, prize, "weight", "user responses must not disclose prize probabilities")
+			assert.Equal(t, s.Prizes[i].ID, prize["id"])
+			assert.Equal(t, s.Prizes[i].Name, prize["name"])
+			assert.Equal(t, s.Prizes[i].Kind, prize["kind"])
+			assert.Equal(t, float64(s.Prizes[i].Quota), prize["quota"])
+			assert.Equal(t, s.Prizes[i].Color, prize["color"])
+		}
+	}
+	var saved struct {
+		Data policy.Result `json:"data"`
+	}
+	require.NoError(t, common.Unmarshal(awarded.Body.Bytes(), &saved))
+	snapshotPath := fmt.Sprintf("records/%d", saved.Data.Record.ID)
+	assert.NotEqual(t, http.StatusOK, request("GET", snapshotPath, token, nil).Code)
+	var snapshotResponse struct {
+		Data struct {
+			Settings policy.Settings `json:"settings"`
+		} `json:"data"`
+	}
+	snapshot := request("GET", snapshotPath, rootToken, nil)
+	require.Equal(t, http.StatusOK, snapshot.Code)
+	require.NoError(t, common.Unmarshal(snapshot.Body.Bytes(), &snapshotResponse))
+	assert.Equal(t, s.Prizes, snapshotResponse.Data.Settings.Prizes, "administrator snapshots retain original prize weights")
 	history := request("GET", "history", otherToken, nil)
 	assert.Contains(t, history.Body.String(), `"total":0`)
 	hidden := request("GET", fmt.Sprintf("history?user_id=%d", user.Id), otherToken, nil)

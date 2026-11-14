@@ -26,6 +26,11 @@ export type Prize = {
   color: string
 }
 
+export type PublicPrize = Pick<
+  Prize,
+  'id' | 'name' | 'kind' | 'quota' | 'color'
+>
+
 export type DrawSettings = {
   version: number
   enabled: boolean
@@ -73,11 +78,11 @@ export type DrawRecord = {
 }
 export type DrawResult = {
   record: DrawRecord
-  prizes: Prize[]
+  prizes: PublicPrize[]
   replay: boolean
 }
 export type DrawDashboard = {
-  rules: DrawSettings
+  rules: Omit<DrawSettings, 'prizes'> & { prizes: PublicPrize[] }
   account: DrawAccount
   qualified_amount: string
   remaining_amount: string

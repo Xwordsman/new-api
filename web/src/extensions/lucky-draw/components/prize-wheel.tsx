@@ -24,12 +24,12 @@ import { Button } from '@/components/ui/button'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatQuotaWithCurrency } from '@/lib/currency'
 
-import type { DrawResult, Prize } from '../types'
+import type { DrawResult, PublicPrize } from '../types'
 
 // Equal sectors keep labels readable. Only the server's saved result chooses
 // the destination; sector size deliberately does not imply probability.
 export function PrizeWheel(props: {
-  prizes: Prize[]
+  prizes: PublicPrize[]
   result?: DrawResult
   animate: boolean
 }) {

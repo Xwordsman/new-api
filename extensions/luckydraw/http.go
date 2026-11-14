@@ -15,6 +15,47 @@ import (
 	"gorm.io/gorm"
 )
 
+// Public prize data deliberately excludes the administrator's probability weights.
+type publicPrize struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Kind  string `json:"kind"`
+	Quota int    `json:"quota"`
+	Color string `json:"color"`
+}
+
+type publicRules struct {
+	policy.Settings
+	Prizes []publicPrize `json:"prizes"`
+}
+
+type publicDashboard struct {
+	policy.DashboardData
+	Rules publicRules `json:"rules"`
+}
+
+type publicResult struct {
+	Record policy.Record `json:"record"`
+	Prizes []publicPrize `json:"prizes"`
+	Replay bool          `json:"replay"`
+}
+
+func publicPrizes(prizes []policy.Prize) []publicPrize {
+	data := make([]publicPrize, 0, len(prizes))
+	for _, prize := range prizes {
+		data = append(data, publicPrize{ID: prize.ID, Name: prize.Name, Kind: prize.Kind, Quota: prize.Quota, Color: prize.Color})
+	}
+	return data
+}
+
+func respondResult(c *gin.Context, data *policy.Result, err error) {
+	if data == nil {
+		respond(c, nil, err)
+		return
+	}
+	respond(c, publicResult{Record: data.Record, Prizes: publicPrizes(data.Prizes), Replay: data.Replay}, err)
+}
+
 func respond(c *gin.Context, data any, err error) {
 	if err == nil {
 		common.ApiSuccess(c, data)
@@ -30,12 +71,12 @@ func respond(c *gin.Context, data any, err error) {
 
 func dashboard(c *gin.Context) {
 	data, err := policy.Dashboard(model.DB.WithContext(c.Request.Context()), c.GetInt("id"), time.Now())
-	respond(c, data, err)
+	respond(c, publicDashboard{DashboardData: data, Rules: publicRules{Settings: data.Rules, Prizes: publicPrizes(data.Rules.Prizes)}}, err)
 }
 
 func result(c *gin.Context) {
 	data, err := policy.ResultFor(model.DB.WithContext(c.Request.Context()), c.GetInt("id"), c.Param("key"))
-	respond(c, data, err)
+	respondResult(c, data, err)
 }
 
 func draw(c *gin.Context) {
@@ -51,7 +92,7 @@ func draw(c *gin.Context) {
 	db := model.DB.WithContext(c.Request.Context())
 	previous, err := policy.ResultFor(db, c.GetInt("id"), input.RequestKey)
 	if err != nil || previous != nil {
-		respond(c, previous, err)
+		respondResult(c, previous, err)
 		return
 	}
 	s, err := policy.GetSettings(db)
@@ -97,7 +138,7 @@ func draw(c *gin.Context) {
 		verified = true
 	}
 	data, err := model.UserLuckyDraw(c.Request.Context(), c.GetInt("id"), input.RequestKey, input.Version, verified)
-	respond(c, data, err)
+	respondResult(c, data, err)
 }
 
 func getSettings(c *gin.Context) {

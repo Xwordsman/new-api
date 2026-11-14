@@ -313,11 +313,6 @@ function DrawPageContent(props: { userId: number }) {
                         </li>
                         <li>
                           {t(
-                            'Equal wheel sectors are decorative. The published probabilities determine each draw.'
-                          )}
-                        </li>
-                        <li>
-                          {t(
                             'If any prize cannot be honored, drawing pauses without changing the odds.'
                           )}
                         </li>
@@ -340,10 +335,7 @@ function DrawPageContent(props: { userId: number }) {
                           </li>
                         )}
                       </ul>
-                      <ul
-                        className='divide-y'
-                        aria-label={t('Prize probabilities')}
-                      >
+                      <ul className='divide-y' aria-label={t('Prize pool')}>
                         {data.rules.prizes.map((p) => (
                           <li
                             key={p.id}
@@ -360,12 +352,7 @@ function DrawPageContent(props: { userId: number }) {
                             <span>
                               {p.kind === 'credit'
                                 ? quota(p.quota)
-                                : t('No reward')}{' '}
-                              ·{' '}
-                              {new Intl.NumberFormat(locale, {
-                                maximumFractionDigits: 4,
-                              }).format(p.weight / 10000)}
-                              %
+                                : t('No reward')}
                             </span>
                           </li>
                         ))}

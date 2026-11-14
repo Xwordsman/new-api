@@ -142,7 +142,16 @@ beforeEach(() => {
     .getState()
     .setConfig({ currency: { ...DEFAULT_CURRENCY_CONFIG } })
   dashboard = {
-    rules: structuredClone(settings),
+    rules: {
+      ...structuredClone(settings),
+      prizes: settings.prizes.map(({ id, name, kind, quota, color }) => ({
+        id,
+        name,
+        kind,
+        quota,
+        color,
+      })),
+    },
     account: {
       user_id: 7,
       state: 'active',
@@ -194,7 +203,7 @@ beforeEach(() => {
         quota_awarded: 5000,
         created_at: 1794400000,
       },
-      prizes: structuredClone(settings.prizes),
+      prizes: structuredClone(dashboard.rules.prizes),
       replay: false,
     }
     return { data: { success: true, data: savedResult } }
@@ -262,27 +271,27 @@ test('insufficient recharge blocks drawing and shows the server reason', async (
   expect(api.post).not.toHaveBeenCalled()
 })
 
-test('rare prize probabilities keep four decimals and update when the interface language changes', async () => {
-  dashboard.rules.prizes[0].weight += 999
-  dashboard.rules.prizes[5].weight = 1
+test('the user prize pool shows prizes and rewards without probabilities when the language changes', async () => {
   await renderDraw()
-  for (const [language, probability] of [
-    ['en', '0.0001%'],
-    ['zhCN', '0.0001%'],
-    ['zhTW', '0.0001%'],
-    ['fr', '0,0001%'],
-    ['ru', '0,0001%'],
-    ['ja', '0.0001%'],
-    ['vi', '0,0001%'],
-    ['invalid_locale', '0.0001%'],
-  ]) {
+  await screen.findByRole('button', { name: 'Draw now' })
+  for (const language of ['en', 'zhCN']) {
     await act(() => i18next.changeLanguage(language))
-    const probabilities = await screen.findByRole('list', {
-      name: i18next.t('Prize probabilities'),
-    })
+    expect(screen.queryAllByText((text) => text.includes('%'))).toHaveLength(0)
     expect(
-      within(probabilities).getByText((text) => text.endsWith(probability))
-    ).toBeVisible()
+      screen.queryByText(
+        i18next.t(
+          'Equal wheel sectors are decorative. The published probabilities determine each draw.'
+        )
+      )
+    ).not.toBeInTheDocument()
+    const prizes = await screen.findByRole('list', {
+      name: i18next.t('Prize pool'),
+    })
+    for (const prize of settings.prizes) {
+      expect(within(prizes).getByText(i18next.t(prize.name))).toBeVisible()
+    }
+    expect(within(prizes).getByText(i18next.t('No reward'))).toBeVisible()
+    expect(within(prizes).getByText('$0.01')).toBeVisible()
   }
 })
 
