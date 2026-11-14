@@ -232,3 +232,50 @@ func TestGetTokenAutoGroupsReturnsFullFilteredGlobalOrderAndLimit(t *testing.T) 
 	assert.Equal(t, []string{"vip", "default"}, data.Groups)
 	assert.Equal(t, 1, data.MaxCount)
 }
+
+func TestGroupDisplayOrderAppliesAfterPermissionsAndPreservesAutoRouting(t *testing.T) {
+	initModelListColumnNames(t)
+	configureTokenAutoGroupsTest(t, "5", `["default","vip"]`)
+	originalOrder := setting.GroupDisplayOrderJSONString()
+	require.NoError(t, setting.UpdateGroupDisplayOrder(`["hidden","vip","default","deleted"]`))
+	t.Cleanup(func() { require.NoError(t, setting.UpdateGroupDisplayOrder(originalOrder)) })
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"vip":0.8,"hidden":3,"member":2}`))
+	user := setupTokenAutoGroupsControllerTest(t)
+	require.NoError(t, model.DB.Model(user).Update("group", "member").Error)
+	userGroup, err := model.GetUserGroup(user.Id, true)
+	require.NoError(t, err)
+	require.Equal(t, "member", userGroup)
+
+	adminCtx, adminRecorder := newTokenAutoGroupsAuthenticatedContext(t, http.MethodGet, "/api/group/", nil, user.Id)
+	GetGroups(adminCtx)
+	var adminGroups []string
+	require.NoError(t, common.Unmarshal(decodeAPIResponse(t, adminRecorder).Data, &adminGroups))
+	assert.Equal(t, []string{"hidden", "vip", "default", "member"}, adminGroups)
+
+	ctx, recorder := newTokenAutoGroupsAuthenticatedContext(t, http.MethodGet, "/api/user/groups", nil, user.Id)
+	GetUserGroups(ctx)
+	var response struct {
+		Success bool `json:"success"`
+		Groups  map[string]struct {
+			Ratio float64 `json:"ratio"`
+			Desc  string  `json:"desc"`
+		} `json:"data"`
+		Order []string `json:"group_order"`
+	}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+	require.True(t, response.Success)
+	assert.Equal(t, []string{"vip", "default", "member"}, response.Order)
+	assert.NotContains(t, response.Groups, "hidden")
+	assert.NotContains(t, response.Groups, "deleted")
+	assert.Equal(t, 0.8, response.Groups["vip"].Ratio)
+	assert.Equal(t, "VIP", response.Groups["vip"].Desc)
+	assert.Equal(t, 2.0, response.Groups["member"].Ratio)
+
+	autoCtx, autoRecorder := newTokenAutoGroupsAuthenticatedContext(t, http.MethodGet, "/api/token/auto-groups", nil, user.Id)
+	GetTokenAutoGroups(autoCtx)
+	var auto struct {
+		Groups []string `json:"groups"`
+	}
+	require.NoError(t, common.Unmarshal(decodeAPIResponse(t, autoRecorder).Data, &auto))
+	assert.Equal(t, []string{"default", "vip"}, auto.Groups)
+}

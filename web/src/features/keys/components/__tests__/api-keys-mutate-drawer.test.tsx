@@ -60,6 +60,7 @@ function installApiFixtures(createdPayloads: Array<Record<string, unknown>>) {
         return {
           data: {
             success: true,
+            group_order: ['vip', 'default', 'auto'],
             data: {
               auto: { desc: 'Automatic routing', ratio: 'auto' },
               default: { desc: 'Standard access', ratio: 1 },
@@ -105,6 +106,7 @@ async function renderCreateDrawer(): Promise<void> {
     ['user-groups'],
     {
       success: true,
+      group_order: ['vip', 'default', 'auto'],
       data: {
         auto: { desc: 'Automatic routing', ratio: 'auto' },
         default: { desc: 'Standard access', ratio: 1 },
@@ -370,8 +372,8 @@ describe('API key expiry across editing sessions', () => {
         expect(findButton('Save changes', true)).toBeEnabled()
       )
       expect(
-        screen.getByRole('button', { name: 'Never expires' })
-      ).toBeVisible()
+        screen.getByRole('button', { name: 'Expiration Time' })
+      ).toHaveTextContent('Never expires')
       expect(screen.getByLabelText('Time')).toBeDisabled()
       fireEvent.click(findButton('Save changes', true))
       await waitFor(() =>
@@ -394,8 +396,8 @@ describe('API key expiry across editing sessions', () => {
       expect(screen.getByLabelText('Time')).toBeEnabled()
       fireEvent.click(screen.getByRole('button', { name: action }))
       expect(
-        screen.getByRole('button', { name: 'Never expires' })
-      ).toBeVisible()
+        screen.getByRole('button', { name: 'Expiration Time' })
+      ).toHaveTextContent('Never expires')
       expect(screen.getByLabelText('Time')).toBeDisabled()
       fireEvent.click(findButton('Save changes', true))
       await waitFor(() => expect(payloads).toHaveLength(1))
@@ -423,4 +425,21 @@ describe('API keys mutate drawer user quota query switch', () => {
     await waitFor(() => expect(createdPayloads).toHaveLength(1))
     expect(createdPayloads[0]?.allow_user_quota_query).toBe(false)
   })
+})
+
+test('shows selectable groups in the admin display order while preserving global Auto priority', async () => {
+  installApiFixtures([])
+  await renderCreateDrawer()
+  fireEvent.click(getControlByLabel('Group'))
+  const options = await screen.findAllByRole('option')
+  expect(
+    options.map(
+      (option) => option.textContent?.match(/^(vip|default|auto)/)?.[1]
+    )
+  ).toEqual(['vip', 'default', 'auto'])
+  expect(
+    [...document.querySelectorAll('[data-slot="global-auto-order-name"]')].map(
+      (item) => item.textContent
+    )
+  ).toEqual(['vip', 'default'])
 })

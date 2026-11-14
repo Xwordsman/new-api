@@ -20,6 +20,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 
 import { useStatus } from '@/hooks/use-status'
+import { orderGroupNames } from '@/lib/group-order'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
 import { getPricing } from '../api'
@@ -55,6 +56,10 @@ export function usePricingData(enabled = true) {
         : undefined
       return {
         ...model,
+        enable_groups: orderGroupNames(
+          model.enable_groups ?? [],
+          data.group_order
+        ),
         key: model.model_name,
         vendor_name: vendor?.name,
         vendor_icon: vendor?.icon,
@@ -64,8 +69,15 @@ export function usePricingData(enabled = true) {
     })
   }, [data])
 
+  const groupOrder = useMemo(
+    () =>
+      orderGroupNames(Object.keys(data?.usable_group ?? {}), data?.group_order),
+    [data]
+  )
+
   return {
     models,
+    groupOrder,
     vendors: data?.vendors ?? [],
     groupRatio: data?.group_ratio ?? {},
     usableGroup: data?.usable_group ?? {},

@@ -67,6 +67,7 @@ import {
 
 type GroupFormValues = {
   GroupRatio: string
+  GroupDisplayOrder: string
   TopupGroupRatio: string
   UserUsableGroups: string
   GroupGroupRatio: string
@@ -168,6 +169,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
             section={section}
             onSectionChange={setSection}
             groupRatio={values.GroupRatio ?? ''}
+            groupDisplayOrder={values.GroupDisplayOrder ?? '[]'}
             topupGroupRatio={values.TopupGroupRatio ?? ''}
             userUsableGroups={values.UserUsableGroups ?? ''}
             groupGroupRatio={values.GroupGroupRatio ?? ''}
@@ -231,6 +233,31 @@ export const GroupRatioForm = memo(function GroupRatioForm({
           />
         ) : (
           <SettingsForm onSubmit={form.handleSubmit(onSave)}>
+            <FormField
+              control={form.control}
+              name='GroupDisplayOrder'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Group display order')}</FormLabel>
+                  <FormControl>
+                    <JsonCodeEditor
+                      value={field.value}
+                      onChange={field.onChange}
+                      name={field.name}
+                      onBlur={field.onBlur}
+                      textareaRef={field.ref}
+                      heightClassName='h-40 min-h-40 max-h-40'
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'Group display order for the model catalog and API key settings. This does not change Auto routing priority.'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name='GroupRatio'

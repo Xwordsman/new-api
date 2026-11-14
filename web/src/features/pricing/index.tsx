@@ -50,6 +50,7 @@ export function Pricing() {
     vendors,
     groupRatio,
     usableGroup,
+    groupOrder,
     endpointMap,
     autoGroups,
     isLoading,
@@ -103,11 +104,8 @@ export function Pricing() {
   )
 
   const availableGroups = useMemo(
-    () =>
-      Object.keys(usableGroup || {}).filter(
-        (g) => !EXCLUDED_GROUPS.includes(g)
-      ),
-    [usableGroup]
+    () => groupOrder.filter((g) => !EXCLUDED_GROUPS.includes(g)),
+    [groupOrder]
   )
 
   const enabledVendors = useMemo(() => {
@@ -273,6 +271,7 @@ export function Pricing() {
               model={selectedModel}
               groupRatio={groupRatio || {}}
               usableGroup={usableGroup || {}}
+              groupOrder={groupOrder}
               endpointMap={
                 (endpointMap as Record<
                   string,

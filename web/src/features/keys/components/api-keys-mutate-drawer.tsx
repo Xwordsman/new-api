@@ -66,6 +66,7 @@ import { RelatedPolicyLink } from '@/features/system-settings/request-policies/r
 import { useStatus } from '@/hooks/use-status'
 import { getUserModels, getUserGroups } from '@/lib/api'
 import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
+import { orderGroupNames } from '@/lib/group-order'
 import { handleServerError } from '@/lib/handle-server-error'
 import {
   requireServerSuccess,
@@ -162,16 +163,21 @@ export function ApiKeysMutateDrawer({
   })
 
   const models = modelsData?.data || []
-  const groups = useMemo<ApiKeyGroupOption[]>(
-    () =>
-      Object.entries(groupsData?.data || {}).map(([key, info]) => ({
+  const groups = useMemo<ApiKeyGroupOption[]>(() => {
+    const usableGroups = groupsData?.data ?? {}
+    return orderGroupNames(
+      Object.keys(usableGroups),
+      groupsData?.group_order
+    ).map((key) => {
+      const info = usableGroups[key]
+      return {
         value: key,
         label: key,
         desc: info.desc ? translateServerText(t, info.desc) : key,
         ratio: info.ratio,
-      })),
-    [groupsData, t]
-  )
+      }
+    })
+  }, [groupsData, t])
   const backendHasAuto = groups.some((g) => g.value === 'auto')
   const availableAutoGroupNames = useMemo(
     () => groups.filter((group) => group.value !== 'auto').map((g) => g.value),
