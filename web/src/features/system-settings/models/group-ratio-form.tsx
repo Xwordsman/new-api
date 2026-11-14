@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Code2, Eye, HelpCircle } from 'lucide-react'
-import { memo, useCallback, useState, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useWatch, type UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
@@ -63,6 +63,7 @@ import { safeNumberFieldProps } from '../utils/numeric-field'
 import {
   GroupRatioVisualEditor,
   type GroupSettingsSection,
+  type GroupPricingRowExtension,
 } from './group-ratio-visual-editor'
 
 export type GroupFormValues = {
@@ -82,6 +83,7 @@ type GroupRatioFormProps = {
   onSave: (values: GroupFormValues) => Promise<void>
   isSaving: boolean
   onRename?: (original: string, name: string) => boolean
+  rowExtension?: GroupPricingRowExtension
 }
 
 export const GroupRatioForm = memo(function GroupRatioForm({
@@ -89,12 +91,19 @@ export const GroupRatioForm = memo(function GroupRatioForm({
   onSave,
   isSaving,
   onRename,
+  rowExtension,
 }: GroupRatioFormProps) {
   const { t } = useTranslation()
   const values = useWatch({ control: form.control })
   const [editMode, setEditMode] = useState<'visual' | 'json'>('visual')
   const [guideOpen, setGuideOpen] = useState(false)
   const [section, setSection] = useState<GroupSettingsSection>('pricing')
+  const reveal = rowExtension?.reveal
+  useEffect(() => {
+    if (!reveal) return
+    setEditMode('visual')
+    setSection('pricing')
+  }, [reveal])
 
   const handleFieldChange = useCallback(
     (field: keyof GroupFormValues, value: string) => {
@@ -169,6 +178,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
         {editMode === 'visual' ? (
           <GroupRatioVisualEditor
             onRename={onRename}
+            rowExtension={rowExtension}
             section={section}
             onSectionChange={setSection}
             groupRatio={values.GroupRatio ?? ''}

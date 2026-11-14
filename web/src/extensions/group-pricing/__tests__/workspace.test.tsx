@@ -17,7 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
@@ -29,6 +35,7 @@ import { api } from '@/lib/api'
 import { createAppQueryClient } from '@/lib/query-client'
 
 import type { PricingSnapshot, PricingUpdate } from '../api'
+import { PromotionToggle } from '../promotion-toggle'
 import { promotionSchema } from '../schema'
 import { GroupPricingWorkspace } from '../workspace'
 
@@ -98,6 +105,246 @@ function renderPricing(data = settings) {
   )
   return { client, put }
 }
+
+it('opens a full-width offer panel immediately below its pricing row', async () => {
+  const user = userEvent.setup()
+  const { client } = renderPricing()
+  const toggle = await screen.findByRole('button', {
+    name: 'Public discount for vip',
+  })
+  const table = screen.getByRole('table', { name: 'Pricing groups' })
+  const row = toggle.closest('tr')
+  if (!row) throw new Error('Expected discount control in its pricing row')
+  expect(within(row).getByRole('textbox', { name: 'Group name' })).toHaveValue(
+    'vip'
+  )
+  expect(
+    screen.queryByRole('region', { name: 'Public discount for vip' })
+  ).toBeNull()
+  await user.click(toggle)
+  const panel = screen.getByRole('region', { name: 'Public discount for vip' })
+  expect(row.nextElementSibling).toContainElement(panel)
+  expect(panel.closest('td')).toHaveAttribute(
+    'colspan',
+    String(within(table).getAllByRole('columnheader').length)
+  )
+  expect(
+    screen.queryByRole('heading', { name: 'Public group discounts' })
+  ).toBeNull()
+  client.clear()
+})
+
+it('expands only one group and preserves drafts when switching groups or sorting', async () => {
+  const user = userEvent.setup()
+  const { client } = renderPricing()
+  const publicToggle = await screen.findByRole('button', {
+    name: 'Public discount for public',
+  })
+  const vipToggle = screen.getByRole('button', {
+    name: 'Public discount for vip',
+  })
+  await user.click(publicToggle)
+  await user.click(
+    screen.getByRole('switch', { name: 'Enable public discount' })
+  )
+  fireEvent.change(
+    screen.getByRole('spinbutton', { name: 'Discounted multiplier' }),
+    {
+      target: { value: '0.18' },
+    }
+  )
+  await user.type(
+    screen.getByRole('textbox', { name: 'Offer label' }),
+    'Public sale'
+  )
+  await user.click(vipToggle)
+  expect(publicToggle).toHaveAttribute('aria-expanded', 'false')
+  expect(vipToggle).toHaveAttribute('aria-expanded', 'true')
+  expect(
+    screen.queryByRole('region', { name: 'Public discount for public' })
+  ).toBeNull()
+  await user.click(screen.getByRole('button', { name: 'Move public up' }))
+  expect(vipToggle).toHaveAttribute('aria-expanded', 'true')
+  await user.click(publicToggle)
+  expect(vipToggle).toHaveAttribute('aria-expanded', 'false')
+  expect(
+    screen.getByRole('spinbutton', { name: 'Discounted multiplier' })
+  ).toHaveValue(0.18)
+  expect(screen.getByRole('textbox', { name: 'Offer label' })).toHaveValue(
+    'Public sale'
+  )
+  await user.click(screen.getAllByRole('spinbutton', { name: 'Ratio' })[0])
+  expect(publicToggle).toHaveAttribute('aria-expanded', 'true')
+  client.clear()
+})
+
+it('reveals and focuses a filtered invalid offer when saving from the JSON editor', async () => {
+  const user = userEvent.setup()
+  const { client, put } = renderPricing({
+    ...settings,
+    promotions: { revision: 1, groups: [{ group: 'public', promotion: rule }] },
+  })
+  await user.click(
+    await screen.findByRole('button', { name: 'Public discount for public' })
+  )
+  fireEvent.change(
+    screen.getByRole('spinbutton', { name: 'Discounted multiplier' }),
+    {
+      target: { value: '0' },
+    }
+  )
+  await user.click(
+    screen.getByRole('button', { name: 'Public discount for public' })
+  )
+  await user.type(
+    screen.getByRole('textbox', {
+      name: 'Search groups by name or description',
+    }),
+    'vip'
+  )
+  await user.click(screen.getByRole('button', { name: 'Switch to JSON' }))
+  await user.click(screen.getByRole('button', { name: 'Save group settings' }))
+  const invalidInput = await screen.findByRole('spinbutton', {
+    name: 'Discounted multiplier',
+  })
+  expect(invalidInput).toBeVisible()
+  expect(invalidInput).toHaveAttribute('aria-invalid', 'true')
+  await waitFor(() => expect(invalidInput).toHaveFocus())
+  expect(
+    screen.getByRole('textbox', {
+      name: 'Search groups by name or description',
+    })
+  ).toHaveValue('')
+  expect(put).not.toHaveBeenCalled()
+  client.clear()
+})
+
+it('keeps an unconfigured group offer editable without recreating its base price', async () => {
+  const user = userEvent.setup()
+  const { client, put } = renderPricing({
+    ...settings,
+    promotions: {
+      revision: 1,
+      groups: [{ group: 'retired', promotion: rule }],
+    },
+  })
+  await user.click(
+    await screen.findByRole('button', { name: 'Public discount for retired' })
+  )
+  expect(screen.getByText('Group no longer configured')).toBeVisible()
+  await user.click(
+    screen.getByRole('switch', { name: 'Enable public discount' })
+  )
+  await user.click(screen.getByRole('button', { name: 'Save group settings' }))
+  await waitFor(() => expect(put).toHaveBeenCalledOnce())
+  const update = put.mock.calls[0][1] as PricingUpdate
+  expect(JSON.parse(update.options.GroupRatio)).toEqual({
+    public: 0.3,
+    vip: 0.5,
+  })
+  expect(update.promotions.groups).toEqual([
+    { group: 'retired', promotion: { ...rule, enabled: false } },
+  ])
+  client.clear()
+})
+
+it('disables offer editing during save and collapses an empty panel after success', async () => {
+  const user = userEvent.setup()
+  const { client, put } = renderPricing()
+  const defaultSave = put.getMockImplementation()
+  if (!defaultSave) throw new Error('Expected save fixture')
+  let finishSave = () => {}
+  const pending = new Promise<void>((resolve) => {
+    finishSave = resolve
+  })
+  put.mockImplementationOnce(async (...args) => {
+    await pending
+    return defaultSave(...args)
+  })
+  await user.click(
+    await screen.findByRole('button', { name: 'Public discount for public' })
+  )
+  await user.click(screen.getByRole('button', { name: 'Save group settings' }))
+  expect(
+    screen.getByRole('button', { name: 'Public discount for public' })
+  ).toBeDisabled()
+  expect(
+    screen.getByRole('switch', { name: 'Enable public discount' })
+  ).toHaveAttribute('aria-disabled', 'true')
+  finishSave()
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Save group settings' })
+    ).toBeEnabled()
+  )
+  expect(
+    screen.getByRole('button', { name: 'Public discount for public' })
+  ).toHaveAttribute('aria-expanded', 'false')
+  expect(
+    screen.queryByRole('region', { name: 'Public discount for public' })
+  ).toBeNull()
+  client.clear()
+})
+
+it.each([
+  { patch: { enabled: false }, status: 'Offer disabled' },
+  { patch: {}, status: 'Offer active' },
+  { patch: { ratio: 0 }, status: 'Invalid offer' },
+  {
+    patch: { starts_at: Date.parse('2026-11-15T00:00:01Z') / 1000 },
+    status: 'Offer scheduled',
+  },
+  {
+    patch: { ends_at: Date.parse('2026-11-15T00:00:00Z') / 1000 },
+    status: 'Offer ended',
+  },
+  {
+    patch: { daily_start: '18:00', daily_end: '22:00' },
+    status: 'Outside daily hours',
+  },
+  {
+    patch: { daily_start: '22:00', daily_end: '10:00' },
+    status: 'Offer active',
+  },
+  {
+    patch: { daily_start: '22:00', daily_end: '08:00' },
+    status: 'Outside daily hours',
+  },
+])('shows $status for the collapsed offer with $patch', ({ patch, status }) => {
+  render(
+    <PromotionToggle
+      group='public'
+      promotion={{ ...rule, ...patch }}
+      baseRatio={0.3}
+      now={Date.parse('2026-11-15T00:00:00Z')}
+      expanded={false}
+      controls='public-details'
+      disabled={false}
+      onToggle={() => {}}
+    />
+  )
+  expect(screen.getByText(status)).toBeVisible()
+  expect(
+    screen.getByRole('button', { name: 'Public discount for public' })
+  ).toHaveAttribute('aria-expanded', 'false')
+})
+
+it('preserves discounted multiplier precision and previews the lower base when pricing changes', () => {
+  const props = {
+    group: 'public',
+    promotion: { ...rule, ratio: 0.12345678 },
+    baseRatio: 0.3,
+    now: Date.parse('2026-11-15T00:00:00Z'),
+    expanded: false,
+    controls: 'public-details',
+    disabled: false,
+    onToggle: () => {},
+  }
+  const view = render(<PromotionToggle {...props} />)
+  expect(screen.getByText('×0.12345678')).toBeVisible()
+  view.rerender(<PromotionToggle {...props} baseRatio={0.1} />)
+  expect(screen.getByText('×0.1')).toBeVisible()
+})
 
 it('saves final public pricing and daily schedule together, including collapsed offers', async () => {
   const user = userEvent.setup()
@@ -219,7 +466,7 @@ it('expands invalid offers with accessible feedback and retains drafts after a r
     name: 'Public discount for public',
   })
   await user.click(toggle)
-  const input = screen.getByRole('spinbutton', {
+  let input = screen.getByRole('spinbutton', {
     name: 'Discounted multiplier',
   })
   fireEvent.change(input, { target: { value: '0' } })
@@ -229,6 +476,7 @@ it('expands invalid offers with accessible feedback and retains drafts after a r
     await screen.findByText('Enter a positive discounted multiplier.')
   ).toBeVisible()
   expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  input = screen.getByRole('spinbutton', { name: 'Discounted multiplier' })
   expect(input).toHaveAttribute('aria-invalid', 'true')
   expect(input).toHaveAccessibleDescription(
     /Enter a positive discounted multiplier/

@@ -45,25 +45,26 @@ export function PromotionFields(props: {
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const formatter = new Intl.NumberFormat(locale, { maximumFractionDigits: 8 })
   return (
-    <section
-      aria-label={t('Public group discount')}
-      className='space-y-5 border-t pt-5'
-    >
+    <section aria-label={t('Public group discount')} className='space-y-5'>
       <FormField
         control={form.control}
         name={`groups.${props.index}.promotion`}
         render={({ field }) => (
           <FormItem className='flex items-center justify-between gap-4'>
             <div className='space-y-1.5'>
-              <FormLabel>{t('Enable public discount')}</FormLabel>
+              <FormLabel data-error={false}>
+                {t('Enable public discount')}
+              </FormLabel>
               <FormDescription>
                 {t(
                   'Set the final public multiplier during the scheduled period.'
                 )}
               </FormDescription>
             </div>
-            <FormControl>
+            {/* The controller stores the entire rule; validation errors belong to its individual fields below. */}
+            <FormControl aria-invalid={false}>
               <Switch
+                onBlur={field.onBlur}
                 checked={field.value?.enabled ?? false}
                 disabled={props.disabled}
                 onCheckedChange={(enabled) =>
@@ -146,6 +147,7 @@ export function PromotionFields(props: {
                       <FormLabel>{label}</FormLabel>
                       <FormControl>
                         <DateTimePicker
+                          ref={field.ref}
                           aria-label={label}
                           value={
                             field.value > 0

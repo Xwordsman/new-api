@@ -81,6 +81,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { TableCell, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber } from '@/lib/format'
@@ -94,6 +95,15 @@ export type GroupSettingsSection =
   | 'overrides'
   | 'visibility'
   | 'auto'
+
+export type GroupPricingRowExtension = {
+  header: ReactNode
+  description: ReactNode
+  renderCell: (group: string, baseRatio: number) => ReactNode
+  renderDetails: (group: string, baseRatio: number) => ReactNode
+  renderFooter?: (configuredGroups: string[]) => ReactNode
+  reveal?: { group: string }
+}
 
 type GroupRatioVisualEditorProps = {
   section: GroupSettingsSection
@@ -109,6 +119,7 @@ type GroupRatioVisualEditorProps = {
   groupSpecialUsableGroup: string
   onChange: (field: string, value: string) => void
   onRename?: (original: string, name: string) => boolean
+  rowExtension?: GroupPricingRowExtension
 }
 
 type GroupPricingRow = {
@@ -304,6 +315,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   groupSpecialUsableGroup,
   onChange,
   onRename,
+  rowExtension,
 }: GroupRatioVisualEditorProps) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
@@ -399,6 +411,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
           onChange={onChange}
           onShowDetail={setDetailGroup}
           onRename={onRename}
+          rowExtension={rowExtension}
         />
       </TabsContent>
       <TabsContent value='overrides' keepMounted>
@@ -506,6 +519,7 @@ type GroupPricingTableProps = {
   onChange: (field: string, value: string) => void
   onShowDetail: (name: string) => void
   onRename?: (original: string, name: string) => boolean
+  rowExtension?: GroupPricingRowExtension
 }
 
 function GroupPricingTable({
@@ -516,9 +530,14 @@ function GroupPricingTable({
   onChange,
   onShowDetail,
   onRename,
+  rowExtension,
 }: GroupPricingTableProps) {
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
+  const reveal = rowExtension?.reveal
+  useEffect(() => {
+    if (reveal) setSearch('')
+  }, [reveal])
   const [rows, setRows] = useState<GroupPricingRow[]>(() =>
     buildGroupPricingRows(
       groupRatio,
@@ -689,11 +708,29 @@ function GroupPricingTable({
               'Use the arrows to set the group order shown in the model catalog and API key settings. Save group settings to apply. This does not change Auto routing priority.'
             )}
           </p>
+          {rowExtension?.description}
           <StaticDataTable
             tableClassName='min-w-[760px]'
             tableProps={{ 'aria-label': t('Pricing groups') }}
             data={visibleRows}
             getRowKey={(row) => row._id}
+            renderAfterRow={(row, _index, columnCount) => {
+              const details = rowExtension?.renderDetails(
+                row.originalName,
+                normalizeRatio(row.ratio)
+              )
+              if (!details) return null
+              return (
+                <TableRow className='bg-muted/20 hover:bg-muted/20'>
+                  <TableCell
+                    colSpan={columnCount}
+                    className='p-5 whitespace-normal'
+                  >
+                    {details}
+                  </TableCell>
+                </TableRow>
+              )
+            }}
             emptyClassName='text-muted-foreground h-20 text-sm'
             emptyContent={
               <EmptyState
@@ -816,6 +853,20 @@ function GroupPricingTable({
                   />
                 ),
               },
+              ...(rowExtension
+                ? [
+                    {
+                      id: 'public-discount',
+                      header: rowExtension.header,
+                      className: 'min-w-52',
+                      cell: (row: GroupPricingRow) =>
+                        rowExtension.renderCell(
+                          row.originalName,
+                          normalizeRatio(row.ratio)
+                        ),
+                    },
+                  ]
+                : []),
               {
                 id: 'selectable',
                 header: t('User selectable'),
@@ -881,6 +932,7 @@ function GroupPricingTable({
               },
             ]}
           />
+          {rowExtension?.renderFooter?.(rows.map((row) => row.originalName))}
 
           {duplicateNames.length > 0 && (
             <p className='text-destructive text-sm'>

@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -26,13 +26,6 @@ import { z } from 'zod'
 
 import { ErrorState } from '@/components/error-state'
 import { LoadingState } from '@/components/loading-state'
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Form } from '@/components/ui/form'
 import {
   GroupRatioForm,
@@ -41,6 +34,7 @@ import {
 
 import { getGroupPricing, saveGroupPricing, type PricingSnapshot } from './api'
 import { PromotionFields } from './promotion-fields'
+import { PromotionToggle } from './promotion-toggle'
 import { promotionsSchema, type PromotionForm } from './schema'
 
 function pricingValues(snapshot: PricingSnapshot): GroupFormValues {
@@ -166,54 +160,36 @@ function PricingEditor(props: {
   const client = useQueryClient()
   const [baseline, setBaseline] = useState(props.initial)
   const [renames, setRenames] = useState<Record<string, string>>({})
-  const [expanded, setExpanded] = useState<string[]>([])
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [reveal, setReveal] = useState<{ group: string }>()
+  const [now, setNow] = useState(Date.now)
+  const panelPrefix = useId()
   const offers = useForm<PromotionForm>({
     resolver: zodResolver(promotionsSchema),
     defaultValues: promotionValues(props.initial),
   })
   const groups = useWatch({ control: offers.control, name: 'groups' })
-  const rawBases = useWatch({ control: props.form.control, name: 'GroupRatio' })
-  const rawOrder = useWatch({
-    control: props.form.control,
-    name: 'GroupDisplayOrder',
-  })
+  const entries = new Map(
+    groups.map((group, index) => [group.group, { ...group, index }])
+  )
   useEffect(() => {
     props.form.reset(pricingValues(baseline))
   }, [props.form, baseline])
-  let bases: Record<string, number> = {}
-  let order: string[] = []
-  try {
-    const parsed = z
-      .record(z.string(), z.number())
-      .safeParse(JSON.parse(rawBases))
-    if (parsed.success) bases = parsed.data
-  } catch {
-    /* The group form reports invalid JSON on save. */
-  }
-  try {
-    const parsed = z.array(z.string()).safeParse(JSON.parse(rawOrder))
-    if (parsed.success) order = parsed.data
-  } catch {
-    /* Keep the editor usable while JSON is incomplete. */
-  }
-  const names = [
-    ...new Set([
-      ...Object.keys(bases),
-      ...groups.filter((group) => group.promotion).map((group) => group.group),
-    ]),
-  ]
-  const positions = new Map(order.map((name, index) => [name, index]))
-  names.sort(
-    (a, b) =>
-      (positions.get(a) ?? Infinity) - (positions.get(b) ?? Infinity) ||
-      a.localeCompare(b)
-  )
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
   const save = useMutation({
     mutationFn: saveGroupPricing,
     onSuccess: async (snapshot) => {
       setBaseline(snapshot)
       offers.reset(promotionValues(snapshot))
       setRenames({})
+      setExpanded((current) =>
+        snapshot.promotions.groups.some((entry) => entry.group === current)
+          ? current
+          : null
+      )
       client.setQueryData(['group-pricing', 'settings'], snapshot)
       await Promise.all(
         [
@@ -279,9 +255,7 @@ function PricingEditor(props: {
         ),
       { shouldDirty: true }
     )
-    setExpanded((current) =>
-      current.map((group) => (group === previous ? name : group))
-    )
+    setExpanded((current) => (current === previous ? name : current))
     if (Object.hasOwn(savedBases, root)) {
       setRenames((current) => {
         const next = { ...current }
@@ -292,6 +266,46 @@ function PricingEditor(props: {
     }
     return true
   }
+  const renderToggle = (name: string, baseRatio?: number) => (
+    <PromotionToggle
+      group={name}
+      promotion={entries.get(name)?.promotion}
+      baseRatio={baseRatio}
+      now={now}
+      expanded={expanded === name}
+      controls={`${panelPrefix}-${encodeURIComponent(name)}`}
+      disabled={save.isPending}
+      onToggle={() => {
+        if (!entries.has(name)) {
+          offers.setValue('groups', [
+            ...offers.getValues('groups'),
+            { group: name, promotion: null },
+          ])
+        }
+        setNow(Date.now())
+        setExpanded((current) => (current === name ? null : name))
+      }}
+    />
+  )
+  const renderDetails = (name: string, baseRatio?: number) => {
+    const entry = entries.get(name)
+    if (expanded !== name || !entry) return null
+    return (
+      <Form {...offers}>
+        <div
+          id={`${panelPrefix}-${encodeURIComponent(name)}`}
+          role='region'
+          aria-label={t('Public discount for {{group}}', { group: name })}
+        >
+          <PromotionFields
+            index={entry.index}
+            baseRatio={baseRatio}
+            disabled={save.isPending}
+          />
+        </div>
+      </Form>
+    )
+  }
   return (
     <div className='space-y-6'>
       <GroupRatioForm
@@ -299,6 +313,55 @@ function PricingEditor(props: {
         form={props.form}
         isSaving={save.isPending}
         onRename={onRename}
+        rowExtension={{
+          header: t('Public discount'),
+          description: (
+            <div className='text-muted-foreground space-y-1 text-sm'>
+              <p>
+                {t(
+                  'Expand a group to configure its public discount. Save group settings to apply pricing and offers together.'
+                )}
+              </p>
+              <p>
+                {t(
+                  'Visual renames update pricing rules, public offers and monitor references. Existing channel, user and API key group assignments must be updated separately.'
+                )}
+              </p>
+            </div>
+          ),
+          renderCell: renderToggle,
+          renderDetails,
+          reveal,
+          renderFooter: (configuredGroups) => {
+            const configured = new Set(configuredGroups)
+            const orphaned = groups.filter(
+              (group) => group.promotion && !configured.has(group.group)
+            )
+            if (!orphaned.length) return null
+            return (
+              <div className='divide-y rounded-md border'>
+                {orphaned.map(({ group }) => (
+                  <div key={group}>
+                    <div className='flex flex-wrap items-center justify-between gap-3 p-3'>
+                      <div className='min-w-0 space-y-1'>
+                        <p className='font-mono break-all'>{group}</p>
+                        <p className='text-muted-foreground text-xs'>
+                          {t('Group no longer configured')}
+                        </p>
+                      </div>
+                      {renderToggle(group)}
+                    </div>
+                    {expanded === group && (
+                      <div className='bg-muted/20 border-t p-5'>
+                        {renderDetails(group)}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )
+          },
+        }}
         onSave={async (values) => {
           await offers.handleSubmit(
             async (promotions) => {
@@ -325,89 +388,16 @@ function PricingEditor(props: {
                 .catch(() => {})
             },
             (errors) => {
-              setExpanded((current) => [
-                ...new Set([
-                  ...current,
-                  ...offers
-                    .getValues('groups')
-                    .filter((_, index) => errors.groups?.[index])
-                    .map((group) => group.group),
-                ]),
-              ])
+              const invalid = offers
+                .getValues('groups')
+                .find((_, index) => errors.groups?.[index])
+              if (!invalid) return
+              setExpanded(invalid.group)
+              setReveal({ group: invalid.group })
             }
           )()
         }}
       />
-      <section className='space-y-4'>
-        <h3 className='font-semibold'>{t('Public group discounts')}</h3>
-        <Alert>
-          <AlertDescription>
-            {t(
-              'Public discounts are saved independently of channel monitoring. Use Save group settings to save pricing and offers together.'
-            )}
-          </AlertDescription>
-        </Alert>
-        <p className='text-muted-foreground text-sm'>
-          {t(
-            'Visual renames update pricing rules, public offers and monitor references. Existing channel, user and API key group assignments must be updated separately.'
-          )}
-        </p>
-        <Form {...offers}>
-          <Accordion
-            multiple
-            keepMounted
-            value={expanded}
-            onValueChange={(next) => {
-              const entries = offers.getValues('groups')
-              const missing = next.filter(
-                (name) => !entries.some((entry) => entry.group === name)
-              )
-              if (missing.length) {
-                offers.setValue('groups', [
-                  ...entries,
-                  ...missing.map((group) => ({ group, promotion: null })),
-                ])
-              }
-              setExpanded(next)
-            }}
-            className='gap-3'
-          >
-            {names.map((name) => {
-              const index = groups.findIndex((group) => group.group === name)
-              return (
-                <AccordionItem
-                  key={name}
-                  value={name}
-                  className='bg-card rounded-xl border'
-                >
-                  <AccordionTrigger
-                    aria-label={t('Public discount for {{group}}', {
-                      group: name,
-                    })}
-                    className='px-5'
-                  >
-                    <span className='font-mono'>{name}</span>
-                    {bases[name] === undefined && (
-                      <span className='text-muted-foreground text-xs'>
-                        {t('Group no longer configured')}
-                      </span>
-                    )}
-                  </AccordionTrigger>
-                  <AccordionContent className='px-5 pb-5'>
-                    {index >= 0 && (
-                      <PromotionFields
-                        index={index}
-                        baseRatio={bases[name]}
-                        disabled={save.isPending}
-                      />
-                    )}
-                  </AccordionContent>
-                </AccordionItem>
-              )
-            })}
-          </Accordion>
-        </Form>
-      </section>
     </div>
   )
 }

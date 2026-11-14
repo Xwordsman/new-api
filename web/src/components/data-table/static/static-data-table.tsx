@@ -47,6 +47,11 @@ type StaticDataTableDataProps<TData = unknown> = StaticDataTableBaseProps & {
   getRowKey?: (row: TData, index: number) => React.Key
   getRowClassName?: (row: TData, index: number) => string | undefined
   renderRow?: (row: TData, index: number) => React.ReactNode
+  renderAfterRow?: (
+    row: TData,
+    index: number,
+    columnCount: number
+  ) => React.ReactNode
   empty?: boolean
   emptyContent?: React.ReactNode
   emptyClassName?: string
@@ -98,6 +103,7 @@ function StaticDataTableWithColumns<TData>({
   getRowKey,
   getRowClassName,
   renderRow,
+  renderAfterRow,
   empty,
   emptyContent,
   emptyClassName,
@@ -105,14 +111,16 @@ function StaticDataTableWithColumns<TData>({
 }: StaticDataTableDataProps<TData>) {
   const isEmpty = empty ?? (data !== undefined && data.length === 0)
   const bodyRows = data.map((row, index) => (
-    <StaticDataTableRow
-      key={getRowKey?.(row, index) ?? index}
-      row={row}
-      index={index}
-      columns={columns}
-      getRowClassName={getRowClassName}
-      renderRow={renderRow}
-    />
+    <React.Fragment key={getRowKey?.(row, index) ?? index}>
+      <StaticDataTableRow
+        row={row}
+        index={index}
+        columns={columns}
+        getRowClassName={getRowClassName}
+        renderRow={renderRow}
+      />
+      {renderAfterRow?.(row, index, columns.length)}
+    </React.Fragment>
   ))
 
   return (
