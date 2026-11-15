@@ -26,6 +26,7 @@ import {
   HoverCardTrigger,
 } from '@/components/ui/hover-card'
 import { toIntlLocale } from '@/i18n/languages'
+import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 import type { MonitorGroup } from '../types'
@@ -147,7 +148,10 @@ export function GroupRatio(props: {
               <dt className='text-muted-foreground'>{t('Discount rate')}</dt>
               <dd className='font-medium'>
                 {t('{{rate}}/10 of base price', {
-                  rate: ratioFormat.format(group.offer.factor * 10),
+                  rate: formatNumber(
+                    Math.floor(group.offer.factor * 10),
+                    locale
+                  ),
                 })}
               </dd>
             </div>
