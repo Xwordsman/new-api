@@ -20,9 +20,14 @@ For commercial licensing, please contact support@quantumnous.com
  * Application-wide constants
  */
 
+import defaultFaviconUrl from '../../public/favicon.ico'
+import defaultLogoUrl from '../../public/logo.png'
+
 // System Configuration Defaults
 export const DEFAULT_SYSTEM_NAME = 'New API'
-export const DEFAULT_LOGO = '/logo.png'
+// Bundled assets get content hashes so CDN caches cannot keep an older image.
+export const DEFAULT_LOGO = defaultLogoUrl
+export const DEFAULT_FAVICON = defaultFaviconUrl
 
 // LocalStorage Keys
 export const STORAGE_KEYS = {
