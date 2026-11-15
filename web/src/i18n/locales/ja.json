@@ -5268,6 +5268,7 @@
     "One endpoint, many models": "ひとつのエンドポイントで多様なモデル",
     "One endpoint. Multiple channels.": "ひとつの接続先で、複数のチャネルへ。",
     "One endpoint. Your next chapter.": "ひとつの接続先から、新しい一歩を。",
+    "One gateway with {{siteName}}": "{{siteName}} で接続を一元化",
     "One gateway with new-api": "new-api でまとめて接続",
     "One gateway, familiar API protocols": "使い慣れた API を、一つのゲートウェイで",
     "One gateway. Every model.": "1 つのゲートウェイですべてのモデルへ。",

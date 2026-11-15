@@ -5268,6 +5268,7 @@
     "One endpoint, many models": "一个端点，多种模型",
     "One endpoint. Multiple channels.": "一个入口，多渠道连接。",
     "One endpoint. Your next chapter.": "一个接入点，开启新的可能。",
+    "One gateway with {{siteName}}": "通过 {{siteName}} 统一接入",
     "One gateway with new-api": "通过 new-api 统一接入",
     "One gateway, familiar API protocols": "一个网关，熟悉的 API 协议",
     "One gateway. Every model.": "一个网关，连接所有模型。",

@@ -20,9 +20,11 @@ import { Check, Layers, Minus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
+import { useSystemConfig } from '@/hooks/use-system-config'
 
 export function Comparison() {
   const { t } = useTranslation()
+  const { systemName } = useSystemConfig()
   const rows = [
     {
       title: t('Integration'),
@@ -76,7 +78,11 @@ export function Comparison() {
                 <th scope='col'>{t('Connecting directly')}</th>
                 <th scope='col'>
                   <Layers className='size-5' aria-hidden />
-                  {t('One gateway with new-api')}
+                  {systemName
+                    ? t('One gateway with {{siteName}}', {
+                        siteName: systemName,
+                      })
+                    : t('One gateway with new-api')}
                 </th>
               </tr>
             </thead>

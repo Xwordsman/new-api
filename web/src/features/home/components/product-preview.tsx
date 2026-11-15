@@ -31,6 +31,7 @@ import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
+import { useSystemConfig } from '@/hooks/use-system-config'
 import { getLobeIcon } from '@/lib/lobe-icon'
 
 import { HeroTerminalDemo } from './hero-terminal-demo'
@@ -65,6 +66,7 @@ export function UsageIllustration() {
 
 export function ProductPreview() {
   const { t } = useTranslation()
+  const { systemName } = useSystemConfig()
 
   return (
     <div
@@ -79,9 +81,11 @@ export function ProductPreview() {
             <i />
             <i />
           </div>
-          <span>
-            <Layers className='size-3' aria-hidden />
-            new-api / {t('Workspace')}
+          <span className='min-w-0'>
+            <Layers className='size-3 shrink-0' aria-hidden />
+            <span className='truncate' title={systemName}>
+              {systemName || 'new-api'} / {t('Workspace')}
+            </span>
           </span>
           <Badge variant='secondary'>{t('Illustrative preview')}</Badge>
         </div>

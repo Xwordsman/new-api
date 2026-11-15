@@ -5268,6 +5268,7 @@
     "One endpoint, many models": "Un endpoint, plusieurs modèles",
     "One endpoint. Multiple channels.": "Un point d’accès. Plusieurs canaux.",
     "One endpoint. Your next chapter.": "Un point d’accès. Un nouveau chapitre.",
+    "One gateway with {{siteName}}": "Une seule passerelle avec {{siteName}}",
     "One gateway with new-api": "Une passerelle avec new-api",
     "One gateway, familiar API protocols": "Une passerelle, vos protocoles API habituels",
     "One gateway. Every model.": "Une passerelle. Tous les modèles.",

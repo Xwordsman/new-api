@@ -30,6 +30,7 @@ import {
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
+import { useSystemConfig } from '@/hooks/use-system-config'
 import { getLobeIcon } from '@/lib/lobe-icon'
 
 import { UsageIllustration } from './product-preview'
@@ -40,6 +41,7 @@ interface CapabilityVisualProps {
 
 export function CapabilityVisual(props: CapabilityVisualProps) {
   const { t } = useTranslation()
+  const { systemName } = useSystemConfig()
 
   if (props.kind === 'routing' || props.kind === 'scale') {
     return (
@@ -52,7 +54,9 @@ export function CapabilityVisual(props: CapabilityVisualProps) {
         <span className='home-route-connector' aria-hidden />
         <div className='home-route-hub'>
           <Route className='size-7' aria-hidden />
-          <span>new-api</span>
+          <span className='max-w-full truncate px-2' title={systemName}>
+            {systemName || 'new-api'}
+          </span>
         </div>
         <span className='home-route-connector' aria-hidden />
         <div className='home-route-destinations'>

@@ -5268,6 +5268,7 @@
     "One endpoint, many models": "Một điểm cuối, nhiều mô hình",
     "One endpoint. Multiple channels.": "Một điểm truy cập. Nhiều kênh kết nối.",
     "One endpoint. Your next chapter.": "Một điểm truy cập. Khởi đầu chương mới.",
+    "One gateway with {{siteName}}": "Một cổng kết nối với {{siteName}}",
     "One gateway with new-api": "Một cổng kết nối với new-api",
     "One gateway, familiar API protocols": "Một cổng kết nối, các giao thức API quen thuộc",
     "One gateway. Every model.": "Một cổng kết nối mọi mô hình.",

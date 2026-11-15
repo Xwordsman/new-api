@@ -5268,6 +5268,7 @@
     "One endpoint, many models": "Одна конечная точка, много моделей",
     "One endpoint. Multiple channels.": "Единая точка входа. Множество каналов.",
     "One endpoint. Your next chapter.": "Единая точка входа. Новые возможности.",
+    "One gateway with {{siteName}}": "Единый шлюз с {{siteName}}",
     "One gateway with new-api": "Единый шлюз new-api",
     "One gateway, familiar API protocols": "Единый шлюз, привычные протоколы API",
     "One gateway. Every model.": "Один шлюз. Все модели.",
