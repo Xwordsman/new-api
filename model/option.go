@@ -234,6 +234,9 @@ func SyncOptions(frequency int) {
 }
 
 func validateOptionValue(key string, value string) error {
+	if key == "RedemptionStoreSettings" {
+		return common.NewMessage("Use Redemption stores settings to configure external stores")
+	}
 	if key == "DocumentationCenterSettings" {
 		return common.NewMessage("Use Documentation center settings to manage published content")
 	}

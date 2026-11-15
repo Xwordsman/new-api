@@ -34,6 +34,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { RedemptionStoreCards } from '@/extensions/redemption-stores/components/store-cards'
+import { isHttpUrl } from '@/lib/content-format'
 import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -142,6 +144,14 @@ export function RechargeFormCard({
     Array.isArray(waffoPayMethods) && waffoPayMethods.length > 0
   const minTopup = getMinTopupAmount(topupInfo)
   const redemptionEnabled = topupInfo?.enable_redemption !== false
+  const stores = redemptionEnabled
+    ? (topupInfo?.redemption_stores ?? []).filter((store) =>
+        isHttpUrl(store.url)
+      )
+    : []
+  const legacyLink = topupLink?.trim() ?? ''
+  const hasLegacyStore = redemptionEnabled && isHttpUrl(legacyLink)
+  const hasCodeStore = stores.length > 0 || hasLegacyStore
 
   if (loading) {
     return (
@@ -197,7 +207,11 @@ export function RechargeFormCard({
   return (
     <TitledCard
       title={t('Add Funds')}
-      description={t('Choose an amount and payment method')}
+      description={
+        hasAnyTopup
+          ? t('Choose an amount and payment method')
+          : t('Use a redemption code to add funds to your account')
+      }
       icon={<WalletCards className='h-4 w-4' />}
       iconTone='success'
       disableHoverEffect
@@ -217,7 +231,7 @@ export function RechargeFormCard({
       contentClassName='space-y-4 sm:space-y-6'
     >
       {/* Online Topup Section */}
-      {hasAnyTopup ? (
+      {hasAnyTopup && (
         <div className='space-y-4 sm:space-y-6'>
           {hasConfigurableTopup && (
             <>
@@ -487,7 +501,8 @@ export function RechargeFormCard({
             </>
           )}
         </div>
-      ) : (
+      )}
+      {!hasAnyTopup && !hasCodeStore && (
         <Alert>
           <AlertDescription>
             {t(
@@ -514,6 +529,7 @@ export function RechargeFormCard({
         )}
 
       {/* Redemption Code Section */}
+      {stores.length > 0 && <RedemptionStoreCards stores={stores} />}
       {redemptionEnabled ? (
         <div className='space-y-2.5 border-t pt-4 sm:space-y-3 sm:pt-6'>
           <div className='flex items-center gap-2'>
@@ -545,11 +561,11 @@ export function RechargeFormCard({
               {t('Redeem')}
             </Button>
           </div>
-          {topupLink && (
+          {hasLegacyStore && stores.length === 0 && (
             <p className='text-muted-foreground text-xs'>
               {t('Need a redemption code?')}{' '}
               <a
-                href={topupLink}
+                href={legacyLink}
                 target='_blank'
                 rel='noopener noreferrer'
                 className='inline-flex items-center gap-1 underline-offset-4 hover:underline'

@@ -16,6 +16,7 @@ import (
 	keypricepolicy "github.com/QuantumNous/new-api/extensions/keypricing/policy"
 	"github.com/QuantumNous/new-api/extensions/leaderboard"
 	"github.com/QuantumNous/new-api/extensions/luckydraw"
+	"github.com/QuantumNous/new-api/extensions/redemptionshop"
 	"github.com/QuantumNous/new-api/extensions/referral"
 	"github.com/QuantumNous/new-api/extensions/referral/ledger"
 	"github.com/QuantumNous/new-api/extensions/registrationrisk"
@@ -80,6 +81,7 @@ func Initialize(db *gorm.DB) {
 // RegisterRoutes mounts routes owned by compile-time extensions.
 func RegisterRoutes(apiRouter *gin.RouterGroup) {
 	grouppricing.RegisterRoutes(apiRouter)
+	redemptionshop.RegisterRoutes(apiRouter)
 	documentation.RegisterRoutes(apiRouter)
 	concurrency.RegisterRoutes(apiRouter)
 	emailtemplate.RegisterRoutes(apiRouter)

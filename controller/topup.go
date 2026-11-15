@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/extensions/redemptionshop"
 	"github.com/QuantumNous/new-api/extensions/referral/ledger"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
@@ -26,6 +27,12 @@ import (
 
 func GetTopUpInfo(c *gin.Context) {
 	complianceConfirmed := operation_setting.IsPaymentComplianceConfirmed()
+	stores, err := redemptionshop.PublicStores(model.DB.WithContext(c.Request.Context()), complianceConfirmed)
+	if err != nil {
+		// A broken store configuration must not prevent other wallet methods
+		// or code redemption from loading. The admin settings page reports it.
+		common.SysError("redemption stores: wallet configuration unavailable")
+	}
 
 	// 获取支付方式
 	payMethods := operation_setting.PayMethods
@@ -105,6 +112,7 @@ func GetTopUpInfo(c *gin.Context) {
 		"enable_waffo_topup":               enableWaffo,
 		"enable_waffo_pancake_topup":       enableWaffoPancake,
 		"enable_redemption":                complianceConfirmed,
+		"redemption_stores":                stores,
 		"payment_compliance_confirmed":     complianceConfirmed,
 		"payment_compliance_terms_version": operation_setting.CurrentComplianceTermsVersion,
 		"waffo_pay_methods": func() any {

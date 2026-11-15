@@ -65,6 +65,7 @@ import { Route as AuthenticatedSystemSettingsEmailTemplatesRouteImport } from '.
 import { Route as AuthenticatedSystemSettingsKeyPriceProtectionRouteImport } from './routes/_authenticated/system-settings/key-price-protection'
 import { Route as AuthenticatedSystemSettingsLeaderboardRouteImport } from './routes/_authenticated/system-settings/leaderboard'
 import { Route as AuthenticatedSystemSettingsLuckyDrawRouteImport } from './routes/_authenticated/system-settings/lucky-draw'
+import { Route as AuthenticatedSystemSettingsRedemptionStoresRouteImport } from './routes/_authenticated/system-settings/redemption-stores'
 import { Route as AuthenticatedSystemSettingsReferralsRouteImport } from './routes/_authenticated/system-settings/referrals'
 import { Route as AuthenticatedSystemSettingsRegistrationRiskRouteImport } from './routes/_authenticated/system-settings/registration-risk'
 import { Route as AuthenticatedSystemSettingsRequestProtectionRouteImport } from './routes/_authenticated/system-settings/request-protection'
@@ -403,6 +404,12 @@ const AuthenticatedSystemSettingsLuckyDrawRoute =
     path: '/lucky-draw',
     getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
   } as any)
+const AuthenticatedSystemSettingsRedemptionStoresRoute =
+  AuthenticatedSystemSettingsRedemptionStoresRouteImport.update({
+    id: '/redemption-stores',
+    path: '/redemption-stores',
+    getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
+  } as any)
 const AuthenticatedSystemSettingsReferralsRoute =
   AuthenticatedSystemSettingsReferralsRouteImport.update({
     id: '/referrals',
@@ -619,6 +626,7 @@ export interface FileRoutesByFullPath {
   '/system-settings/key-price-protection': typeof AuthenticatedSystemSettingsKeyPriceProtectionRoute
   '/system-settings/leaderboard': typeof AuthenticatedSystemSettingsLeaderboardRoute
   '/system-settings/lucky-draw': typeof AuthenticatedSystemSettingsLuckyDrawRoute
+  '/system-settings/redemption-stores': typeof AuthenticatedSystemSettingsRedemptionStoresRoute
   '/system-settings/referrals': typeof AuthenticatedSystemSettingsReferralsRoute
   '/system-settings/registration-risk': typeof AuthenticatedSystemSettingsRegistrationRiskRoute
   '/system-settings/request-protection': typeof AuthenticatedSystemSettingsRequestProtectionRoute
@@ -704,6 +712,7 @@ export interface FileRoutesByTo {
   '/system-settings/key-price-protection': typeof AuthenticatedSystemSettingsKeyPriceProtectionRoute
   '/system-settings/leaderboard': typeof AuthenticatedSystemSettingsLeaderboardRoute
   '/system-settings/lucky-draw': typeof AuthenticatedSystemSettingsLuckyDrawRoute
+  '/system-settings/redemption-stores': typeof AuthenticatedSystemSettingsRedemptionStoresRoute
   '/system-settings/referrals': typeof AuthenticatedSystemSettingsReferralsRoute
   '/system-settings/registration-risk': typeof AuthenticatedSystemSettingsRegistrationRiskRoute
   '/system-settings/request-protection': typeof AuthenticatedSystemSettingsRequestProtectionRoute
@@ -793,6 +802,7 @@ export interface FileRoutesById {
   '/_authenticated/system-settings/key-price-protection': typeof AuthenticatedSystemSettingsKeyPriceProtectionRoute
   '/_authenticated/system-settings/leaderboard': typeof AuthenticatedSystemSettingsLeaderboardRoute
   '/_authenticated/system-settings/lucky-draw': typeof AuthenticatedSystemSettingsLuckyDrawRoute
+  '/_authenticated/system-settings/redemption-stores': typeof AuthenticatedSystemSettingsRedemptionStoresRoute
   '/_authenticated/system-settings/referrals': typeof AuthenticatedSystemSettingsReferralsRoute
   '/_authenticated/system-settings/registration-risk': typeof AuthenticatedSystemSettingsRegistrationRiskRoute
   '/_authenticated/system-settings/request-protection': typeof AuthenticatedSystemSettingsRequestProtectionRoute
@@ -881,6 +891,7 @@ export interface FileRouteTypes {
     | '/system-settings/key-price-protection'
     | '/system-settings/leaderboard'
     | '/system-settings/lucky-draw'
+    | '/system-settings/redemption-stores'
     | '/system-settings/referrals'
     | '/system-settings/registration-risk'
     | '/system-settings/request-protection'
@@ -966,6 +977,7 @@ export interface FileRouteTypes {
     | '/system-settings/key-price-protection'
     | '/system-settings/leaderboard'
     | '/system-settings/lucky-draw'
+    | '/system-settings/redemption-stores'
     | '/system-settings/referrals'
     | '/system-settings/registration-risk'
     | '/system-settings/request-protection'
@@ -1054,6 +1066,7 @@ export interface FileRouteTypes {
     | '/_authenticated/system-settings/key-price-protection'
     | '/_authenticated/system-settings/leaderboard'
     | '/_authenticated/system-settings/lucky-draw'
+    | '/_authenticated/system-settings/redemption-stores'
     | '/_authenticated/system-settings/referrals'
     | '/_authenticated/system-settings/registration-risk'
     | '/_authenticated/system-settings/request-protection'
@@ -1518,6 +1531,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSystemSettingsLuckyDrawRouteImport
       parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
     }
+    '/_authenticated/system-settings/redemption-stores': {
+      id: '/_authenticated/system-settings/redemption-stores'
+      path: '/redemption-stores'
+      fullPath: '/system-settings/redemption-stores'
+      preLoaderRoute: typeof AuthenticatedSystemSettingsRedemptionStoresRouteImport
+      parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
+    }
     '/_authenticated/system-settings/referrals': {
       id: '/_authenticated/system-settings/referrals'
       path: '/referrals'
@@ -1767,6 +1787,7 @@ interface AuthenticatedSystemSettingsRouteRouteChildren {
   AuthenticatedSystemSettingsKeyPriceProtectionRoute: typeof AuthenticatedSystemSettingsKeyPriceProtectionRoute
   AuthenticatedSystemSettingsLeaderboardRoute: typeof AuthenticatedSystemSettingsLeaderboardRoute
   AuthenticatedSystemSettingsLuckyDrawRoute: typeof AuthenticatedSystemSettingsLuckyDrawRoute
+  AuthenticatedSystemSettingsRedemptionStoresRoute: typeof AuthenticatedSystemSettingsRedemptionStoresRoute
   AuthenticatedSystemSettingsReferralsRoute: typeof AuthenticatedSystemSettingsReferralsRoute
   AuthenticatedSystemSettingsRegistrationRiskRoute: typeof AuthenticatedSystemSettingsRegistrationRiskRoute
   AuthenticatedSystemSettingsRequestProtectionRoute: typeof AuthenticatedSystemSettingsRequestProtectionRoute
@@ -1811,6 +1832,8 @@ const AuthenticatedSystemSettingsRouteRouteChildren: AuthenticatedSystemSettings
       AuthenticatedSystemSettingsLeaderboardRoute,
     AuthenticatedSystemSettingsLuckyDrawRoute:
       AuthenticatedSystemSettingsLuckyDrawRoute,
+    AuthenticatedSystemSettingsRedemptionStoresRoute:
+      AuthenticatedSystemSettingsRedemptionStoresRoute,
     AuthenticatedSystemSettingsReferralsRoute:
       AuthenticatedSystemSettingsReferralsRoute,
     AuthenticatedSystemSettingsRegistrationRiskRoute:

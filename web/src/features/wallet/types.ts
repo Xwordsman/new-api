@@ -20,6 +20,8 @@ For commercial licensing, please contact support@quantumnous.com
 // Wallet Type Definitions
 // ============================================================================
 
+import type { RedemptionStore } from '@/extensions/redemption-stores/types'
+
 /**
  * Generic API response
  */
@@ -120,6 +122,7 @@ export interface WaffoPayMethod {
  * Topup configuration information
  */
 export interface TopupInfo {
+  redemption_stores?: RedemptionStore[]
   /** Whether online topup is enabled */
   enable_online_topup: boolean
   /** Whether Stripe topup is enabled */
