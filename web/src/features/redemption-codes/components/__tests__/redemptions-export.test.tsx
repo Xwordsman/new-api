@@ -52,11 +52,11 @@ function captureDownloads() {
       revokeObjectURL: vi.fn(),
     })
   )
-  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(
-    function (this: HTMLAnchorElement) {
-      downloads.push({ filename: this.download, blob: currentBlob })
-    }
-  )
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+    this: HTMLAnchorElement
+  ) {
+    downloads.push({ filename: this.download, blob: currentBlob })
+  })
   return downloads
 }
 
@@ -176,6 +176,66 @@ test('keeps names containing table delimiters and markup inside one Markdown cel
   expect(await readDownload(downloads[0])).toBe(
     '| Name | Code | Quota |\n| --- | --- | --- |\n| A \\| \\[B\\] \\<x\\> | codeA | $10 |\n'
   )
+})
+
+test.each(['txt', 'md'] as const)(
+  'exports only one code per line in %s when codes-only is selected',
+  async (format) => {
+    const downloads = captureDownloads()
+    const user = userEvent.setup()
+    render(
+      <RedemptionsExportDialog
+        data={{ keys: ['codeA', 'codeB'], name: '$10 card', quota: '$10.00' }}
+        onClose={() => undefined}
+      />
+    )
+    await user.click(screen.getByRole('checkbox', { name: 'Save as a file' }))
+    await user.click(
+      screen.getByRole('radio', {
+        name: format === 'txt' ? 'Save as TXT' : 'Save as Markdown',
+      })
+    )
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Codes only (one per line)' })
+    )
+    expect(
+      screen.queryByRole('checkbox', { name: 'Include name' })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('checkbox', { name: 'Include quota' })
+    ).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Done' }))
+    expect(downloads).toHaveLength(1)
+    expect(downloads[0].filename).toMatch(new RegExp(`\\.${format}$`))
+    expect(await readDownload(downloads[0])).toBe('codeA\ncodeB\n')
+  }
+)
+
+test('turning codes-only off by keyboard restores the previous export columns', async () => {
+  const downloads = captureDownloads()
+  const user = userEvent.setup()
+  render(
+    <RedemptionsExportDialog
+      data={{ keys: ['codeA'], name: 'launch', quota: '$10.00' }}
+      onClose={() => undefined}
+    />
+  )
+  await user.click(screen.getByRole('checkbox', { name: 'Save as a file' }))
+  await user.click(screen.getByRole('checkbox', { name: 'Include name' }))
+  const codesOnly = screen.getByRole('checkbox', {
+    name: 'Codes only (one per line)',
+  })
+  codesOnly.focus()
+  await user.keyboard(' ')
+  expect(codesOnly).toBeChecked()
+  await user.keyboard(' ')
+  expect(codesOnly).not.toBeChecked()
+  expect(
+    screen.getByRole('checkbox', { name: 'Include name' })
+  ).not.toBeChecked()
+  expect(screen.getByRole('checkbox', { name: 'Include quota' })).toBeChecked()
+  await user.click(screen.getByRole('button', { name: 'Done' }))
+  expect(await readDownload(downloads[0])).toBe('codeA\t$10.00\n')
 })
 
 test('successful batch creation opens export with returned codes and the configured currency', async () => {

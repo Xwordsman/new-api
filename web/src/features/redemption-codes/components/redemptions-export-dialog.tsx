@@ -41,6 +41,7 @@ export function RedemptionsExportDialog(props: RedemptionsExportDialogProps) {
   const id = useId()
   const [saveToFile, setSaveToFile] = useState(false)
   const [format, setFormat] = useState<'txt' | 'md'>('txt')
+  const [codesOnly, setCodesOnly] = useState(false)
   const [includeName, setIncludeName] = useState(true)
   const [includeQuota, setIncludeQuota] = useState(true)
 
@@ -50,20 +51,20 @@ export function RedemptionsExportDialog(props: RedemptionsExportDialogProps) {
       return
     }
     const headers: string[] = []
-    if (includeName) headers.push(t('Name'))
+    if (!codesOnly && includeName) headers.push(t('Name'))
     headers.push(t('Code'))
-    if (includeQuota) headers.push(t('Quota'))
+    if (!codesOnly && includeQuota) headers.push(t('Quota'))
 
     const rows = props.data.keys.map((key) => {
       const row: string[] = []
-      if (includeName) row.push(props.data.name)
+      if (!codesOnly && includeName) row.push(props.data.name)
       row.push(key)
-      if (includeQuota) row.push(props.data.quota)
+      if (!codesOnly && includeQuota) row.push(props.data.quota)
       return row.map((value) => value.replaceAll(/[\t\r\n]+/g, ' '))
     })
 
     let content = `${rows.map((row) => row.join('\t')).join('\n')}\n`
-    if (format === 'md') {
+    if (format === 'md' && !codesOnly) {
       const markdownRows = [headers, headers.map(() => '---'), ...rows]
       const markdownLines = markdownRows.map((row, index) => {
         const cells =
@@ -143,24 +144,36 @@ export function RedemptionsExportDialog(props: RedemptionsExportDialogProps) {
               </div>
             ))}
           </RadioGroup>
-          <div className='flex flex-wrap gap-6'>
-            <div className='flex items-center gap-2'>
-              <Checkbox
-                id={`${id}-name`}
-                checked={includeName}
-                onCheckedChange={setIncludeName}
-              />
-              <Label htmlFor={`${id}-name`}>{t('Include name')}</Label>
-            </div>
-            <div className='flex items-center gap-2'>
-              <Checkbox
-                id={`${id}-quota`}
-                checked={includeQuota}
-                onCheckedChange={setIncludeQuota}
-              />
-              <Label htmlFor={`${id}-quota`}>{t('Include quota')}</Label>
-            </div>
+          <div className='flex items-center gap-2'>
+            <Checkbox
+              id={`${id}-codes-only`}
+              checked={codesOnly}
+              onCheckedChange={setCodesOnly}
+            />
+            <Label htmlFor={`${id}-codes-only`}>
+              {t('Codes only (one per line)')}
+            </Label>
           </div>
+          {!codesOnly && (
+            <div className='flex flex-wrap gap-6'>
+              <div className='flex items-center gap-2'>
+                <Checkbox
+                  id={`${id}-name`}
+                  checked={includeName}
+                  onCheckedChange={setIncludeName}
+                />
+                <Label htmlFor={`${id}-name`}>{t('Include name')}</Label>
+              </div>
+              <div className='flex items-center gap-2'>
+                <Checkbox
+                  id={`${id}-quota`}
+                  checked={includeQuota}
+                  onCheckedChange={setIncludeQuota}
+                />
+                <Label htmlFor={`${id}-quota`}>{t('Include quota')}</Label>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </Dialog>
