@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils'
 import { getBenchmarkRun } from '../api'
 import { useRunStatuses } from '../hooks/use-run-statuses'
 import { ArtworkPreview } from './artwork-preview'
+import { RegenerateResult } from './regenerate-result'
 
 // Inline results and the enlarged dialog share the same saved data and controls.
 export function RunResult(props: {
@@ -93,6 +94,7 @@ export function RunResult(props: {
           </StatusBadge>
         </div>
       </div>
+      <RegenerateResult key={run.id} run={run} onOpen={props.onOpen} />
       {!props.inline && (
         <p className='text-muted-foreground font-mono text-[11px] break-all'>
           {run.group} · {run.model} · {formatTimestamp(run.created_at)}
@@ -254,6 +256,8 @@ export function RunResult(props: {
 export function RunDetail(props: { id: number; onClose: () => void }) {
   const { t } = useTranslation()
   const [paused, setPaused] = useState(false)
+  const [selected, setSelected] = useState({ source: props.id, id: props.id })
+  const id = selected.source === props.id ? selected.id : props.id
   return (
     <Dialog
       open
@@ -265,7 +269,11 @@ export function RunDetail(props: { id: number; onClose: () => void }) {
       <Button variant='outline' size='sm' onClick={() => setPaused(!paused)}>
         {paused ? t('Resume previews') : t('Pause previews')}
       </Button>
-      <RunResult id={props.id} paused={paused} />
+      <RunResult
+        id={id}
+        paused={paused}
+        onOpen={(next) => setSelected({ source: props.id, id: next })}
+      />
     </Dialog>
   )
 }

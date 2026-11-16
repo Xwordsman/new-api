@@ -1226,4 +1226,6 @@ export const STATIC_I18N_KEYS = [
   'Other currencies require a positive USD exchange rate',
   'Invalid redemption recharge settings',
   'Used redemption codes cannot be modified',
+  'A benchmark regeneration is already running or queued',
+  'Regeneration is unavailable for this benchmark result',
 ] as const

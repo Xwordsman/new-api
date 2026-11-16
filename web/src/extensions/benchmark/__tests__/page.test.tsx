@@ -244,6 +244,9 @@ it('lets root view saved results and refresh the page without allowing a manual 
   expect(await screen.findByText('The saved candy question')).toBeVisible()
   expect(screen.getByText('Expected answer')).toBeVisible()
   expect(
+    screen.getByRole('button', { name: 'Regenerate result' })
+  ).toBeEnabled()
+  expect(
     screen.queryByRole('button', { name: 'Retest group' })
   ).not.toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Refresh' }))
@@ -482,3 +485,164 @@ it('offers retry after an API failure and explains when the feature is disabled'
     )
   ).toBeVisible()
 })
+
+it('hides regeneration from ordinary users even when an original result is open', async () => {
+  const user = userEvent.setup()
+  useAuthStore
+    .getState()
+    .auth.setUser({ id: 2, username: 'member', role: ROLE.USER })
+  renderPage()
+  await user.click(await screen.findByRole('button', { name: 'gpt-public' }))
+  expect(await screen.findByText('The saved candy question')).toBeVisible()
+  expect(
+    screen.queryByRole('button', { name: 'Regenerate result' })
+  ).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'View original output' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Benchmark result' })
+  expect(
+    within(dialog).queryByRole('button', { name: 'Regenerate result' })
+  ).not.toBeInTheDocument()
+})
+
+it('queues an administrator regeneration once, opens the new record and preserves access to the original result and automatic schedule', async () => {
+  const user = userEvent.setup()
+  useAuthStore
+    .getState()
+    .auth.setUser({ id: 1, username: 'admin', role: ROLE.ADMIN })
+  const get = renderPage()
+  const queued: BenchmarkRun = {
+    ...run,
+    id: 31,
+    source_run_id: run.id,
+    manual: true,
+    status: 'running',
+    output: '',
+    error_code: '',
+    finished_at: 0,
+  }
+  get.mockImplementation(async (url) => {
+    if (url.endsWith('/snapshot')) {
+      return { data: { success: true, data: snapshot } }
+    }
+    if (url.endsWith('/artworks')) {
+      return {
+        data: {
+          success: true,
+          data: { items: [], total: 0, page: 1, page_size: 15 },
+        },
+      }
+    }
+    return {
+      data: { success: true, data: url.endsWith('/runs/31') ? queued : run },
+    }
+  })
+  let complete: (value: unknown) => void = () => {}
+  const post = vi.spyOn(api, 'post').mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        complete = resolve
+      })
+  )
+  await user.click(await screen.findByRole('button', { name: 'gpt-public' }))
+  await user.click(
+    await screen.findByRole('button', { name: 'Regenerate result' })
+  )
+  const confirm = await screen.findByRole('alertdialog', {
+    name: 'Regenerate this result?',
+  })
+  expect(
+    within(confirm).getByText(
+      /Automatic detection times and prompt rotation stay unchanged/
+    )
+  ).toBeVisible()
+  await user.click(
+    within(confirm).getByRole('button', { name: 'Regenerate result' })
+  )
+  expect(
+    within(confirm).getByRole('button', { name: 'Regenerate result' })
+  ).toBeDisabled()
+  expect(within(confirm).getByRole('button', { name: 'Cancel' })).toBeDisabled()
+  expect(post).toHaveBeenCalledExactlyOnceWith(
+    '/api/extensions/benchmark/admin/runs/21/regenerate'
+  )
+  await act(async () => {
+    complete({ data: { success: true, data: queued } })
+  })
+  const dialog = await screen.findByRole('dialog', { name: 'Benchmark result' })
+  expect(await within(dialog).findByText('Manual regeneration')).toBeVisible()
+  expect(
+    within(dialog).getByRole('button', { name: 'Regenerate result' })
+  ).toBeDisabled()
+  expect(
+    clients[0].getQueryData<Snapshot>(['benchmark', 'snapshot'])?.groups[0]
+      .next_at
+  ).toBe(group.next_at)
+  await user.click(
+    within(dialog).getByRole('button', { name: 'View original result' })
+  )
+  expect(
+    await within(dialog).findByText('The saved candy question')
+  ).toBeVisible()
+  expect(within(dialog).getAllByText('29', { exact: true })).toHaveLength(2)
+  expect(
+    within(dialog).getByRole('button', { name: 'Regenerate result' })
+  ).toBeEnabled()
+  expect(post).toHaveBeenCalledTimes(1)
+})
+
+it.each(['passed', 'request_failed'] as const)(
+  'lets an administrator regenerate a %s SVG result and keeps the confirmation open on a rejected request',
+  async (status) => {
+    const user = userEvent.setup()
+    useAuthStore
+      .getState()
+      .auth.setUser({ id: 1, username: 'root', role: ROLE.SUPER_ADMIN })
+    const svg: BenchmarkRun = {
+      ...run,
+      kind: 'svg',
+      status,
+      prompt_name: 'Saved drawing',
+      output: status === 'passed' ? '<svg><circle/></svg>' : '',
+    }
+    const data = {
+      ...snapshot,
+      groups: [
+        { ...group, candy_enabled: false, svg_enabled: true, runs: [svg] },
+      ],
+    }
+    const get = renderPage(data)
+    get.mockImplementation(async (url) => {
+      if (url.endsWith('/snapshot')) return { data: { success: true, data } }
+      if (url.endsWith('/artworks')) {
+        return { data: { success: true, data: { items: [], total: 0 } } }
+      }
+      return { data: { success: true, data: svg } }
+    })
+    const post = vi.spyOn(api, 'post').mockResolvedValue({
+      data: {
+        success: false,
+        message: 'A benchmark regeneration is already running or queued',
+      },
+    })
+    await user.click(await screen.findByRole('button', { name: 'gpt-public' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Regenerate result' })
+    )
+    const confirm = await screen.findByRole('alertdialog', {
+      name: 'Regenerate this result?',
+    })
+    await user.click(
+      within(confirm).getByRole('button', { name: 'Regenerate result' })
+    )
+    await waitFor(() =>
+      expect(
+        within(confirm).getByRole('button', { name: 'Regenerate result' })
+      ).toBeEnabled()
+    )
+    expect(confirm).toBeVisible()
+    expect(screen.queryByText('Manual regeneration')).not.toBeInTheDocument()
+    expect(post).toHaveBeenCalledExactlyOnceWith(
+      '/api/extensions/benchmark/admin/runs/21/regenerate'
+    )
+  }
+)

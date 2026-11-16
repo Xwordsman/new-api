@@ -17,6 +17,7 @@ import (
 )
 
 const taskType = "extension_benchmark"
+const regenerationTaskType = "extension_benchmark_regenerate"
 const maxOutputBytes = 512 << 10
 
 // ProbeExecutor is supplied by the gateway so probes share the existing
@@ -38,6 +39,7 @@ type taskPayload struct {
 
 func RegisterTasks(execute ProbeExecutor) {
 	service.RegisterSystemTaskHandler(taskHandler{execute: execute})
+	service.RegisterSystemTaskHandler(regenerationHandler{execute: execute})
 }
 func (taskHandler) Type() string { return taskType }
 func (taskHandler) Enabled() bool {
@@ -69,8 +71,25 @@ func (taskHandler) Enabled() bool {
 func (taskHandler) Interval() time.Duration { return 15 * time.Second }
 func (taskHandler) NewPayload() any         { return taskPayload{} }
 
-// scheduledGroups respects each group's interval independently. Manual checks
-// neither postpone nor accelerate the automatic schedule.
+// nextAutomaticAt aligns intervals to the server's local wall clock, so hourly
+// checks run at :00 and half-hourly checks at :00/:30. A one-minute dispatch
+// window accommodates the system task poll; missed slots are skipped rather
+// than replayed on restart. LastAutoAt prevents duplicate runs within a slot
+// without allowing a delayed start to shift subsequent checks.
+func nextAutomaticAt(lastAutoAt, interval, now int64) int64 {
+	_, offset := time.Unix(now, 0).In(time.Local).Zone()
+	slot := now - (now+int64(offset))%interval
+	if lastAutoAt >= slot {
+		return slot + (1+(lastAutoAt-slot)/interval)*interval
+	}
+	if now-slot < 60 {
+		return slot
+	}
+	return slot + interval
+}
+
+// scheduledGroups respects each group's clock-aligned interval independently.
+// Manual checks neither postpone nor accelerate the automatic schedule.
 func scheduledGroups(db *gorm.DB, s Settings, now int64, manualGroup string) ([]GroupSettings, error) {
 	groups := make([]GroupSettings, 0)
 	if !s.Enabled {
@@ -94,7 +113,7 @@ func scheduledGroups(db *gorm.DB, s Settings, now int64, manualGroup string) ([]
 	}
 	due := make([]GroupSettings, 0, len(groups))
 	for _, g := range groups {
-		if lastRun[g.Group] == 0 || now >= lastRun[g.Group]+g.interval(s) {
+		if nextAutomaticAt(lastRun[g.Group], g.interval(s), now) <= now {
 			due = append(due, g)
 		}
 	}
@@ -102,7 +121,7 @@ func scheduledGroups(db *gorm.DB, s Settings, now int64, manualGroup string) ([]
 }
 
 func (h taskHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
-	err := h.run(ctx, model.DB, task)
+	err := h.run(ctx, model.DB, task, time.Now().Unix())
 	status := model.SystemTaskStatusSucceeded
 	message := ""
 	if err != nil {
@@ -115,11 +134,11 @@ func (h taskHandler) Run(ctx context.Context, task *model.SystemTask, runnerID s
 	}
 }
 
-func (h taskHandler) run(ctx context.Context, db *gorm.DB, task *model.SystemTask) error {
-	// The system task lease serializes all benchmark batches. Any running rows
-	// left by a previous lease/process are interrupted, never silently passed.
-	now := time.Now().Unix()
-	if err := db.WithContext(ctx).Model(&Run{}).Where("status = ?", "running").Updates(map[string]any{
+func (h taskHandler) run(ctx context.Context, db *gorm.DB, task *model.SystemTask, now int64) error {
+	// Automatic and manual tasks have independent leases. Keep a live manual
+	// result intact; clean up only abandoned tasks after cancellation/restart.
+	activeManual := db.Model(&model.SystemTask{}).Select("task_id").Where("type = ? AND status IN ?", regenerationTaskType, []model.SystemTaskStatus{model.SystemTaskStatusPending, model.SystemTaskStatusRunning})
+	if err := db.WithContext(ctx).Model(&Run{}).Where("status = ? AND (source_run_id IS NULL OR source_run_id = 0 OR task_id NOT IN (?))", "running", activeManual).Updates(map[string]any{
 		"status": "interrupted", "error_code": "interrupted", "finished_at": now,
 	}).Error; err != nil {
 		return err
@@ -223,6 +242,62 @@ func (h taskHandler) run(ctx context.Context, db *gorm.DB, task *model.SystemTas
 		"status": "interrupted", "error_code": "interrupted", "finished_at": time.Now().Unix(),
 	}).Error
 	return errors.Join(workerErr, ctx.Err(), cleanupErr)
+}
+
+// regenerationHandler is deliberately not scheduled. Its task type has its
+// own lease so a slow manual result never delays a clock-aligned batch.
+type regenerationHandler struct{ execute ProbeExecutor }
+
+func (regenerationHandler) Type() string { return regenerationTaskType }
+
+func (h regenerationHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	err := h.run(ctx, model.DB, task)
+	status, message := model.SystemTaskStatusSucceeded, ""
+	if err != nil {
+		status, message = model.SystemTaskStatusFailed, "Benchmark task could not complete"
+		common.SysError("benchmark regeneration: " + err.Error())
+	}
+	if err := model.FinishSystemTask(task.TaskID, runnerID, status, nil, message); err != nil {
+		common.SysError("benchmark regeneration finish: " + err.Error())
+	}
+}
+
+func (h regenerationHandler) run(ctx context.Context, db *gorm.DB, task *model.SystemTask) (err error) {
+	defer func() {
+		if recover() != nil {
+			err = errors.Join(err, errors.New("benchmark regeneration interrupted"))
+		}
+		writeCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		cleanupErr := db.WithContext(writeCtx).Model(&Run{}).Where("task_id = ? AND status = ?", task.TaskID, "running").Updates(map[string]any{
+			"status": "interrupted", "error_code": "interrupted", "finished_at": time.Now().Unix(),
+		}).Error
+		err = errors.Join(err, cleanupErr)
+	}()
+	var run Run
+	if err := db.WithContext(ctx).Where("task_id = ? AND manual = ? AND source_run_id > 0 AND status = ?", task.TaskID, true, "running").Take(&run).Error; err != nil {
+		return err
+	}
+	s, _, err := getSettings(db.WithContext(ctx))
+	if err != nil {
+		return err
+	}
+	if !regenerationEnabled(s, run) {
+		return db.WithContext(ctx).Model(&Run{}).Where("id = ? AND status = ?", run.ID, "running").Updates(map[string]any{"status": "interrupted", "error_code": "interrupted", "finished_at": time.Now().Unix()}).Error
+	}
+	return errors.Join((taskHandler{execute: h.execute}).probe(ctx, db, s, run), ctx.Err())
+}
+
+func regenerationEnabled(s Settings, run Run) bool {
+	if !s.Enabled {
+		return false
+	}
+	for _, g := range s.Groups {
+		if g.Group == run.GroupName && g.Enabled {
+			return run.Kind == "candy" && g.CandyEnabled || run.Kind == "svg" && g.SVGEnabled
+		}
+	}
+	return false
 }
 
 func (h taskHandler) probe(ctx context.Context, db *gorm.DB, s Settings, run Run) error {

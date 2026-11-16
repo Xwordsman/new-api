@@ -26,6 +26,78 @@ func RegisterRoutes(api *gin.RouterGroup) {
 	admin := api.Group("/extensions/benchmark/admin", middleware.RootAuth(), middleware.DisableCache(), queryTimeout())
 	admin.GET("/settings", adminSettings)
 	admin.PUT("/settings", middleware.SessionCookieOriginGuard(), middleware.UserCriticalRateLimit("benchmark-admin"), updateSettings)
+	actions := api.Group("/extensions/benchmark/admin", middleware.AdminAuth(), middleware.DisableCache(), queryTimeout())
+	actions.POST("/runs/:id/regenerate", middleware.StrictSessionCookieOriginGuard(), middleware.UserCriticalRateLimit("benchmark-regenerate"), regenerateRun)
+}
+
+var errRegenerationBusy = errors.New("A benchmark regeneration is already running or queued")
+var errRegenerationDisabled = errors.New("Regeneration is unavailable for this benchmark result")
+
+func regenerateRun(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	db := model.DB.WithContext(c.Request.Context())
+	s, _, err := getSettings(db)
+	if err != nil {
+		respond(c, nil, err)
+		return
+	}
+	groups := []string{}
+	for _, g := range visibleGroups(s, c.GetString("user_group")) {
+		groups = append(groups, g.Group)
+	}
+	var source Run
+	if err = db.Where("id = ? AND group_name IN ?", id, groups).Take(&source).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		respond(c, nil, err)
+		return
+	}
+	if source.Status == "running" || !regenerationEnabled(s, source) {
+		respond(c, nil, errRegenerationDisabled)
+		return
+	}
+	run, err := enqueueRegeneration(db, source, c.GetInt("id"))
+	respond(c, run, err)
+}
+
+// The task and result are created atomically. The unique system-task active key
+// limits manual traffic to one probe, including across multiple gateway nodes.
+func enqueueRegeneration(db *gorm.DB, source Run, administrator int) (Run, error) {
+	taskID, err := model.GenerateSystemTaskID()
+	if err != nil {
+		return Run{}, err
+	}
+	run := Run{GroupName: source.GroupName, Model: source.Model, Kind: source.Kind, PromptName: source.PromptName,
+		Prompt: source.Prompt, Expected: source.Expected, Status: "running", Manual: true,
+		SourceRunID: source.ID, RequestedBy: administrator, TaskID: taskID, CreatedAt: time.Now().Unix()}
+	key := regenerationTaskType
+	err = db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&model.SystemTask{TaskID: taskID, Type: key, ActiveKey: &key, Status: model.SystemTaskStatusPending}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&run).Error
+	})
+	if err == nil {
+		return run, nil
+	}
+	var active model.SystemTask
+	if activeErr := db.Where("active_key = ?", key).Take(&active).Error; activeErr != nil {
+		return Run{}, err
+	}
+	var existing Run
+	if err := db.Where("task_id = ?", active.TaskID).Take(&existing).Error; err != nil {
+		return Run{}, err
+	}
+	if existing.SourceRunID == source.ID && existing.RequestedBy == administrator {
+		return existing, nil
+	}
+	return Run{}, errRegenerationBusy
 }
 
 func queryTimeout() gin.HandlerFunc {
@@ -42,7 +114,7 @@ func respond(c *gin.Context, data any, err error) {
 		common.ApiSuccess(c, data)
 		return
 	}
-	if errors.Is(err, errInvalid) || errors.Is(err, errConflict) {
+	if errors.Is(err, errInvalid) || errors.Is(err, errConflict) || errors.Is(err, errRegenerationBusy) || errors.Is(err, errRegenerationDisabled) {
 		common.ApiError(c, err)
 		return
 	}
@@ -145,10 +217,10 @@ func buildSnapshot(db *gorm.DB, s Settings, userGroup string, now int64) (snapsh
 			return data, err
 		}
 		if s.Enabled && config.Enabled {
-			g.NextAt = max(now, latest.LastAutoAt+g.IntervalSeconds)
+			g.NextAt = nextAutomaticAt(latest.LastAutoAt, g.IntervalSeconds, now)
 		}
 		var runs []Run
-		err = db.Select("id", "kind", "status", "created_at", "latency_ms", "prompt_name").Where("group_name = ? AND created_at >= ?", config.Group, now-int64(s.HistoryHours)*3600).Order("id DESC").Limit(600 * s.HistoryHours / 24).Find(&runs).Error
+		err = db.Select("id", "kind", "status", "created_at", "latency_ms", "prompt_name", "manual", "source_run_id").Where("group_name = ? AND created_at >= ?", config.Group, now-int64(s.HistoryHours)*3600).Order("id DESC").Limit(600 * s.HistoryHours / 24).Find(&runs).Error
 		if err != nil {
 			return data, err
 		}
@@ -244,6 +316,6 @@ func getArtworks(c *gin.Context) {
 	// Artwork HTML is fetched only when opened. Listing stays bounded even
 	// when a model produces hundreds of kilobytes of animation code.
 	items := []Run{}
-	err = query.Select("id", "group_name", "model", "kind", "prompt_name", "status", "created_at", "latency_ms").Order("id DESC").Offset((page - 1) * 15).Limit(15).Find(&items).Error
+	err = query.Select("id", "group_name", "model", "kind", "prompt_name", "status", "created_at", "latency_ms", "manual", "source_run_id").Order("id DESC").Offset((page - 1) * 15).Limit(15).Find(&items).Error
 	respond(c, gin.H{"items": items, "total": total, "page": page, "page_size": 15}, err)
 }

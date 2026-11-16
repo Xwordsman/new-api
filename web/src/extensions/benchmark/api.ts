@@ -73,3 +73,15 @@ export async function getBenchmarkArtworks(
     ).data
   ).data
 }
+
+export async function regenerateBenchmarkRun(
+  id: number
+): Promise<BenchmarkRun> {
+  return requireServerSuccess(
+    (
+      await api.post<Envelope<BenchmarkRun>>(
+        `${base}/admin/runs/${id}/regenerate`
+      )
+    ).data
+  ).data
+}

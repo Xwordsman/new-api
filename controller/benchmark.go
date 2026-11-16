@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"net/http"
@@ -10,7 +12,6 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/extensions/benchmark"
-	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 )
@@ -42,7 +43,7 @@ func RunBenchmarkProbe(ctx context.Context, group, modelName, prompt string, max
 	if path == "/v1/responses" || channel.Type == constant.ChannelTypeCodex {
 		endpoint = string(constant.EndpointTypeOpenAIResponse)
 	}
-	response := executeChannelTest(ctx, channel, userID, modelName, endpoint, false, &channelProbeOptions{group: group, prompt: prompt, maxTokens: uint(maxTokens)})
+	response := executeChannelTest(ctx, channel, userID, modelName, endpoint, true, &channelProbeOptions{group: group, prompt: prompt, maxTokens: uint(maxTokens)})
 	if response.localErr != nil {
 		return result, errors.New("benchmark upstream request failed")
 	}
@@ -53,44 +54,93 @@ func RunBenchmarkProbe(ctx context.Context, group, modelName, prompt string, max
 		result.InputTokens = response.usage.PromptTokens
 		result.OutputTokens = response.usage.CompletionTokens
 	}
-	// Ignore reasoning/tool output: only the final user-visible text is graded.
-	if endpoint == string(constant.EndpointTypeOpenAIResponse) {
-		var body struct {
-			Status string `json:"status"`
-			Output []struct {
-				Type    string `json:"type"`
-				Content []struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"content"`
-			} `json:"output"`
+	output, truncated, err := benchmarkStreamOutput(response.body, endpoint == string(constant.EndpointTypeOpenAIResponse))
+	result.Output, result.Truncated = output, truncated
+	return result, err
+}
+
+// benchmarkStreamOutput grades only user-visible output, never reasoning or
+// tool deltas. A protocol terminal is required even if an adaptor emitted DONE
+// after an interrupted stream. Responses terminal output replaces deltas so
+// the same answer is not concatenated twice.
+func benchmarkStreamOutput(body []byte, responses bool) (string, bool, error) {
+	var output strings.Builder
+	terminal, truncated := false, false
+	scanner := bufio.NewScanner(bytes.NewReader(body))
+	scanner.Buffer(make([]byte, 4096), 8<<20)
+	for scanner.Scan() {
+		line, ok := strings.CutPrefix(scanner.Text(), "data:")
+		if !ok {
+			continue
 		}
-		if err := common.Unmarshal(response.body, &body); err != nil {
-			return result, err
+		line = strings.TrimSpace(line)
+		if line == "" || line == "[DONE]" {
+			continue
 		}
-		result.Truncated = body.Status != "completed"
-		var output strings.Builder
-		for _, item := range body.Output {
-			if item.Type != "message" {
-				continue
+		var event struct {
+			Type    string `json:"type"`
+			Delta   string `json:"delta"`
+			Error   any    `json:"error"`
+			Choices []struct {
+				Index int `json:"index"`
+				Delta struct {
+					Content string `json:"content"`
+				} `json:"delta"`
+				FinishReason *string `json:"finish_reason"`
+			} `json:"choices"`
+			Response *struct {
+				Status string `json:"status"`
+				Output []struct {
+					Type    string `json:"type"`
+					Content []struct {
+						Type string `json:"type"`
+						Text string `json:"text"`
+					} `json:"content"`
+				} `json:"output"`
+			} `json:"response"`
+		}
+		if common.UnmarshalJsonStr(line, &event) != nil || event.Error != nil || event.Type == "error" || event.Type == "response.failed" || event.Type == "response.cancelled" {
+			return "", false, errors.New("benchmark stream failed")
+		}
+		if responses {
+			switch event.Type {
+			case "response.output_text.delta":
+				output.WriteString(event.Delta)
+			case "response.completed", "response.incomplete":
+				terminal = true
+				truncated = event.Type == "response.incomplete"
+				if event.Response != nil && event.Response.Output != nil {
+					output.Reset()
+					for _, item := range event.Response.Output {
+						if item.Type != "message" {
+							continue
+						}
+						for _, part := range item.Content {
+							if part.Type == "output_text" {
+								output.WriteString(part.Text)
+							}
+						}
+					}
+				}
 			}
-			for _, part := range item.Content {
-				if part.Type == "output_text" {
-					output.WriteString(part.Text)
+		} else {
+			for _, choice := range event.Choices {
+				if choice.Index != 0 {
+					continue
+				}
+				output.WriteString(choice.Delta.Content)
+				if choice.FinishReason != nil && *choice.FinishReason != "" {
+					terminal = true
+					truncated = *choice.FinishReason != "stop"
 				}
 			}
 		}
-		result.Output = output.String()
-	} else {
-		var body dto.OpenAITextResponse
-		if err := common.Unmarshal(response.body, &body); err != nil {
-			return result, err
+		if output.Len() > 512<<10 {
+			return "", false, errors.New("benchmark output too large")
 		}
-		if len(body.Choices) == 0 {
-			return result, errors.New("benchmark response has no choices")
-		}
-		result.Output = body.Choices[0].StringContent()
-		result.Truncated = body.Choices[0].FinishReason != "stop"
 	}
-	return result, nil
+	if scanner.Err() != nil || !terminal {
+		return "", false, errors.New("benchmark stream interrupted")
+	}
+	return output.String(), truncated, nil
 }

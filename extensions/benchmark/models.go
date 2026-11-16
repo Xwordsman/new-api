@@ -21,6 +21,8 @@ type Run struct {
 	ChannelID    int            `json:"-"`
 	TaskID       string         `gorm:"size:64" json:"-"`
 	Manual       bool           `json:"manual"`
+	SourceRunID  int64          `gorm:"index:idx_benchmark_source" json:"source_run_id"`
+	RequestedBy  int            `json:"-"`
 	CreatedAt    int64          `gorm:"index:idx_benchmark_group_time,priority:2;index:idx_benchmark_created" json:"created_at"`
 	FinishedAt   int64          `json:"finished_at"`
 	LatencyMS    int64          `json:"latency_ms"`
@@ -43,14 +45,16 @@ func Migrate(db *gorm.DB) error { return db.AutoMigrate(&Run{}, &GroupState{}) }
 func (Run) TableName() string { return "extension_benchmark_runs" }
 
 type RunSummary struct {
-	ID         int64  `json:"id"`
-	Kind       string `json:"kind"`
-	Status     string `json:"status"`
-	CreatedAt  int64  `json:"created_at"`
-	LatencyMS  int64  `json:"latency_ms"`
-	PromptName string `json:"prompt_name"`
+	ID          int64  `json:"id"`
+	Kind        string `json:"kind"`
+	Status      string `json:"status"`
+	CreatedAt   int64  `json:"created_at"`
+	LatencyMS   int64  `json:"latency_ms"`
+	PromptName  string `json:"prompt_name"`
+	Manual      bool   `json:"manual"`
+	SourceRunID int64  `json:"source_run_id"`
 }
 
 func (r Run) summary() RunSummary {
-	return RunSummary{ID: r.ID, Kind: r.Kind, Status: r.Status, CreatedAt: r.CreatedAt, LatencyMS: r.LatencyMS, PromptName: r.PromptName}
+	return RunSummary{ID: r.ID, Kind: r.Kind, Status: r.Status, CreatedAt: r.CreatedAt, LatencyMS: r.LatencyMS, PromptName: r.PromptName, Manual: r.Manual, SourceRunID: r.SourceRunID}
 }

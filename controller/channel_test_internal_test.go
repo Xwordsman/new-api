@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -502,6 +503,7 @@ func TestBenchmarkProbeUsesGroupRoutingAndPreservesPromptLimitsAndWallet(t *test
 	previousMainType, previousLogType := common.MainDatabaseType(), common.LogDatabaseType()
 	previousRedis, previousMemory := common.RedisEnabled, common.MemoryCacheEnabled
 	previousLogging, previousExport := common.LogConsumeEnabled, common.DataExportEnabled
+	previousStreamingTimeout := constant.StreamingTimeout
 	previousGroups := ratio_setting.GroupRatio2JSONString()
 	previousModels := ratio_setting.ModelRatio2JSONString()
 	t.Cleanup(func() {
@@ -509,12 +511,14 @@ func TestBenchmarkProbeUsesGroupRoutingAndPreservesPromptLimitsAndWallet(t *test
 		common.SetDatabaseTypes(previousMainType, previousLogType)
 		common.RedisEnabled, common.MemoryCacheEnabled = previousRedis, previousMemory
 		common.LogConsumeEnabled, common.DataExportEnabled = previousLogging, previousExport
+		constant.StreamingTimeout = previousStreamingTimeout
 		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(previousGroups))
 		require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(previousModels))
 	})
 	db := setupModelListControllerTestDB(t)
-	require.NoError(t, db.AutoMigrate(&model.Log{}))
+	require.NoError(t, db.AutoMigrate(&model.Log{}, &model.Option{}))
 	common.MemoryCacheEnabled, common.LogConsumeEnabled, common.DataExportEnabled = false, true, false
+	constant.StreamingTimeout = 300
 	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"benchmark":1}`))
 	require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(`{"gpt-benchmark":1,"gpt-benchmark-codex":1}`))
 	service.InitHttpClient()
@@ -532,6 +536,8 @@ func TestBenchmarkProbeUsesGroupRoutingAndPreservesPromptLimitsAndWallet(t *test
 			}
 			requests := make(chan capturedRequest, 1)
 			var incomplete atomic.Bool
+			var broken atomic.Bool
+			var longOutput atomic.Bool
 			var waitForCancel atomic.Bool
 			started := make(chan struct{}, 1)
 			release := make(chan struct{})
@@ -550,20 +556,35 @@ func TestBenchmarkProbeUsesGroupRoutingAndPreservesPromptLimitsAndWallet(t *test
 					return
 				}
 				requests <- capturedRequest{r.URL.Path, string(body), r.Header.Get("Authorization")}
-				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Content-Type", "text/event-stream")
+				text := "21"
+				if longOutput.Load() {
+					text = "<svg><text>" + strings.Repeat("x", 12000) + "</text></svg>"
+				}
+				encoded, _ := common.Marshal(text)
 				if protocol == "chat" {
+					_, _ = fmt.Fprintf(w, "data: {\"id\":\"chat-test\",\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":%s,\"reasoning_content\":\"not the answer\"}}]}\n\n", encoded)
+					w.(http.Flusher).Flush()
+					if broken.Load() {
+						return
+					}
 					finish := "stop"
 					if incomplete.Load() {
 						finish = "length"
 					}
-					_, _ = fmt.Fprintf(w, `{"id":"chat-test","model":"upstream-model","choices":[{"message":{"role":"assistant","content":"21","reasoning_content":"not the answer"},"finish_reason":%q}],"usage":{"prompt_tokens":30,"completion_tokens":8,"total_tokens":38}}`, finish)
+					_, _ = fmt.Fprintf(w, "data: {\"id\":\"chat-test\",\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":%q}],\"usage\":{\"prompt_tokens\":30,\"completion_tokens\":8,\"total_tokens\":38}}\n\ndata: [DONE]\n\n", finish)
+					return
+				}
+				_, _ = fmt.Fprintf(w, "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":%s}\n\n", encoded)
+				w.(http.Flusher).Flush()
+				if broken.Load() {
 					return
 				}
 				status := "completed"
 				if incomplete.Load() {
 					status = "incomplete"
 				}
-				_, _ = fmt.Fprintf(w, `{"id":"resp-test","object":"response","status":%q,"model":"upstream-model","output":[{"type":"reasoning","content":[{"type":"output_text","text":"not the answer"}]},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"21"}]}],"usage":{"input_tokens":30,"output_tokens":8,"total_tokens":38}}`, status)
+				_, _ = fmt.Fprintf(w, "event: response.%s\ndata: {\"type\":\"response.%s\",\"response\":{\"id\":\"resp-test\",\"object\":\"response\",\"status\":%q,\"model\":\"upstream-model\",\"output\":[{\"type\":\"reasoning\",\"content\":[{\"type\":\"output_text\",\"text\":\"not the answer\"}]},{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":%s}]}],\"usage\":{\"input_tokens\":30,\"output_tokens\":8,\"total_tokens\":38}}}\n\n", status, status, status, encoded)
 			}))
 			t.Cleanup(func() {
 				close(release)
@@ -571,7 +592,7 @@ func TestBenchmarkProbeUsesGroupRoutingAndPreservesPromptLimitsAndWallet(t *test
 			})
 			mapping, err := common.Marshal(map[string]string{modelName: "upstream-model"})
 			require.NoError(t, err)
-			override := `{"messages":[{"role":"user","content":"replace prompt"}],"input":"replace prompt","stream":true,"max_tokens":999999,"max_completion_tokens":999999,"max_output_tokens":999999,"n":12,"reasoning_effort":"low"}`
+			override := `{"messages":[{"role":"user","content":"replace prompt"}],"input":"replace prompt","stream":false,"max_tokens":999999,"max_completion_tokens":999999,"max_output_tokens":999999,"n":12,"reasoning_effort":"low"}`
 			channel := model.Channel{Type: constant.ChannelTypeOpenAI, Key: "benchmark-test-key", Name: protocol, Models: modelName, Group: "benchmark", BaseURL: &upstream.URL, ModelMapping: common.GetPointer(string(mapping)), ParamOverride: &override, Status: common.ChannelStatusEnabled}
 			require.NoError(t, channel.Insert())
 			result, err := RunBenchmarkProbe(context.Background(), "benchmark", modelName, "Configured candy prompt", 4096)
@@ -586,7 +607,7 @@ func TestBenchmarkProbeUsesGroupRoutingAndPreservesPromptLimitsAndWallet(t *test
 			var body map[string]any
 			require.NoError(t, common.UnmarshalJsonStr(request.body, &body))
 			assert.Equal(t, "upstream-model", body["model"])
-			assert.Equal(t, false, body["stream"])
+			assert.Equal(t, true, body["stream"])
 			assert.Equal(t, "low", body["reasoning_effort"])
 			assert.NotContains(t, request.body, "replace prompt")
 			assert.Contains(t, request.body, "Configured candy prompt")
@@ -610,6 +631,7 @@ func TestBenchmarkProbeUsesGroupRoutingAndPreservesPromptLimitsAndWallet(t *test
 			assert.Equal(t, "Model test", log.TokenName)
 			assert.Equal(t, "benchmark", log.Group)
 			assert.Equal(t, modelName, log.ModelName)
+			assert.True(t, log.IsStream)
 
 			incomplete.Store(true)
 			result, err = RunBenchmarkProbe(context.Background(), "benchmark", modelName, "Configured candy prompt", 4096)
@@ -617,6 +639,16 @@ func TestBenchmarkProbeUsesGroupRoutingAndPreservesPromptLimitsAndWallet(t *test
 			assert.True(t, result.Truncated)
 			<-requests
 
+			incomplete.Store(false)
+			longOutput.Store(true)
+			result, err = RunBenchmarkProbe(context.Background(), "benchmark", modelName, "Configured SVG prompt", 16384)
+			require.NoError(t, err)
+			assert.Equal(t, "<svg><text>"+strings.Repeat("x", 12000)+"</text></svg>", result.Output)
+			<-requests
+			broken.Store(true)
+			_, err = RunBenchmarkProbe(context.Background(), "benchmark", modelName, "Configured SVG prompt", 16384)
+			require.Error(t, err, "EOF without a terminal must not pass")
+			<-requests
 			waitForCancel.Store(true)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()

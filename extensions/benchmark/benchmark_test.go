@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
@@ -49,10 +51,10 @@ func benchmarkTestDB(t *testing.T, dialect string) *gorm.DB {
 		connection.SetMaxOpenConns(1)
 	}
 	t.Cleanup(func() { require.NoError(t, connection.Close()) })
-	for _, table := range []any{&Run{}, &GroupState{}, &model.Option{}} {
+	for _, table := range []any{&Run{}, &GroupState{}, &model.Option{}, &model.SystemTask{}} {
 		require.NoError(t, db.Migrator().DropTable(table))
 	}
-	require.NoError(t, db.AutoMigrate(&model.Option{}))
+	require.NoError(t, db.AutoMigrate(&model.Option{}, &model.SystemTask{}))
 	require.NoError(t, Migrate(db))
 	require.NoError(t, Migrate(db))
 	return db
@@ -95,6 +97,55 @@ func TestBenchmarkHasNoManualDetectionEndpoint(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, response.Code)
 }
 
+func TestBenchmarkAutomaticScheduleFollowsWallClock(t *testing.T) {
+	cases := []struct {
+		name, now, last, next string
+		minutes               int64
+	}{
+		{"hourly before boundary", "2026-11-16 12:59:59", "2026-11-16 12:00:17", "2026-11-16 13:00:00", 60},
+		{"hourly at boundary", "2026-11-16 13:00:00", "2026-11-16 12:00:17", "2026-11-16 13:00:00", 60},
+		{"polling delay", "2026-11-16 13:00:59", "2026-11-16 12:00:17", "2026-11-16 13:00:00", 60},
+		{"no duplicate after delayed start", "2026-11-16 13:00:59", "2026-11-16 13:00:42", "2026-11-16 14:00:00", 60},
+		{"legacy off-grid run", "2026-11-16 13:00:05", "2026-11-16 12:47:00", "2026-11-16 13:00:00", 60},
+		{"new group waits for boundary", "2026-11-16 12:17:00", "", "2026-11-16 13:00:00", 60},
+		{"new group at boundary", "2026-11-16 13:00:05", "", "2026-11-16 13:00:00", 60},
+		{"missed slot is not replayed", "2026-11-16 13:01:00", "2026-11-16 10:00:00", "2026-11-16 14:00:00", 60},
+		{"restart skips older slots", "2026-11-16 13:00:10", "2026-11-15 10:00:00", "2026-11-16 13:00:00", 60},
+		{"half-hour before boundary", "2026-11-16 12:29:59", "2026-11-16 12:00:10", "2026-11-16 12:30:00", 30},
+		{"half-hour at boundary", "2026-11-16 12:30:00", "2026-11-16 12:00:10", "2026-11-16 12:30:00", 30},
+		{"half-hour crosses hour", "2026-11-16 13:00:05", "2026-11-16 12:30:10", "2026-11-16 13:00:00", 30},
+		{"half-hour crosses day", "2026-11-16 23:59:59", "2026-11-16 23:30:10", "2026-11-17 00:00:00", 30},
+		{"interval changed to half-hour", "2026-11-16 12:30:05", "2026-11-16 12:00:10", "2026-11-16 12:30:00", 30},
+		{"interval changed to hourly", "2026-11-16 12:45:00", "2026-11-16 12:30:10", "2026-11-16 13:00:00", 60},
+		{"two-hour override", "2026-11-16 13:59:59", "2026-11-16 12:00:10", "2026-11-16 14:00:00", 120},
+		{"daily checks use local midnight", "2026-11-16 23:59:59", "2026-11-16 00:00:10", "2026-11-17 00:00:00", 1440},
+	}
+	for _, zone := range []string{"UTC", "Asia/Shanghai", "Asia/Kathmandu"} {
+		t.Run(zone, func(t *testing.T) {
+			location, err := time.LoadLocation(zone)
+			require.NoError(t, err)
+			previousLocation := time.Local
+			time.Local = location
+			t.Cleanup(func() { time.Local = previousLocation })
+			for _, tc := range cases {
+				t.Run(tc.name, func(t *testing.T) {
+					now, err := time.ParseInLocation(time.DateTime, tc.now, location)
+					require.NoError(t, err)
+					next, err := time.ParseInLocation(time.DateTime, tc.next, location)
+					require.NoError(t, err)
+					var last int64
+					if tc.last != "" {
+						previous, err := time.ParseInLocation(time.DateTime, tc.last, location)
+						require.NoError(t, err)
+						last = previous.Unix()
+					}
+					assert.Equal(t, next.Unix(), nextAutomaticAt(last, tc.minutes*60, now.Unix()))
+				})
+			}
+		})
+	}
+}
+
 func TestBenchmarkSettingsAndScheduleMatrix(t *testing.T) {
 	dialects := []string{"sqlite"}
 	if os.Getenv("BENCHMARK_TEST_EXTERNAL") == "1" {
@@ -118,8 +169,8 @@ func TestBenchmarkSettingsAndScheduleMatrix(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, s, stored)
 
-			now := time.Now().Unix()
-			states := []GroupState{{GroupName: "public", LastAutoAt: now - 3660}, {GroupName: "fast", LastAutoAt: now - 7140}}
+			now := time.Date(2026, time.November, 16, 12, 0, 15, 0, time.Local).Unix()
+			states := []GroupState{{GroupName: "public", LastAutoAt: now - 3660}, {GroupName: "fast", LastAutoAt: now - 10}}
 			require.NoError(t, db.Create(&states).Error)
 			due, err := scheduledGroups(db, s, now, "")
 			require.NoError(t, err)
@@ -142,13 +193,13 @@ func TestBenchmarkSettingsAndScheduleMatrix(t *testing.T) {
 				assert.Equal(t, 16384, limit)
 				return ProbeResult{Output: artwork, ChannelID: 99}, nil
 			}}
-			require.NoError(t, h.run(context.Background(), db, &model.SystemTask{TaskID: "manual", Payload: `{"group":"public"}`}))
+			require.NoError(t, h.run(context.Background(), db, &model.SystemTask{TaskID: "manual", Payload: `{"group":"public"}`}, now))
 			var state GroupState
 			require.NoError(t, db.Where("group_name = ?", "public").Take(&state).Error)
 			assert.Equal(t, now-3660, state.LastAutoAt, "manual checks must not postpone automatic checks")
 			assert.Equal(t, int64(1), state.SVGSequence)
-			require.NoError(t, h.run(context.Background(), db, &model.SystemTask{TaskID: "automatic"}))
-			require.NoError(t, h.run(context.Background(), db, &model.SystemTask{TaskID: "not-due"}))
+			require.NoError(t, h.run(context.Background(), db, &model.SystemTask{TaskID: "automatic"}, now))
+			require.NoError(t, h.run(context.Background(), db, &model.SystemTask{TaskID: "not-due"}, now+15))
 			var runs []Run
 			require.NoError(t, db.Order("id").Find(&runs).Error)
 			require.Len(t, runs, 4)
@@ -177,6 +228,32 @@ func TestBenchmarkSettingsAndScheduleMatrix(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, s, stored)
 
+			data, err := buildSnapshot(db, s, "member", now)
+			require.NoError(t, err)
+			require.Len(t, data.Groups, 2)
+			assert.Equal(t, now-15+3600, data.Groups[0].NextAt, "global hourly interval follows the clock")
+			assert.Equal(t, now-15+7200, data.Groups[1].NextAt, "group override follows its own clock interval")
+			nextStart := now - 15 + 3600 + 42
+			data, err = buildSnapshot(db, s, "member", nextStart)
+			require.NoError(t, err)
+			assert.Equal(t, nextStart-42, data.Groups[0].NextAt, "due snapshot and task must identify the same clock slot")
+			require.NoError(t, h.run(context.Background(), db, &model.SystemTask{TaskID: "next-hour"}, nextStart))
+			require.NoError(t, h.run(context.Background(), db, &model.SystemTask{TaskID: "same-slot"}, nextStart+10))
+			require.NoError(t, db.Where("group_name = ?", "public").Take(&state).Error)
+			assert.Equal(t, nextStart, state.LastAutoAt)
+			data, err = buildSnapshot(db, s, "member", nextStart+10)
+			require.NoError(t, err)
+			assert.Equal(t, now-15+7200, data.Groups[0].NextAt, "late dispatch must not shift the following hour")
+			var automatic []Run
+			require.NoError(t, db.Where("task_id = ?", "next-hour").Find(&automatic).Error)
+			require.Len(t, automatic, 2)
+			for _, run := range automatic {
+				assert.Equal(t, nextStart, run.CreatedAt, "history must retain the real start time")
+			}
+			var duplicates int64
+			require.NoError(t, db.Model(&Run{}).Where("task_id = ?", "same-slot").Count(&duplicates).Error)
+			assert.Zero(t, duplicates)
+
 			old := Run{GroupName: "public", Kind: "candy", Status: "passed", CreatedAt: now - 31*86400}
 			require.NoError(t, db.Create(&old).Error)
 			s.Enabled = false
@@ -186,12 +263,17 @@ func TestBenchmarkSettingsAndScheduleMatrix(t *testing.T) {
 			model.DB = db
 			assert.True(t, h.Enabled(), "disabled checks must still clean expired history")
 			model.DB = previousDB
-			require.NoError(t, h.run(context.Background(), db, &model.SystemTask{TaskID: "retention"}))
+			require.NoError(t, h.run(context.Background(), db, &model.SystemTask{TaskID: "retention"}, now))
 			var count int64
 			require.NoError(t, db.Model(&Run{}).Where("id = ?", old.ID).Count(&count).Error)
 			assert.Zero(t, count)
 			require.NoError(t, db.Where("group_name = ?", "public").Take(&state).Error)
-			assert.Equal(t, int64(2), state.SVGSequence, "retention must not reset rotation")
+			assert.Equal(t, int64(3), state.SVGSequence, "retention must not reset rotation")
+			data, err = buildSnapshot(db, s, "member", now)
+			require.NoError(t, err)
+			for _, group := range data.Groups {
+				assert.Zero(t, group.NextAt, "disabled checks have no next detection time")
+			}
 		})
 	}
 }
@@ -271,7 +353,7 @@ func TestBenchmarkCancellationAndWorkerFailurePersistInterruption(t *testing.T) 
 				<-ctx.Done()
 				return ProbeResult{}, ctx.Err()
 			}}
-			require.Error(t, h.run(ctx, db, &model.SystemTask{TaskID: "failed-batch", Payload: `{"group":"public"}`}))
+			require.Error(t, h.run(ctx, db, &model.SystemTask{TaskID: "failed-batch", Payload: `{"group":"public"}`}, time.Now().Unix()))
 			var runs []Run
 			require.NoError(t, db.Find(&runs).Error)
 			require.Len(t, runs, 2)
@@ -349,7 +431,7 @@ func TestBenchmarkHistoryRangeDoesNotChangeScheduleOrDailyTotals(t *testing.T) {
 			s, _, err = getSettings(db)
 			require.NoError(t, err)
 			assert.Equal(t, 48, s.HistoryHours, "old saved settings inherit the display default")
-			const now int64 = 1800000000
+			now := time.Date(2026, time.November, 16, 12, 30, 0, 0, time.Local).Unix()
 			state := GroupState{GroupName: "public", LastAutoAt: now - 1800}
 			require.NoError(t, db.Create(&state).Error)
 			runs := []Run{
@@ -377,8 +459,7 @@ func TestBenchmarkHistoryRangeDoesNotChangeScheduleOrDailyTotals(t *testing.T) {
 				assert.Equal(t, totals{CandyTotal: 1, CandyPassed: 1}, data.Summary)
 				due, err := scheduledGroups(db, stored, now, "")
 				require.NoError(t, err)
-				require.Len(t, due, 1)
-				assert.Equal(t, "fast", due[0].Group)
+				assert.Empty(t, due)
 				var savedState GroupState
 				require.NoError(t, db.Where("group_name = ?", "public").Take(&savedState).Error)
 				assert.Equal(t, state, savedState)
@@ -390,4 +471,254 @@ func TestBenchmarkHistoryRangeDoesNotChangeScheduleOrDailyTotals(t *testing.T) {
 			assert.Equal(t, 48, s.HistoryHours)
 		})
 	}
+}
+
+func TestBenchmarkRegenerationMatrix(t *testing.T) {
+	dialects := []string{"sqlite"}
+	if os.Getenv("BENCHMARK_TEST_EXTERNAL") == "1" {
+		dialects = append(dialects, "mysql", "postgres")
+	}
+	for _, dialect := range dialects {
+		t.Run(dialect, func(t *testing.T) {
+			db := benchmarkTestDB(t, dialect)
+			s := benchmarkTestSettings(t)
+			s, err := saveSettings(db, s)
+			require.NoError(t, err)
+			now := time.Date(2026, time.November, 16, 12, 17, 0, 0, time.Local).Unix()
+			state := GroupState{GroupName: "public", LastAutoAt: now - 1020, SVGSequence: 7}
+			require.NoError(t, db.Create(&state).Error)
+			// Reproduce the released schema before the two audit columns were added.
+			require.NoError(t, db.Migrator().DropColumn(&Run{}, "SourceRunID"))
+			require.NoError(t, db.Migrator().DropColumn(&Run{}, "RequestedBy"))
+			original := Run{GroupName: "public", Model: "saved-model", Kind: "candy", PromptName: "saved question", Prompt: "saved prompt", Expected: "21", Output: "27", Status: "wrong_answer", CreatedAt: now - 60}
+			require.NoError(t, db.Omit("SourceRunID", "RequestedBy").Create(&original).Error)
+			require.NoError(t, Migrate(db))
+			require.NoError(t, Migrate(db))
+			var saved Run
+			saved = Run{}
+			require.NoError(t, db.First(&saved, original.ID).Error)
+			assert.Equal(t, original, saved)
+			assert.True(t, db.Migrator().HasIndex(&Run{}, "idx_benchmark_source"))
+			assert.True(t, db.Migrator().HasIndex(&Run{}, "idx_benchmark_group_time"))
+			assert.Error(t, db.Create(&GroupState{GroupName: "public"}).Error)
+			before, err := buildSnapshot(db, s, "member", now)
+			require.NoError(t, err)
+			for _, kind := range []string{"candy", "svg", "request_failed"} {
+				t.Run(kind, func(t *testing.T) {
+					source := original
+					if kind != "candy" {
+						source.ID = 0
+						source.Kind = "svg"
+						source.PromptName = "saved artwork"
+						source.Output = "<svg><circle/></svg>"
+						source.Status = "passed"
+						if kind == "request_failed" {
+							source.Status = "request_failed"
+							source.Output = ""
+						}
+						require.NoError(t, db.Create(&source).Error)
+					}
+					regenerated, err := enqueueRegeneration(db, source, 42)
+					require.NoError(t, err)
+					duplicate, err := enqueueRegeneration(db, source, 42)
+					require.NoError(t, err)
+					assert.Equal(t, regenerated.ID, duplicate.ID)
+					_, err = enqueueRegeneration(db, source, 43)
+					require.ErrorIs(t, err, errRegenerationBusy)
+					assert.True(t, regenerated.Manual)
+					assert.Equal(t, source.ID, regenerated.SourceRunID)
+					assert.Equal(t, 42, regenerated.RequestedBy)
+					assert.Equal(t, source.Model, regenerated.Model)
+					assert.Equal(t, source.Prompt, regenerated.Prompt)
+					assert.Equal(t, source.Expected, regenerated.Expected)
+					assert.Equal(t, source.PromptName, regenerated.PromptName)
+					var task model.SystemTask
+					require.NoError(t, db.Where("task_id = ?", regenerated.TaskID).Take(&task).Error)
+					assert.Equal(t, regenerationTaskType, task.Type)
+					// Automatic housekeeping must not mark a queued manual probe interrupted.
+					require.NoError(t, (taskHandler{}).run(context.Background(), db, &model.SystemTask{TaskID: "not-due"}, now))
+					saved = Run{}
+					require.NoError(t, db.First(&saved, regenerated.ID).Error)
+					assert.Equal(t, "running", saved.Status)
+					calls := 0
+					h := regenerationHandler{execute: func(_ context.Context, group, model, prompt string, limit int) (ProbeResult, error) {
+						calls++
+						assert.Equal(t, source.GroupName, group)
+						assert.Equal(t, source.Model, model)
+						assert.Equal(t, source.Prompt, prompt)
+						if source.Kind == "candy" {
+							assert.Equal(t, s.CandyMaxTokens, limit)
+							return ProbeResult{Output: "21"}, nil
+						}
+						assert.Equal(t, s.SVGMaxTokens, limit)
+						return ProbeResult{Output: "<svg><circle/></svg>"}, nil
+					}}
+					require.NoError(t, h.run(context.Background(), db, &task))
+					assert.Equal(t, 1, calls)
+					saved = Run{}
+					require.NoError(t, db.First(&saved, regenerated.ID).Error)
+					assert.Equal(t, "passed", saved.Status)
+					encoded, err := common.Marshal(saved)
+					require.NoError(t, err)
+					assert.NotContains(t, string(encoded), "requested_by")
+					assert.NotContains(t, string(encoded), regenerated.TaskID)
+					var unchanged Run
+					require.NoError(t, db.First(&unchanged, source.ID).Error)
+					assert.Equal(t, source, unchanged)
+					var cursor GroupState
+					require.NoError(t, db.First(&cursor).Error)
+					assert.Equal(t, state, cursor, "regeneration must not advance the automatic schedule or SVG rotation")
+					after, err := buildSnapshot(db, s, "member", now)
+					require.NoError(t, err)
+					assert.Equal(t, before.Groups[0].NextAt, after.Groups[0].NextAt)
+					require.NoError(t, db.Model(&task).Updates(map[string]any{"status": model.SystemTaskStatusSucceeded, "active_key": nil}).Error)
+				})
+			}
+			require.NoError(t, Migrate(db))
+			require.NoError(t, Migrate(db))
+			saved = Run{}
+			require.NoError(t, db.First(&saved, original.ID).Error)
+			assert.Equal(t, original, saved)
+		})
+	}
+}
+
+func TestBenchmarkRegenerationInterruptedOrDisabled(t *testing.T) {
+	for _, failure := range []string{"cancel", "panic", "disabled"} {
+		t.Run(failure, func(t *testing.T) {
+			db := benchmarkTestDB(t, "sqlite")
+			s := benchmarkTestSettings(t)
+			s, err := saveSettings(db, s)
+			require.NoError(t, err)
+			source := Run{GroupName: "public", Kind: "candy", Model: "gpt-4o", Prompt: "saved", Expected: "21", Status: "request_failed"}
+			require.NoError(t, db.Create(&source).Error)
+			run, err := enqueueRegeneration(db, source, 42)
+			require.NoError(t, err)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if failure == "disabled" {
+				s.Enabled = false
+				_, err = saveSettings(db, s)
+				require.NoError(t, err)
+			}
+			calls := 0
+			handler := regenerationHandler{execute: func(ctx context.Context, _, _, _ string, _ int) (ProbeResult, error) {
+				calls++
+				if failure == "panic" {
+					panic("provider credentials must never leak")
+				}
+				cancel()
+				<-ctx.Done()
+				return ProbeResult{}, ctx.Err()
+			}}
+			err = handler.run(ctx, db, &model.SystemTask{TaskID: run.TaskID})
+			if failure == "disabled" {
+				require.NoError(t, err)
+				assert.Zero(t, calls)
+			} else {
+				require.Error(t, err)
+			}
+			require.NoError(t, db.First(&run, run.ID).Error)
+			assert.Equal(t, "interrupted", run.Status)
+			assert.Empty(t, run.Output)
+			assert.Equal(t, "interrupted", run.ErrorCode)
+		})
+	}
+}
+
+func TestBenchmarkRegenerationAdminAuthorization(t *testing.T) {
+	require.NoError(t, i18n.Init())
+	db := benchmarkTestDB(t, "sqlite")
+	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.UserAccessToken{}, &model.AuditLog{}))
+	s := benchmarkTestSettings(t)
+	s, err := saveSettings(db, s)
+	require.NoError(t, err)
+	source := Run{GroupName: "public", Kind: "candy", Model: "gpt-4o", Prompt: "saved", Expected: "21", Status: "wrong_answer"}
+	require.NoError(t, db.Create(&source).Error)
+	previousDB, previousLogs := model.DB, model.LOG_DB
+	previousRedis, previousRate, previousSecret := common.RedisEnabled, common.CriticalRateLimitEnable, common.SessionSecret
+	previousTrusted := common.SessionCookieTrustedURLs
+	model.DB, model.LOG_DB, common.RedisEnabled, common.CriticalRateLimitEnable = db, db, false, false
+	common.SessionSecret, common.SessionCookieTrustedURLs = "benchmark-regeneration-test-signing-key", nil
+	t.Cleanup(func() {
+		model.DB, model.LOG_DB = previousDB, previousLogs
+		common.RedisEnabled, common.CriticalRateLimitEnable, common.SessionSecret = previousRedis, previousRate, previousSecret
+		common.SessionCookieTrustedURLs = previousTrusted
+	})
+	credentials := map[int]string{}
+	sessions := map[int]model.UserSession{}
+	for _, role := range []int{common.RoleCommonUser, common.RoleAdminUser, common.RoleRootUser} {
+		name := "benchmark-" + strconv.Itoa(role)
+		user := model.User{Username: name, AffCode: name, Role: role, Status: common.UserStatusEnabled, Group: "member", AuthVersion: 1}
+		require.NoError(t, db.Create(&user).Error)
+		session := model.UserSession{SID: name, UserID: user.Id, Version: 1, UserAuthVersion: 1, Status: model.UserSessionStatusActive, RefreshHash: "unusable", LoginMethod: "test", LastActiveAt: time.Now().Unix(), ExpiresAt: time.Now().Unix() + 3600}
+		require.NoError(t, model.CreateUserSession(&session))
+		sessions[role] = session
+		credentials[role], _, err = service.IssueAccessToken(service.AuthIdentity{UserID: user.Id, SessionID: session.SID, UserAuthVersion: 1, SessionVersion: 1})
+		require.NoError(t, err)
+	}
+	router := gin.New()
+	RegisterRoutes(router.Group("/api"))
+	request := func(role int, origin string, id int64) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "http://benchmark.example/api/extensions/benchmark/admin/runs/"+strconv.FormatInt(id, 10)+"/regenerate", nil)
+		if credentials[role] != "" {
+			req.Header.Set("Authorization", "Bearer "+credentials[role])
+		}
+		if origin != "" {
+			req.Header.Set("Origin", origin)
+		}
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, req)
+		return response
+	}
+	for _, role := range []int{0, common.RoleCommonUser} {
+		assert.Contains(t, []int{http.StatusUnauthorized, http.StatusForbidden}, request(role, "http://benchmark.example", source.ID).Code)
+	}
+	for _, origin := range []string{"", "https://untrusted.example"} {
+		assert.Equal(t, http.StatusForbidden, request(common.RoleAdminUser, origin, source.ID).Code)
+	}
+	private := source
+	private.ID = 0
+	private.GroupName = "private"
+	require.NoError(t, db.Create(&private).Error)
+	assert.Equal(t, http.StatusNotFound, request(common.RoleAdminUser, "http://benchmark.example", private.ID).Code)
+	for _, role := range []int{common.RoleAdminUser, common.RoleRootUser} {
+		response := request(role, "http://benchmark.example", source.ID)
+		require.Equal(t, http.StatusOK, response.Code)
+		assert.Contains(t, response.Body.String(), `"success":true`)
+		assert.NotContains(t, response.Body.String(), "requested_by")
+		assert.NotContains(t, response.Body.String(), credentials[role])
+		require.NoError(t, db.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&model.SystemTask{}).Error)
+	}
+	for _, edit := range []string{"running", "plugin", "group", "kind"} {
+		t.Run(edit, func(t *testing.T) {
+			modified := s
+			modified.Groups = append([]GroupSettings(nil), s.Groups...)
+			if edit == "running" {
+				require.NoError(t, db.Model(&source).Update("status", "running").Error)
+			}
+			if edit == "plugin" {
+				modified.Enabled = false
+			}
+			if edit == "group" {
+				modified.Groups[0].Enabled = false
+			}
+			if edit == "kind" {
+				modified.Groups[0].CandyEnabled = false
+			}
+			_, err = saveSettings(db, modified)
+			require.NoError(t, err)
+			response := request(common.RoleAdminUser, "http://benchmark.example", source.ID)
+			assert.Contains(t, response.Body.String(), `"success":false`)
+			current, _, err := getSettings(db)
+			require.NoError(t, err)
+			s.Revision = current.Revision
+			s, err = saveSettings(db, s)
+			require.NoError(t, err)
+			require.NoError(t, db.Model(&source).Update("status", "wrong_answer").Error)
+		})
+	}
+	session := sessions[common.RoleAdminUser]
+	require.NoError(t, db.Model(&session).Update("status", "revoked").Error)
+	assert.Equal(t, http.StatusUnauthorized, request(common.RoleAdminUser, "http://benchmark.example", source.ID).Code)
 }

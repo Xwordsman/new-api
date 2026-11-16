@@ -256,9 +256,13 @@ func executeChannelTest(ctx context.Context, channel *model.Channel, testUserID 
 			if err != nil {
 				return testResult{localErr: err}
 			}
-			request = &dto.OpenAIResponsesRequest{Model: testModel, Input: input, MaxOutputTokens: &probe.maxTokens, Stream: common.GetPointer(false)}
+			request = &dto.OpenAIResponsesRequest{Model: testModel, Input: input, MaxOutputTokens: &probe.maxTokens, Stream: common.GetPointer(isStream)}
 		} else {
-			request = &dto.GeneralOpenAIRequest{Model: testModel, Messages: []dto.Message{{Role: "user", Content: probe.prompt}}, MaxCompletionTokens: &probe.maxTokens, Stream: common.GetPointer(false)}
+			probeRequest := &dto.GeneralOpenAIRequest{Model: testModel, Messages: []dto.Message{{Role: "user", Content: probe.prompt}}, MaxCompletionTokens: &probe.maxTokens, Stream: common.GetPointer(isStream)}
+			if testRequest, ok := request.(*dto.GeneralOpenAIRequest); ok {
+				probeRequest.StreamOptions = testRequest.StreamOptions
+			}
+			request = probeRequest
 		}
 	}
 
@@ -274,6 +278,12 @@ func executeChannelTest(ctx context.Context, channel *model.Channel, testUserID 
 
 	info.IsChannelTest = true
 	info.InitChannelMeta(c)
+	if probe != nil && isStream {
+		// Keep terminal frames with usage and keep reasoning separate from the
+		// visible answer used for grading, regardless of channel UI settings.
+		info.ShouldIncludeUsage = true
+		info.ChannelSetting.ThinkingToContent = false
+	}
 
 	err = attachTestBillingRequestInput(info, request)
 	if err != nil {
@@ -503,7 +513,7 @@ func executeChannelTest(ctx context.Context, channel *model.Channel, testUserID 
 		if probe != nil {
 			// Bound the entire upstream envelope before any provider decoder reads
 			// it. Model-generated documents must not exhaust gateway memory.
-			httpResp.Body = http.MaxBytesReader(c.Writer, httpResp.Body, 2<<20)
+			httpResp.Body = http.MaxBytesReader(c.Writer, httpResp.Body, 8<<20)
 		}
 		if httpResp.StatusCode != http.StatusOK {
 			err := service.RelayErrorHandler(c.Request.Context(), httpResp, true)
@@ -541,7 +551,9 @@ func executeChannelTest(ctx context.Context, channel *model.Channel, testUserID 
 		}
 	}
 	result := w.Result()
-	respBody, err := readTestResponseBody(result.Body, isStream)
+	// Probes need the complete document, rather than the 8 KiB channel-test
+	// preview. The upstream envelope is bounded before adaptor decoding.
+	respBody, err := readTestResponseBody(result.Body, isStream && probe == nil)
 	if err != nil {
 		return testResult{
 			context:     c,
@@ -554,6 +566,12 @@ func executeChannelTest(ctx context.Context, channel *model.Channel, testUserID 
 			context:     c,
 			localErr:    bodyErr,
 			newAPIError: types.NewOpenAIError(bodyErr, types.ErrorCodeBadResponseBody, http.StatusInternalServerError),
+		}
+	}
+	if probe != nil && isStream && info.StreamStatus != nil {
+		outcome := info.StreamStatus.OutcomeSnapshot()
+		if outcome.HasErrors || !info.StreamStatus.IsNormalEnd() || outcome.Response == relaycommon.ResponseOutcomeFailed || outcome.Response == relaycommon.ResponseOutcomeCancelled || (outcome.ExpectsTerminal && outcome.Response == relaycommon.ResponseOutcomeUnknown) {
+			return testResult{localErr: errors.New("benchmark stream interrupted")}
 		}
 	}
 	info.SetEstimatePromptTokens(usage.PromptTokens)

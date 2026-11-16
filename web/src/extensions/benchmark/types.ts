@@ -61,6 +61,8 @@ export type RunSummary = {
   created_at: number
   latency_ms: number
   prompt_name: string
+  manual?: boolean
+  source_run_id?: number
 }
 
 export type BenchmarkRun = RunSummary & {
