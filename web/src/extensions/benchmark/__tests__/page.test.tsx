@@ -29,6 +29,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import en from '@/i18n/locales/en.json'
 import zh from '@/i18n/locales/zh.json'
 import { api } from '@/lib/api'
+import { formatTimestamp } from '@/lib/format'
 import { createAppQueryClient } from '@/lib/query-client'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
@@ -93,6 +94,7 @@ const group: BenchmarkGroup = {
 }
 const snapshot: Snapshot = {
   enabled: true,
+  history_hours: 24,
   updated_at: 1800000000,
   refresh_seconds: 15,
   groups: [
@@ -260,12 +262,55 @@ it('keeps empty hourly slots visible instead of stretching a single result acros
   expect(
     within(lane).getByRole('button', { name: /Answer mismatch/ })
   ).toHaveAttribute('aria-pressed', 'false')
+  const cells = within(lane).getAllByRole('button')[0]
+    .parentElement as HTMLElement
+  expect(getComputedStyle(cells).justifyContent).toBe('flex-start')
+  expect(getComputedStyle(cells).gap).toBe('var(--benchmark-cell-gap)')
   for (const cell of within(lane).getAllByRole('button')) {
     const style = getComputedStyle(cell)
     expect(style.height).toBe('28px')
     expect(style.maxWidth).toBe('16px')
     expect(style.flexShrink).toBe('1')
   }
+})
+
+it('uses the configured 72-hour range with local scrolling and keeps detection frequency unchanged', async () => {
+  renderPage({ ...snapshot, history_hours: 72, groups: [group] })
+  const lane = await screen.findByRole('region', { name: 'Candy logic' })
+  expect(within(lane).getAllByRole('button')).toHaveLength(72)
+  expect(screen.getByText('Every 60 min')).toBeVisible()
+  expect(screen.getByText('−36 hours')).toBeVisible()
+  expect(
+    screen.getByText(formatTimestamp(snapshot.updated_at - 72 * 3600))
+  ).toBeVisible()
+  const scroller = lane.closest('.benchmark-lanes') as HTMLElement
+  expect(getComputedStyle(scroller).overflowX).toBe('auto')
+})
+
+it('keeps daily latency statistics unchanged when older results are included in the display range', async () => {
+  renderPage({
+    ...snapshot,
+    history_hours: 72,
+    groups: [
+      {
+        ...group,
+        runs: [
+          run,
+          {
+            ...run,
+            id: 24,
+            created_at: run.created_at - 49 * 3600,
+            latency_ms: 100000,
+          },
+        ],
+      },
+    ],
+  })
+  expect(await screen.findByText('1.2s')).toBeVisible()
+  const lane = screen.getByRole('region', { name: 'Candy logic' })
+  expect(
+    within(lane).getAllByRole('button', { name: /Answer mismatch/ })
+  ).toHaveLength(2)
 })
 
 it('preserves saved question line breaks and caps the expanded SVG preview at 400 by 300 without limiting the dialog', async () => {

@@ -39,6 +39,7 @@ type Settings struct {
 	Revision        int64           `json:"revision"`
 	Enabled         bool            `json:"enabled"`
 	IntervalMinutes int             `json:"interval_minutes"`
+	HistoryHours    int             `json:"history_hours"`
 	TimeoutSeconds  int             `json:"timeout_seconds"`
 	CandyMaxTokens  int             `json:"candy_max_tokens"`
 	SVGMaxTokens    int             `json:"svg_max_tokens"`
@@ -51,7 +52,7 @@ type Settings struct {
 
 func defaultSettings() Settings {
 	return Settings{
-		IntervalMinutes: 60, TimeoutSeconds: 300, CandyMaxTokens: 4096, SVGMaxTokens: 16384, RetentionDays: 30,
+		IntervalMinutes: 60, HistoryHours: 48, TimeoutSeconds: 300, CandyMaxTokens: 4096, SVGMaxTokens: 16384, RetentionDays: 30,
 		CandyPrompt: "在一个黑色的袋子里放有三种口味的糖果，每种糖果有两种不同的形状（圆形和五角星形）。摸取前可以用手感辨别形状并选择要取出的形状，但不能辨别口味；取出的糖果不放回。参赛者需要事先分别决定取多少颗圆形糖、多少颗五角星形糖。现已知数量如下表。最少取出多少颗糖果（两种形状的合计），才能保证手中有圆形苹果味和五角星桃子味的组合，或者圆形桃子味和五角星苹果味的组合？\n\n| 形状 | 苹果味 | 桃子味 | 西瓜味 |\n| 圆形 | 7 | 9 | 8 |\n| 五角星形 | 7 | 6 | 4 |\n\n请只返回最少糖果数，用一个阿拉伯数字回答，不要解释。",
 		CandyAnswer: "21",
 		SVGPrompts:  []SVGPrompt{{Name: "Octopus drummer", Enabled: true, Prompt: "创建一个 HTML，用 SVG 绘制一只章鱼打架子鼓的 2D 动画：章鱼有 8 条可辨的触手，分别握着鼓棒，同时敲击底鼓、军鼓、镲片等至少 5 件鼓组部件，敲击节奏要稳定循环，被击中的部件有震动或闪光反馈，章鱼头部随节拍轻微点动。所有样式与脚本内联，不引用外部资源。只返回完整单文件 HTML，必须包含 SVG；不要解释或 Markdown 围栏。"}},
@@ -80,7 +81,11 @@ func getSettings(db *gorm.DB) (Settings, string, error) {
 }
 
 func saveSettings(db *gorm.DB, settings Settings) (Settings, error) {
+	if settings.HistoryHours == 0 {
+		settings.HistoryHours = 48 // Clients predating the display setting omit this field.
+	}
 	if settings.Revision < 0 || settings.Revision == math.MaxInt64 || settings.IntervalMinutes < 5 || settings.IntervalMinutes > 10080 ||
+		(settings.HistoryHours != 24 && settings.HistoryHours != 48 && settings.HistoryHours != 72) ||
 		settings.TimeoutSeconds < 10 || settings.TimeoutSeconds > 600 || settings.RetentionDays < 1 || settings.RetentionDays > 90 ||
 		settings.CandyMaxTokens < 16 || settings.CandyMaxTokens > 32768 || settings.SVGMaxTokens < 128 || settings.SVGMaxTokens > 32768 ||
 		len(settings.Groups) > 24 || len(settings.SVGPrompts) > 24 {

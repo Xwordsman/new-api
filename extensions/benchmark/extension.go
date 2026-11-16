@@ -108,6 +108,7 @@ type snapshot struct {
 	Enabled        bool          `json:"enabled"`
 	UpdatedAt      int64         `json:"updated_at"`
 	RefreshSeconds int           `json:"refresh_seconds"`
+	HistoryHours   int           `json:"history_hours"`
 	Groups         []publicGroup `json:"groups"`
 	Summary        totals        `json:"summary"`
 }
@@ -135,7 +136,7 @@ func getSnapshot(c *gin.Context) {
 }
 
 func buildSnapshot(db *gorm.DB, s Settings, userGroup string, now int64) (snapshot, error) {
-	data := snapshot{Enabled: s.Enabled, UpdatedAt: now, RefreshSeconds: 15, Groups: []publicGroup{}}
+	data := snapshot{Enabled: s.Enabled, UpdatedAt: now, RefreshSeconds: 15, HistoryHours: s.HistoryHours, Groups: []publicGroup{}}
 	for _, config := range visibleGroups(s, userGroup) {
 		g := publicGroup{GroupSettings: config, IntervalSeconds: config.interval(s), Runs: []RunSummary{}}
 		var latest GroupState
@@ -147,7 +148,7 @@ func buildSnapshot(db *gorm.DB, s Settings, userGroup string, now int64) (snapsh
 			g.NextAt = max(now, latest.LastAutoAt+g.IntervalSeconds)
 		}
 		var runs []Run
-		err = db.Select("id", "kind", "status", "created_at", "latency_ms", "prompt_name").Where("group_name = ? AND created_at >= ?", config.Group, now-86400).Order("id DESC").Limit(600).Find(&runs).Error
+		err = db.Select("id", "kind", "status", "created_at", "latency_ms", "prompt_name").Where("group_name = ? AND created_at >= ?", config.Group, now-int64(s.HistoryHours)*3600).Order("id DESC").Limit(600 * s.HistoryHours / 24).Find(&runs).Error
 		if err != nil {
 			return data, err
 		}

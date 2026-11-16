@@ -20,16 +20,18 @@ import type { RunSummary } from '../types'
 
 export type TimelineSlot = { start: number; runs: RunSummary[] }
 
-// Keep a full day of scheduled windows even when the group has only one check.
+// Display range is independent of how often a group is checked.
 // Preserve every retest in its window so a later pass cannot hide a failure.
 export function buildTimeline(
   runs: RunSummary[],
   intervalSeconds: number,
   nextAt: number,
-  now: number
+  now: number,
+  historyHours = 48
 ): TimelineSlot[] {
   const interval = Math.max(60, intervalSeconds || 3600)
-  const count = Math.max(1, Math.ceil(86400 / interval))
+  const rangeSeconds = historyHours * 3600
+  const count = Math.max(1, Math.ceil(rangeSeconds / interval))
   const anchor = nextAt > 0 ? nextAt : now
   const latestStart = anchor + Math.floor((now - anchor) / interval) * interval
   const firstStart = latestStart - (count - 1) * interval
@@ -38,7 +40,7 @@ export function buildTimeline(
     runs: [],
   }))
   for (const run of runs) {
-    if (run.created_at <= now - 86400 || run.created_at > now) continue
+    if (run.created_at <= now - rangeSeconds || run.created_at > now) continue
     const index = Math.min(
       count - 1,
       Math.max(0, Math.floor((run.created_at - firstStart) / interval))

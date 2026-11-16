@@ -363,6 +363,7 @@ export function BenchmarkPage() {
                     key={g.group}
                     group={g}
                     now={data.updated_at}
+                    historyHours={data.history_hours}
                     paused={paused}
                     onOpen={setDetail}
                   />

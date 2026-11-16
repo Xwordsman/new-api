@@ -38,6 +38,10 @@ export const benchmarkSettingsSchema = z
     revision: integer(0, Number.MAX_SAFE_INTEGER),
     enabled: z.boolean(),
     interval_minutes: integer(5, 10080),
+    history_hours: integer(24, 72).refine(
+      (hours) => [24, 48, 72].includes(hours),
+      invalid
+    ),
     timeout_seconds: integer(10, 600),
     candy_max_tokens: integer(16, 32768),
     svg_max_tokens: integer(128, 32768),

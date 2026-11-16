@@ -33,6 +33,7 @@ const fixture: SettingsResponse = {
     revision: 2,
     enabled: false,
     interval_minutes: 60,
+    history_hours: 48,
     timeout_seconds: 300,
     retention_days: 30,
     candy_max_tokens: 4096,
@@ -73,6 +74,43 @@ function renderSettings(data = fixture) {
   )
   return client
 }
+
+it('saves the history display range independently from global and group detection intervals', async () => {
+  const user = userEvent.setup()
+  const client = renderSettings()
+  const range = await screen.findByRole('combobox', {
+    name: 'History display range',
+  })
+  expect(range).toHaveValue('48')
+  await user.selectOptions(range, '72')
+  const saved = { ...fixture.settings, revision: 3, history_hours: 72 }
+  const put = vi
+    .spyOn(api, 'put')
+    .mockResolvedValue({ data: { success: true, data: saved } })
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() =>
+    expect(put).toHaveBeenCalledWith(
+      '/api/extensions/benchmark/admin/settings',
+      {
+        ...fixture.settings,
+        history_hours: 72,
+      }
+    )
+  )
+  expect(
+    screen.getByRole('spinbutton', { name: 'Default interval (minutes)' })
+  ).toHaveValue(60)
+  client.clear()
+})
+
+it('rejects unsupported history ranges without accepting arbitrary hours', () => {
+  expect(
+    benchmarkSettingsSchema.safeParse({
+      ...fixture.settings,
+      history_hours: 36,
+    }).success
+  ).toBe(false)
+})
 
 it('starts at 60 minutes with group settings collapsed and preserves edits across collapse and save', async () => {
   const user = userEvent.setup()

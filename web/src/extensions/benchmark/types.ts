@@ -30,6 +30,7 @@ export type BenchmarkSettings = {
   enabled: boolean
   interval_minutes: number
   timeout_seconds: number
+  history_hours: number
   candy_max_tokens: number
   svg_max_tokens: number
   retention_days: number
@@ -94,6 +95,7 @@ export type Snapshot = {
   enabled: boolean
   updated_at: number
   refresh_seconds: number
+  history_hours: number
   groups: BenchmarkGroup[]
   summary: Totals
 }

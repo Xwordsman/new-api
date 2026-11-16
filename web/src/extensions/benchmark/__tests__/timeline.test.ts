@@ -30,9 +30,47 @@ const result: RunSummary = {
   prompt_name: '',
 }
 
-describe('24-hour benchmark timeline', () => {
+describe('benchmark history display range', () => {
+  it.each([24, 48, 72])(
+    'shows %i hours without changing the hourly detection interval',
+    (hours) => {
+      const older = {
+        ...result,
+        id: 2,
+        created_at: result.created_at - 25 * 3600,
+      }
+      const slots = buildTimeline(
+        [result, older],
+        3600,
+        1800003600,
+        1800000000,
+        hours
+      )
+      expect(slots).toHaveLength(hours)
+      expect(slots[1].start - slots[0].start).toBe(3600)
+      expect(slots.flatMap((slot) => slot.runs)).toEqual(
+        hours === 24 ? [result] : [older, result]
+      )
+    }
+  )
+
+  it('defaults to 48 hours and excludes expired and future results', () => {
+    const slots = buildTimeline(
+      [
+        result,
+        { ...result, id: 2, created_at: result.created_at - 48 * 3600 },
+        { ...result, id: 3, created_at: result.created_at + 1 },
+      ],
+      3600,
+      1800003600,
+      1800000000
+    )
+    expect(slots).toHaveLength(48)
+    expect(slots.flatMap((slot) => slot.runs)).toEqual([result])
+  })
+
   it('reserves 24 hourly slots with only the newest slot filled for one result', () => {
-    const slots = buildTimeline([result], 3600, 1800003600, 1800000000)
+    const slots = buildTimeline([result], 3600, 1800003600, 1800000000, 24)
     expect(slots).toHaveLength(24)
     expect(slots.slice(0, 23).every((slot) => slot.runs.length === 0)).toBe(
       true
@@ -47,7 +85,13 @@ describe('24-hour benchmark timeline', () => {
       status: 'wrong_answer' as const,
       created_at: result.created_at - 60,
     }
-    const slots = buildTimeline([result, failed], 1800, 1800001800, 1800000100)
+    const slots = buildTimeline(
+      [result, failed],
+      1800,
+      1800001800,
+      1800000100,
+      24
+    )
     expect(slots).toHaveLength(48)
     expect(
       slots
@@ -66,7 +110,8 @@ describe('24-hour benchmark timeline', () => {
       ],
       3600,
       1800003600,
-      1800000000
+      1800000000,
+      24
     )
     expect(slots.flatMap((slot) => slot.runs)).toEqual([result])
   })

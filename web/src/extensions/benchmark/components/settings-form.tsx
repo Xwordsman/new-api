@@ -43,6 +43,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { STATUS_QUERY_KEY } from '@/lib/status-query'
@@ -130,6 +131,36 @@ export function BenchmarkSettingsForm(props: { data: SettingsResponse }) {
               )}
             />
             <div className='grid gap-5 sm:grid-cols-2 lg:grid-cols-3'>
+              <FormField
+                control={form.control}
+                name='history_hours'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('History display range')}</FormLabel>
+                    <FormControl>
+                      <NativeSelect
+                        {...field}
+                        className='w-full'
+                        onChange={(event) =>
+                          field.onChange(Number(event.target.value))
+                        }
+                      >
+                        {[24, 48, 72].map((hours) => (
+                          <NativeSelectOption key={hours} value={hours}>
+                            {t('{{count}} hours', { count: hours })}
+                          </NativeSelectOption>
+                        ))}
+                      </NativeSelect>
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Only changes the timeline range. Detection frequency and costs stay the same. Records older than the retention period are not shown.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               {(
                 [
                   [

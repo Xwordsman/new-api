@@ -204,6 +204,7 @@ func TestBenchmarkRejectsInvalidConfiguration(t *testing.T) {
 		edit func(*Settings)
 	}{
 		{"too frequent", func(s *Settings) { s.IntervalMinutes = 1 }},
+		{"unsupported history range", func(s *Settings) { s.HistoryHours = 36 }},
 		{"unbounded timeout", func(s *Settings) { s.TimeoutSeconds = 601 }},
 		{"unbounded output", func(s *Settings) { s.SVGMaxTokens = 32769 }},
 		{"empty answer", func(s *Settings) { s.CandyAnswer = " " }},
@@ -286,6 +287,7 @@ func TestBenchmarkCancellationAndWorkerFailurePersistInterruption(t *testing.T) 
 func TestBenchmarkSnapshotAndDetailRespectVisibilityAndKeepFullTotals(t *testing.T) {
 	db := benchmarkTestDB(t, "sqlite")
 	s := benchmarkTestSettings(t)
+	s.HistoryHours = 24
 	_, err := saveSettings(db, s)
 	require.NoError(t, err)
 	now := time.Now().Unix()
@@ -325,4 +327,67 @@ func TestBenchmarkSnapshotAndDetailRespectVisibilityAndKeepFullTotals(t *testing
 	getArtworks(c)
 	assert.Contains(t, recorder.Body.String(), `"items":[]`)
 	assert.Contains(t, recorder.Body.String(), `"total":0`)
+}
+
+func TestBenchmarkHistoryRangeDoesNotChangeScheduleOrDailyTotals(t *testing.T) {
+	dialects := []string{"sqlite"}
+	if os.Getenv("BENCHMARK_TEST_EXTERNAL") == "1" {
+		dialects = append(dialects, "mysql", "postgres")
+	}
+	for _, dialect := range dialects {
+		t.Run(dialect, func(t *testing.T) {
+			db := benchmarkTestDB(t, dialect)
+			s := benchmarkTestSettings(t)
+			encoded, err := common.Marshal(s)
+			require.NoError(t, err)
+			var legacy map[string]any
+			require.NoError(t, common.Unmarshal(encoded, &legacy))
+			delete(legacy, "history_hours")
+			encoded, err = common.Marshal(legacy)
+			require.NoError(t, err)
+			require.NoError(t, db.Create(&model.Option{Key: settingsKey, Value: string(encoded)}).Error)
+			s, _, err = getSettings(db)
+			require.NoError(t, err)
+			assert.Equal(t, 48, s.HistoryHours, "old saved settings inherit the display default")
+			const now int64 = 1800000000
+			state := GroupState{GroupName: "public", LastAutoAt: now - 1800}
+			require.NoError(t, db.Create(&state).Error)
+			runs := []Run{
+				{GroupName: "public", Kind: "candy", Status: "passed", CreatedAt: now},
+				{GroupName: "public", Kind: "candy", Status: "wrong_answer", CreatedAt: now - 25*3600},
+				{GroupName: "public", Kind: "svg", Status: "passed", CreatedAt: now - 49*3600},
+				{GroupName: "public", Kind: "svg", Status: "passed", CreatedAt: now - 73*3600},
+			}
+			require.NoError(t, db.Create(&runs).Error)
+			for i, hours := range []int{24, 48, 72} {
+				s.HistoryHours = hours
+				s, err = saveSettings(db, s)
+				require.NoError(t, err)
+				stored, _, err := getSettings(db)
+				require.NoError(t, err)
+				assert.Equal(t, hours, stored.HistoryHours)
+				assert.Equal(t, 60, stored.IntervalMinutes)
+				assert.Equal(t, 120, stored.Groups[1].IntervalMinutes)
+				data, err := buildSnapshot(db, stored, "member", now)
+				require.NoError(t, err)
+				assert.Equal(t, hours, data.HistoryHours)
+				require.Len(t, data.Groups, 2)
+				assert.Len(t, data.Groups[0].Runs, i+1)
+				assert.Equal(t, now+1800, data.Groups[0].NextAt)
+				assert.Equal(t, totals{CandyTotal: 1, CandyPassed: 1}, data.Summary)
+				due, err := scheduledGroups(db, stored, now, "")
+				require.NoError(t, err)
+				require.Len(t, due, 1)
+				assert.Equal(t, "fast", due[0].Group)
+				var savedState GroupState
+				require.NoError(t, db.Where("group_name = ?", "public").Take(&savedState).Error)
+				assert.Equal(t, state, savedState)
+			}
+			// Older clients omit the field; accepting them must not disable history.
+			s.HistoryHours = 0
+			s, err = saveSettings(db, s)
+			require.NoError(t, err)
+			assert.Equal(t, 48, s.HistoryHours)
+		})
+	}
 }

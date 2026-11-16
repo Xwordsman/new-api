@@ -142,6 +142,28 @@ For commercial licensing, please contact support@quantumnous.com
 }
 .benchmark-lanes {
   min-width: 0;
+  overflow-x: auto;
+  padding: 3px;
+  margin: -3px;
+}
+.benchmark-timeline {
+  --benchmark-label-width: 92px;
+  --benchmark-count-width: 64px;
+  --benchmark-lane-gap: 12px;
+  --benchmark-cell-gap: 3px;
+  --benchmark-chrome-width: calc(
+    var(--benchmark-label-width) + var(--benchmark-count-width) + 2 *
+      var(--benchmark-lane-gap)
+  );
+  width: 100%;
+  min-width: calc(
+    var(--benchmark-chrome-width) + var(--benchmark-slots) *
+      (4px + var(--benchmark-cell-gap)) - var(--benchmark-cell-gap)
+  );
+  max-width: calc(
+    var(--benchmark-chrome-width) + var(--benchmark-slots) *
+      (16px + var(--benchmark-cell-gap)) - var(--benchmark-cell-gap)
+  );
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -149,8 +171,10 @@ For commercial licensing, please contact support@quantumnous.com
 .benchmark-lane {
   min-width: 0;
   display: grid;
-  grid-template-columns: 92px minmax(0, 1fr) 64px;
-  gap: 12px;
+  grid-template-columns: var(--benchmark-label-width) minmax(0, 1fr) var(
+      --benchmark-count-width
+    );
+  gap: var(--benchmark-lane-gap);
   align-items: center;
 }
 .benchmark-lane-name {
@@ -173,14 +197,14 @@ For commercial licensing, please contact support@quantumnous.com
 .benchmark-lane-cells {
   min-width: 0;
   display: flex;
-  justify-content: space-between;
-  gap: 3px;
+  justify-content: flex-start;
+  gap: var(--benchmark-cell-gap);
 }
 .benchmark-lane-cell {
   height: 28px;
   width: auto;
   max-width: 16px;
-  min-width: 0;
+  min-width: 4px;
   padding: 0;
   border: 0;
   border-radius: 2px;
@@ -233,22 +257,32 @@ For commercial licensing, please contact support@quantumnous.com
   overflow-wrap: anywhere;
 }
 .benchmark-lane-axis {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  padding-left: 104px;
-  padding-right: 76px;
+  padding-left: calc(var(--benchmark-label-width) + var(--benchmark-lane-gap));
+  padding-right: calc(var(--benchmark-count-width) + var(--benchmark-lane-gap));
   color: var(--muted-foreground);
   font: 9px/14px var(--font-mono);
 }
 .benchmark-lane-axis span:first-child {
-  flex: 1;
+  overflow-wrap: anywhere;
 }
 .benchmark-lane-axis span:not(:first-child) {
   text-align: right;
-  flex: 0.6;
   white-space: nowrap;
+}
+.benchmark-lane-axis span:nth-child(2) {
+  text-align: center;
+}
+.benchmark-lane-axis[data-compact='true'] {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0;
+}
+.benchmark-lane-axis[data-compact='true'] span:nth-child(2) {
+  display: none;
 }
 .benchmark-art {
   min-width: 0;
@@ -450,22 +484,17 @@ For commercial licensing, please contact support@quantumnous.com
   .benchmark-group-stats {
     max-width: 360px;
   }
-  .benchmark-lane {
-    grid-template-columns: 76px minmax(0, 1fr) 44px;
-    gap: 8px;
-  }
-  .benchmark-lane-cells {
-    gap: 2px;
+  .benchmark-timeline {
+    --benchmark-label-width: 76px;
+    --benchmark-count-width: 44px;
+    --benchmark-lane-gap: 8px;
+    --benchmark-cell-gap: 2px;
   }
   .benchmark-lane-name {
     font-size: 11px;
   }
   .benchmark-lane-name svg {
     display: none;
-  }
-  .benchmark-lane-axis {
-    padding-left: 84px;
-    padding-right: 52px;
   }
   .benchmark-lane-axis > span:first-child {
     max-width: 90px;

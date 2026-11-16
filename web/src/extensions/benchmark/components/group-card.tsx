@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { BrainCircuit, Candy, Expand, PenTool, X } from 'lucide-react'
-import { memo, useState } from 'react'
+import { memo, useState, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { StatusBadge } from '@/components/status-badge'
@@ -59,6 +59,7 @@ const severity: Record<RunStatus, number> = {
 export const GroupCard = memo(function GroupCard(props: {
   group: BenchmarkGroup
   now: number
+  historyHours: number
   paused: boolean
   onOpen: (id: number) => void
 }) {
@@ -97,6 +98,8 @@ export const GroupCard = memo(function GroupCard(props: {
   const provider = resolveModelProvider(g.model)
   const completed = runs.filter(
     (r) =>
+      r.created_at >= props.now - 86400 &&
+      r.created_at <= props.now &&
       r.status !== 'running' &&
       (r.kind === 'candy' ? g.candy_enabled : g.svg_enabled)
   )
@@ -106,6 +109,13 @@ export const GroupCard = memo(function GroupCard(props: {
       completed.length /
       1000
     : null
+  const timeline = buildTimeline(
+    runs,
+    g.interval_seconds,
+    g.next_at,
+    props.now,
+    props.historyHours
+  )
   const displayed = selected.length
     ? selected
     : [
@@ -189,105 +199,113 @@ export const GroupCard = memo(function GroupCard(props: {
             </dl>
           </div>
           <div className='benchmark-lanes'>
-            {(['candy', 'svg'] as const).map((kind) => {
-              const enabled =
-                g.enabled &&
-                (kind === 'candy' ? g.candy_enabled : g.svg_enabled)
-              const kindRuns = runs.filter((r) => r.kind === kind)
-              const slots = buildTimeline(
-                kindRuns,
-                g.interval_seconds,
-                g.next_at,
-                props.now
-              )
-              const recent = slots.flatMap((slot) => slot.runs)
-              const Icon = kind === 'candy' ? Candy : PenTool
-              const label =
-                kind === 'candy' ? t('Candy logic') : t('SVG drawing')
-              return (
-                <section
-                  className='benchmark-lane'
-                  key={kind}
-                  aria-label={label}
-                >
-                  <div className='benchmark-lane-name'>
-                    <span>
-                      <Icon className='size-3.5' aria-hidden />
-                      {label}
+            <div
+              className='benchmark-timeline'
+              style={{ '--benchmark-slots': timeline.length } as CSSProperties}
+            >
+              {(['candy', 'svg'] as const).map((kind) => {
+                const enabled =
+                  g.enabled &&
+                  (kind === 'candy' ? g.candy_enabled : g.svg_enabled)
+                const slots = timeline.map((slot) => ({
+                  ...slot,
+                  runs: slot.runs.filter((run) => run.kind === kind),
+                }))
+                const recent = slots.flatMap((slot) => slot.runs)
+                const Icon = kind === 'candy' ? Candy : PenTool
+                const label =
+                  kind === 'candy' ? t('Candy logic') : t('SVG drawing')
+                return (
+                  <section
+                    className='benchmark-lane'
+                    key={kind}
+                    aria-label={label}
+                  >
+                    <div className='benchmark-lane-name'>
+                      <span>
+                        <Icon className='size-3.5' aria-hidden />
+                        {label}
+                      </span>
+                      <small>{kind === 'candy' ? 'CANDY' : 'ARTWORK'}</small>
+                    </div>
+                    <div className='benchmark-lane-cells'>
+                      {slots.map((slot) => {
+                        const representative = slot.runs.reduce<
+                          RunSummary | undefined
+                        >(
+                          (worst, run) =>
+                            !worst ||
+                            severity[run.status] > severity[worst.status]
+                              ? run
+                              : worst,
+                          undefined
+                        )
+                        let state = 'empty'
+                        let description = t('No checks yet')
+                        if (!enabled) {
+                          state = 'disabled'
+                          description = t('Disabled')
+                        } else if (representative) {
+                          state = representative.status
+                          description = statuses[representative.status].label
+                        }
+                        const time = representative?.created_at ?? slot.start
+                        return (
+                          <Tooltip key={slot.start}>
+                            <TooltipTrigger
+                              render={
+                                <Button
+                                  size='icon-sm'
+                                  variant='ghost'
+                                  className='benchmark-lane-cell'
+                                  data-status={state}
+                                  disabled={!enabled || !representative}
+                                  aria-label={`${label} · ${formatTimestamp(time)} · ${description}`}
+                                  aria-pressed={Boolean(
+                                    open &&
+                                    selected.some((run) =>
+                                      slot.runs.some((r) => r.id === run.id)
+                                    )
+                                  )}
+                                  onClick={() => {
+                                    setSelected(slot.runs)
+                                    setOpen(true)
+                                  }}
+                                />
+                              }
+                            />
+                            <TooltipContent>
+                              <span>
+                                {formatTimestamp(time)} · {description}
+                                {slot.runs.length > 1
+                                  ? ` · ${formatNumber(slot.runs.length, locale)}`
+                                  : ''}
+                              </span>
+                            </TooltipContent>
+                          </Tooltip>
+                        )
+                      })}
+                    </div>
+                    <span className='benchmark-lane-count'>
+                      {enabled
+                        ? `${formatNumber(recent.filter((r) => r.status === 'passed').length, locale)}/${formatNumber(recent.filter((r) => r.status !== 'running').length, locale)}`
+                        : t('Disabled')}
                     </span>
-                    <small>{kind === 'candy' ? 'CANDY' : 'ARTWORK'}</small>
-                  </div>
-                  <div className='benchmark-lane-cells'>
-                    {slots.map((slot) => {
-                      const representative = slot.runs.reduce<
-                        RunSummary | undefined
-                      >(
-                        (worst, run) =>
-                          !worst ||
-                          severity[run.status] > severity[worst.status]
-                            ? run
-                            : worst,
-                        undefined
-                      )
-                      let state = 'empty'
-                      let description = t('No checks yet')
-                      if (!enabled) {
-                        state = 'disabled'
-                        description = t('Disabled')
-                      } else if (representative) {
-                        state = representative.status
-                        description = statuses[representative.status].label
-                      }
-                      const time = representative?.created_at ?? slot.start
-                      return (
-                        <Tooltip key={slot.start}>
-                          <TooltipTrigger
-                            render={
-                              <Button
-                                size='icon-sm'
-                                variant='ghost'
-                                className='benchmark-lane-cell'
-                                data-status={state}
-                                disabled={!enabled || !representative}
-                                aria-label={`${label} · ${formatTimestamp(time)} · ${description}`}
-                                aria-pressed={Boolean(
-                                  open &&
-                                  selected.some((run) =>
-                                    slot.runs.some((r) => r.id === run.id)
-                                  )
-                                )}
-                                onClick={() => {
-                                  setSelected(slot.runs)
-                                  setOpen(true)
-                                }}
-                              />
-                            }
-                          />
-                          <TooltipContent>
-                            <span>
-                              {formatTimestamp(time)} · {description}
-                              {slot.runs.length > 1
-                                ? ` · ${formatNumber(slot.runs.length, locale)}`
-                                : ''}
-                            </span>
-                          </TooltipContent>
-                        </Tooltip>
-                      )
-                    })}
-                  </div>
-                  <span className='benchmark-lane-count'>
-                    {enabled
-                      ? `${formatNumber(recent.filter((r) => r.status === 'passed').length, locale)}/${formatNumber(recent.filter((r) => r.status !== 'running').length, locale)}`
-                      : t('Disabled')}
-                  </span>
-                </section>
-              )
-            })}
-            <div className='benchmark-lane-axis'>
-              <span>{formatTimestamp(props.now - 86400)}</span>
-              <span>−{t('{{count}} hours', { count: 12 })}</span>
-              <span>−{t('{{count}} hours', { count: 6 })}</span>
-              <span>{t('Now')}</span>
+                  </section>
+                )
+              })}
+              <div
+                className='benchmark-lane-axis'
+                data-compact={timeline.length < 24}
+              >
+                <span>
+                  {formatTimestamp(props.now - props.historyHours * 3600)}
+                </span>
+                <span>
+                  −{t('{{count}} hours', { count: props.historyHours / 2 })}
+                </span>
+                <span>{t('Now')}</span>
+              </div>
             </div>
           </div>
           <article className='benchmark-art'>
