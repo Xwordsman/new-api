@@ -44,13 +44,16 @@ export function groupStatus(
 ): 'passed' | 'suspected' | 'failed' | 'unknown' {
   if (!group.enabled) return 'unknown'
   const candy =
-    group.candy_enabled &&
-    group.runs.find((r) => r.kind === 'candy' && r.status !== 'running')
-  const svg =
-    group.svg_enabled &&
-    group.runs.find((r) => r.kind === 'svg' && r.status !== 'running')
+    group.candy_enabled && group.runs.find((r) => r.kind === 'candy')
+  const svg = group.svg_enabled && group.runs.find((r) => r.kind === 'svg')
   if (candy && candy.status === 'wrong_answer') return 'suspected'
-  if ([candy, svg].some((r) => r && r.status !== 'passed')) return 'failed'
+  if (
+    [candy, svg].some(
+      (r) => r && r.status !== 'passed' && r.status !== 'running'
+    )
+  ) {
+    return 'failed'
+  }
   if (
     (group.candy_enabled && !candy) ||
     (group.svg_enabled && !svg) ||
@@ -58,5 +61,6 @@ export function groupStatus(
   ) {
     return 'unknown'
   }
+  if ([candy, svg].some((r) => r && r.status === 'running')) return 'unknown'
   return 'passed'
 }

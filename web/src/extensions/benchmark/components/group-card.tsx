@@ -17,28 +17,51 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { BrainCircuit, Candy, PenTool, RotateCw } from 'lucide-react'
+import { BrainCircuit, Candy, Expand, PenTool, RotateCw, X } from 'lucide-react'
+import { memo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { StatusBadge, dotColorMap } from '@/components/status-badge'
+import { StatusBadge } from '@/components/status-badge'
 import {
+  Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber, formatTimestamp } from '@/lib/format'
-import { cn } from '@/lib/utils'
+import { getLobeIcon } from '@/lib/lobe-icon'
+import { resolveModelProvider } from '@/lib/model-provider'
 
 import { runBenchmark } from '../api'
 import { groupStatus, useRunStatuses } from '../hooks/use-run-statuses'
-import type { BenchmarkGroup } from '../types'
+import { buildTimeline } from '../lib/timeline'
+import type { BenchmarkGroup, RunSummary, RunStatus } from '../types'
 import { SavedArtwork } from './artwork-preview'
+import { RunResult } from './run-detail'
 
-export function GroupCard(props: {
+// A failure remains visible when manual retests share its scheduled window.
+const severity: Record<RunStatus, number> = {
+  passed: 0,
+  running: 1,
+  interrupted: 2,
+  invalid: 3,
+  truncated: 3,
+  request_failed: 3,
+  timeout: 3,
+  wrong_answer: 4,
+}
+
+export const GroupCard = memo(function GroupCard(props: {
   group: BenchmarkGroup
+  now: number
   canRun: boolean
   paused: boolean
   onOpen: (id: number) => void
@@ -48,22 +71,52 @@ export function GroupCard(props: {
   const queryClient = useQueryClient()
   const statuses = useRunStatuses()
   const g = props.group
-  const latestSVG = g.runs.find(
-    (r) => r.kind === 'svg' && r.status === 'passed'
+  const [open, setOpen] = useState(false)
+  const [selected, setSelected] = useState<RunSummary[]>([])
+  const runs = [...g.runs].sort(
+    (a, b) => b.created_at - a.created_at || b.id - a.id
   )
+  const latestSVG = g.svg_enabled
+    ? runs.find((r) => r.kind === 'svg' && r.status === 'passed')
+    : undefined
+  const latestCandy = g.candy_enabled
+    ? runs.find((r) => r.kind === 'candy')
+    : undefined
   const status = groupStatus(g)
+  const checking =
+    (g.candy_enabled &&
+      runs.find((r) => r.kind === 'candy')?.status === 'running') ||
+    (g.svg_enabled && runs.find((r) => r.kind === 'svg')?.status === 'running')
   const labels = {
     passed: t('No degradation detected'),
     suspected: t('Suspected degradation'),
     failed: t('Request or output failure'),
-    unknown: t('No checks'),
+    unknown: checking ? t('Checking') : t('No checks'),
   }
   const variants = {
     passed: 'success',
     suspected: 'danger',
     failed: 'warning',
-    unknown: 'neutral',
+    unknown: checking ? 'info' : 'neutral',
   } as const
+  const provider = resolveModelProvider(g.model)
+  const completed = runs.filter(
+    (r) =>
+      r.status !== 'running' &&
+      (r.kind === 'candy' ? g.candy_enabled : g.svg_enabled)
+  )
+  const total = g.totals.candy_total + g.totals.svg_total
+  const averageLatency = completed.length
+    ? completed.reduce((sum, r) => sum + r.latency_ms, 0) /
+      completed.length /
+      1000
+    : null
+  const displayed = selected.length
+    ? selected
+    : [
+        latestCandy,
+        g.svg_enabled ? runs.find((r) => r.kind === 'svg') : undefined,
+      ].filter((r): r is RunSummary => Boolean(r))
   const retest = useMutation({
     mutationFn: () => runBenchmark(g.group),
     onSuccess: async () => {
@@ -74,186 +127,279 @@ export function GroupCard(props: {
     },
   })
   return (
-    <AccordionItem
-      value={g.group}
-      className='console-surface bg-card rounded-xl border'
+    <Accordion
+      value={open ? [g.group] : []}
+      onValueChange={(value) => setOpen(value.length > 0)}
     >
-      <div className='grid gap-5 p-4 sm:p-5 xl:grid-cols-[minmax(200px,0.9fr)_minmax(280px,1.4fr)_210px]'>
-        <div className='min-w-0'>
-          <AccordionTrigger
-            className='items-start py-0 hover:no-underline'
-            aria-label={g.group}
-          >
-            <span className='flex min-w-0 items-start gap-3'>
-              <span className='console-surface-icon flex size-9 shrink-0 items-center justify-center rounded-lg border'>
-                <BrainCircuit className='size-4' aria-hidden />
-              </span>
-              <span className='min-w-0 text-left'>
-                <span className='block text-sm font-semibold break-all'>
-                  {g.group}
-                </span>
-                <span className='text-muted-foreground mt-1 block font-mono text-xs font-normal break-all'>
-                  {g.model}
-                </span>
-              </span>
-            </span>
-          </AccordionTrigger>
-          <div className='mt-3 flex flex-wrap items-center gap-2 text-xs'>
-            <StatusBadge
-              variant={variants[status]}
-              label={g.enabled ? labels[status] : t('Disabled')}
-              copyable={false}
-            />
-            <span className='text-muted-foreground rounded-sm border px-1.5 py-0.5'>
-              {t('Every {{minutes}} min', {
-                minutes: formatNumber(g.interval_seconds / 60, locale),
-              })}
-            </span>
-          </div>
-          <div className='text-muted-foreground mt-2 text-xs'>
-            {t('Next check')}:{' '}
-            {g.next_at ? formatTimestamp(g.next_at).slice(11) : '—'}
-          </div>
-          <div className='mt-4 grid grid-cols-2 divide-x rounded-lg border p-2.5 text-xs'>
-            <div>
-              <p className='text-muted-foreground'>{t('Candy pass rate')}</p>
-              <p className='mt-1 font-mono'>
-                {g.totals.candy_total
-                  ? `${formatNumber((g.totals.candy_passed / g.totals.candy_total) * 100, locale)}%`
-                  : '—'}
-              </p>
-            </div>
-            <div className='pl-3'>
-              <p className='text-muted-foreground'>{t('Anomalies')}</p>
-              <p className='mt-1 font-mono'>
-                {formatNumber(g.totals.anomalies, locale)}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className='flex min-w-0 flex-col justify-center gap-5'>
-          {(['candy', 'svg'] as const).map((kind) => {
-            const enabled = kind === 'candy' ? g.candy_enabled : g.svg_enabled
-            const runs = g.runs
-              .filter((r) => r.kind === kind)
-              .slice(0, 72)
-              .reverse()
-            const Icon = kind === 'candy' ? Candy : PenTool
-            return (
-              <section
-                key={kind}
-                aria-label={
-                  kind === 'candy' ? t('Candy logic') : t('SVG drawing')
-                }
-              >
-                <div className='mb-2 flex items-center justify-between gap-2 text-xs'>
-                  <span className='flex items-center gap-1.5 font-medium'>
-                    <Icon className='size-3.5' aria-hidden />
-                    {kind === 'candy' ? t('Candy logic') : t('SVG drawing')}
-                  </span>
-                  <span className='text-muted-foreground font-mono'>
-                    {formatNumber(
-                      runs.filter((r) => r.status === 'passed').length,
-                      locale
-                    )}{' '}
-                    / {formatNumber(runs.length, locale)}
-                  </span>
-                </div>
-                {!enabled ? (
-                  <p className='text-muted-foreground text-xs'>
-                    {t('Disabled')}
-                  </p>
-                ) : (
-                  <>
-                    <div className='flex h-8 items-stretch gap-[3px]'>
-                      {runs.length === 0 ? (
-                        <span className='text-muted-foreground self-center text-xs'>
-                          {t('No checks yet')}
-                        </span>
-                      ) : (
-                        runs.map((run) => (
-                          <Button
-                            key={run.id}
-                            size='icon-sm'
-                            variant='ghost'
-                            className={cn(
-                              'h-full min-w-1 flex-1 rounded-sm p-0 opacity-85 hover:opacity-100',
-                              dotColorMap[statuses[run.status].variant]
-                            )}
-                            title={`${formatTimestamp(run.created_at)} · ${statuses[run.status].label}`}
-                            aria-label={`${kind === 'candy' ? t('Candy logic') : t('SVG drawing')} · ${formatTimestamp(run.created_at)} · ${statuses[run.status].label}`}
-                            onClick={() => props.onOpen(run.id)}
-                          />
-                        ))
-                      )}
-                    </div>
-                    <div className='text-muted-foreground mt-1 flex justify-between font-mono text-[10px]'>
-                      <span>
-                        {runs[0]
-                          ? formatTimestamp(runs[0].created_at).slice(5, 16)
-                          : '—'}
-                      </span>
-                      <span>{t('Now')}</span>
-                    </div>
-                  </>
-                )}
-              </section>
-            )
-          })}
-        </div>
-        <div className='min-w-0'>
-          {latestSVG ? (
-            <>
-              <SavedArtwork
-                id={latestSVG.id}
-                paused={props.paused}
-                className='pointer-events-none h-36 min-h-36'
-              />
-              <Button
-                variant='link'
-                size='sm'
-                className='mt-1 h-auto max-w-full justify-start px-0 text-xs'
-                onClick={() => props.onOpen(latestSVG.id)}
-              >
-                <span className='truncate'>
-                  {latestSVG.prompt_name || t('View artwork')}
-                </span>
-                <span className='text-muted-foreground shrink-0 font-mono'>
-                  {formatNumber(latestSVG.latency_ms / 1000, locale)} s
-                </span>
-              </Button>
-            </>
-          ) : (
-            <div className='bg-muted/30 text-muted-foreground flex h-36 items-center justify-center rounded-lg border border-dashed text-xs'>
-              {t('No SVG artwork yet')}
-            </div>
-          )}
-        </div>
-      </div>
-      <AccordionContent className='border-t px-5 py-4'>
-        <div className='flex flex-wrap items-center justify-between gap-3'>
-          <p className='text-muted-foreground max-w-2xl text-xs leading-5'>
-            {t(
-              'The timeline shows recent checks from the last 24 hours. Click a result to inspect its saved prompt and original output. Failures remain visible.'
-            )}
-          </p>
-          {props.canRun && (
-            <Button
-              size='sm'
-              variant='outline'
-              disabled={
-                !g.enabled ||
-                retest.isPending ||
-                g.runs.some((r) => r.status === 'running')
-              }
-              onClick={() => retest.mutate()}
+      <AccordionItem value={g.group} className='benchmark-target'>
+        <div className='benchmark-target-grid'>
+          <div className='benchmark-target-info'>
+            <AccordionTrigger
+              aria-label={g.group}
+              className='items-center p-0 hover:no-underline'
             >
-              <RotateCw aria-hidden />
-              {t('Retest group')}
-            </Button>
-          )}
+              <span className='flex min-w-0 items-center gap-2.5'>
+                <span className='benchmark-provider' aria-hidden>
+                  {provider ? (
+                    getLobeIcon(provider.icon, 18)
+                  ) : (
+                    <BrainCircuit className='size-[18px]' />
+                  )}
+                </span>
+                <span className='min-w-0'>
+                  <span
+                    className='block truncate text-sm leading-[21px] font-semibold'
+                    title={g.group}
+                  >
+                    {g.group}
+                  </span>
+                  <span
+                    className='text-muted-foreground block truncate font-mono text-[11.5px] font-normal'
+                    title={g.model}
+                  >
+                    {g.model}
+                  </span>
+                </span>
+              </span>
+            </AccordionTrigger>
+            <div className='benchmark-badges'>
+              <StatusBadge
+                variant={variants[status]}
+                label={g.enabled ? labels[status] : t('Disabled')}
+                copyable={false}
+                className='text-[11px]'
+              />
+              <span className='rounded-sm border px-1.5 py-0.5'>
+                {t('Every {{minutes}} min', {
+                  minutes: formatNumber(g.interval_seconds / 60, locale),
+                })}
+              </span>
+              <span className='text-muted-foreground'>
+                {t('Next check')}{' '}
+                {g.next_at ? formatTimestamp(g.next_at).slice(11, 16) : '—'}
+              </span>
+            </div>
+            <dl className='benchmark-group-stats'>
+              <div>
+                <dt>{t('Success rate')}</dt>
+                <dd>
+                  {total
+                    ? `${formatNumber(((g.totals.candy_passed + g.totals.svg_passed) / total) * 100, locale)}%`
+                    : '—'}
+                </dd>
+              </div>
+              <div>
+                <dt>{t('Anomalies')}</dt>
+                <dd>{formatNumber(g.totals.anomalies, locale)}</dd>
+              </div>
+              <div>
+                <dt>{t('Average latency')}</dt>
+                <dd>
+                  {averageLatency === null
+                    ? '—'
+                    : `${formatNumber(averageLatency, locale)}s`}
+                </dd>
+              </div>
+            </dl>
+          </div>
+          <div className='benchmark-lanes'>
+            {(['candy', 'svg'] as const).map((kind) => {
+              const enabled =
+                g.enabled &&
+                (kind === 'candy' ? g.candy_enabled : g.svg_enabled)
+              const kindRuns = runs.filter((r) => r.kind === kind)
+              const slots = buildTimeline(
+                kindRuns,
+                g.interval_seconds,
+                g.next_at,
+                props.now
+              )
+              const recent = slots.flatMap((slot) => slot.runs)
+              const Icon = kind === 'candy' ? Candy : PenTool
+              const label =
+                kind === 'candy' ? t('Candy logic') : t('SVG drawing')
+              return (
+                <section
+                  className='benchmark-lane'
+                  key={kind}
+                  aria-label={label}
+                >
+                  <div className='benchmark-lane-name'>
+                    <span>
+                      <Icon className='size-3.5' aria-hidden />
+                      {label}
+                    </span>
+                    <small>{kind === 'candy' ? 'CANDY' : 'ARTWORK'}</small>
+                  </div>
+                  <div className='benchmark-lane-cells'>
+                    {slots.map((slot) => {
+                      const representative = slot.runs.reduce<
+                        RunSummary | undefined
+                      >(
+                        (worst, run) =>
+                          !worst ||
+                          severity[run.status] > severity[worst.status]
+                            ? run
+                            : worst,
+                        undefined
+                      )
+                      let state = 'empty'
+                      let description = t('No checks yet')
+                      if (!enabled) {
+                        state = 'disabled'
+                        description = t('Disabled')
+                      } else if (representative) {
+                        state = representative.status
+                        description = statuses[representative.status].label
+                      }
+                      const time = representative?.created_at ?? slot.start
+                      return (
+                        <Tooltip key={slot.start}>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                size='icon-sm'
+                                variant='ghost'
+                                className='benchmark-lane-cell'
+                                data-status={state}
+                                disabled={!enabled || !representative}
+                                aria-label={`${label} · ${formatTimestamp(time)} · ${description}`}
+                                aria-pressed={Boolean(
+                                  open &&
+                                  selected.some((run) =>
+                                    slot.runs.some((r) => r.id === run.id)
+                                  )
+                                )}
+                                onClick={() => {
+                                  setSelected(slot.runs)
+                                  setOpen(true)
+                                }}
+                              />
+                            }
+                          />
+                          <TooltipContent>
+                            <span>
+                              {formatTimestamp(time)} · {description}
+                              {slot.runs.length > 1
+                                ? ` · ${formatNumber(slot.runs.length, locale)}`
+                                : ''}
+                            </span>
+                          </TooltipContent>
+                        </Tooltip>
+                      )
+                    })}
+                  </div>
+                  <span className='benchmark-lane-count'>
+                    {enabled
+                      ? `${formatNumber(recent.filter((r) => r.status === 'passed').length, locale)}/${formatNumber(recent.filter((r) => r.status !== 'running').length, locale)}`
+                      : t('Disabled')}
+                  </span>
+                </section>
+              )
+            })}
+            <div className='benchmark-lane-axis'>
+              <span>{formatTimestamp(props.now - 86400)}</span>
+              <span>−{t('{{count}} hours', { count: 12 })}</span>
+              <span>−{t('{{count}} hours', { count: 6 })}</span>
+              <span>{t('Now')}</span>
+            </div>
+          </div>
+          <article className='benchmark-art'>
+            <div className='benchmark-thumb'>
+              {latestSVG ? (
+                <>
+                  <SavedArtwork
+                    id={latestSVG.id}
+                    paused={props.paused}
+                    className='h-full min-h-0'
+                  />
+                  <Button
+                    size='icon-sm'
+                    variant='secondary'
+                    className='benchmark-enlarge'
+                    aria-label={t('View artwork')}
+                    onClick={() => props.onOpen(latestSVG.id)}
+                  >
+                    <Expand aria-hidden />
+                  </Button>
+                </>
+              ) : (
+                <div className='benchmark-art-empty'>
+                  {g.svg_enabled ? t('No SVG artwork yet') : t('Disabled')}
+                </div>
+              )}
+            </div>
+            <div className='benchmark-art-caption'>
+              <div>
+                <strong title={latestSVG?.prompt_name}>
+                  {latestSVG?.prompt_name || t('SVG drawing')}
+                </strong>
+                <span>
+                  {latestSVG
+                    ? `${formatNumber(latestSVG.latency_ms / 1000, locale)}s`
+                    : '—'}
+                </span>
+              </div>
+              <div>
+                <span>
+                  {latestSVG
+                    ? formatTimestamp(latestSVG.created_at).slice(5, 16)
+                    : '—'}
+                </span>
+                <span className='truncate'>{g.group}</span>
+              </div>
+            </div>
+          </article>
         </div>
-      </AccordionContent>
-    </AccordionItem>
+        <AccordionContent className='benchmark-expanded'>
+          <div className='mb-4 flex items-center justify-between gap-3'>
+            <span className='text-muted-foreground text-xs'>
+              {t('Benchmark result')}
+            </span>
+            <div className='flex items-center gap-2'>
+              {props.canRun && (
+                <Button
+                  size='sm'
+                  variant='outline'
+                  disabled={
+                    !g.enabled ||
+                    retest.isPending ||
+                    runs.some((r) => r.status === 'running')
+                  }
+                  onClick={() => retest.mutate()}
+                >
+                  <RotateCw aria-hidden />
+                  {t('Retest group')}
+                </Button>
+              )}
+              <Button
+                size='icon-sm'
+                variant='ghost'
+                aria-label={t('Close')}
+                onClick={() => setOpen(false)}
+              >
+                <X aria-hidden />
+              </Button>
+            </div>
+          </div>
+          <div className='benchmark-results'>
+            {displayed.map((run) => (
+              <RunResult
+                key={run.id}
+                id={run.id}
+                inline
+                paused={props.paused}
+                onOpen={props.onOpen}
+              />
+            ))}
+            {displayed.length === 0 && (
+              <p className='text-muted-foreground text-sm'>
+                {t('No checks yet')}
+              </p>
+            )}
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
   )
-}
+})

@@ -180,6 +180,15 @@ it('filters groups by status and selection, then opens the saved question and or
   await user.click(
     screen.getByRole('button', { name: /Candy logic · .*Answer mismatch/ })
   )
+  expect(await screen.findByText('The saved candy question')).toBeVisible()
+  expect(screen.getByRole('button', { name: 'gpt-public' })).toHaveAttribute(
+    'aria-expanded',
+    'true'
+  )
+  expect(
+    screen.getByRole('button', { name: /Candy logic · .*Answer mismatch/ })
+  ).toHaveAttribute('aria-pressed', 'true')
+  await user.click(screen.getByRole('button', { name: 'View details' }))
   const dialog = await screen.findByRole('dialog', { name: 'Benchmark result' })
   expect(
     await within(dialog).findByText('The saved candy question')
@@ -192,6 +201,19 @@ it('filters groups by status and selection, then opens the saved question and or
   ).toBeEnabled()
 })
 
+it('expands and collapses group results from the keyboard', async () => {
+  const user = userEvent.setup()
+  renderPage()
+  const toggle = await screen.findByRole('button', { name: 'gpt-public' })
+  toggle.focus()
+  await user.keyboard('{Enter}')
+  expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  expect(await screen.findByText('The saved candy question')).toBeVisible()
+  await user.click(screen.getByRole('button', { name: 'Close' }))
+  expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  expect(screen.queryByText('The saved candy question')).not.toBeInTheDocument()
+})
+
 it('lets the root administrator expand a group and queue a retest without modifying automatic settings', async () => {
   const user = userEvent.setup()
   useAuthStore
@@ -202,6 +224,8 @@ it('lets the root administrator expand a group and queue a retest without modify
     .spyOn(api, 'post')
     .mockResolvedValue({ data: { success: true, data: { queued: true } } })
   await user.click(await screen.findByRole('button', { name: 'gpt-public' }))
+  expect(await screen.findByText('The saved candy question')).toBeVisible()
+  expect(screen.getByText('Expected answer')).toBeVisible()
   await user.click(screen.getByRole('button', { name: 'Retest group' }))
   await waitFor(() =>
     expect(post).toHaveBeenCalledWith('/api/extensions/benchmark/admin/run', {
@@ -209,6 +233,41 @@ it('lets the root administrator expand a group and queue a retest without modify
     })
   )
   expect(screen.getByRole('switch', { name: 'Auto refresh' })).toBeChecked()
+})
+
+it('keeps empty hourly slots visible instead of stretching a single result across the day', async () => {
+  renderPage()
+  const lanes = await screen.findAllByRole('region', { name: 'Candy logic' })
+  const lane = lanes[0]
+  expect(within(lane).getAllByRole('button')).toHaveLength(24)
+  expect(
+    within(lane).getAllByRole('button', { name: /No checks yet/ })
+  ).toHaveLength(23)
+  expect(
+    within(lane).getByRole('button', { name: /Answer mismatch/ })
+  ).toHaveAttribute('aria-pressed', 'false')
+})
+
+it('shows an active SVG check as checking when the candy check has already passed', async () => {
+  renderPage({
+    ...snapshot,
+    groups: [
+      {
+        ...group,
+        svg_enabled: true,
+        runs: [
+          { ...run, kind: 'svg', id: 23, status: 'running' },
+          { ...run, status: 'passed' },
+        ],
+      },
+    ],
+  })
+  const toggle = await screen.findByRole('button', { name: 'gpt-public' })
+  expect(
+    within(
+      toggle.closest('[data-slot="accordion-item"]') as HTMLElement
+    ).getAllByText('Checking').length
+  ).toBeGreaterThan(0)
 })
 
 it('paginates the artwork gallery and resets to the first page when the group filter changes', async () => {

@@ -36,7 +36,6 @@ import { ConsolePageHeader, Main } from '@/components/layout'
 import { LoadingState } from '@/components/loading-state'
 import { StatCardValue } from '@/components/stat-card-value'
 import { dotColorMap } from '@/components/status-badge'
-import { Accordion } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
@@ -54,6 +53,7 @@ import { RunDetail } from './components/run-detail'
 import { groupStatus, useRunStatuses } from './hooks/use-run-statuses'
 
 import '@/styles/channel-monitor.css'
+import '@/styles/benchmark.css'
 
 export function BenchmarkPage() {
   const { t, i18n } = useTranslation()
@@ -159,7 +159,20 @@ export function BenchmarkPage() {
     <Main className='console-page @container/monitor'>
       <ConsolePageHeader
         icon={FlaskConical}
-        eyebrow='MODEL BENCHMARK'
+        eyebrow='BENCHMARK'
+        eyebrowMeta={
+          <span className='benchmark-live'>
+            <span
+              className={cn(
+                'size-1.5 rounded-full',
+                automatic ? 'bg-success' : 'bg-muted-foreground'
+              )}
+              aria-hidden
+            />
+            {automatic ? t('Live') : t('Manual')} ·{' '}
+            {t('Refresh every {{seconds}} seconds', { seconds: 15 })}
+          </span>
+        }
         title={t('Model benchmark')}
         description={t(
           'Scheduled candy logic and SVG checks for selected groups. Disabled checks do not count as successes or failures.'
@@ -198,14 +211,7 @@ export function BenchmarkPage() {
             </Button>
           </div>
         }
-      >
-        <p className='text-muted-foreground flex flex-wrap items-center gap-2 border-t pt-3 text-xs'>
-          <span>{automatic ? t('Live') : t('Manual')}</span>
-          <span>
-            · {t('Refresh every {{seconds}} seconds', { seconds: 15 })}
-          </span>
-        </p>
-      </ConsolePageHeader>
+      />
       <div className='min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-6 sm:px-6 lg:px-8'>
         {query.isPending && <LoadingState />}
         {query.isError && <ErrorState onRetry={() => void query.refetch()} />}
@@ -223,14 +229,14 @@ export function BenchmarkPage() {
             <div
               role='group'
               aria-label={t('Period metrics')}
-              className='monitor-metrics grid grid-cols-2 gap-4 @min-[56rem]/monitor:grid-cols-4'
+              className='monitor-metrics benchmark-metrics'
             >
               {cards.map((card) => (
                 <section
                   key={card.code}
                   aria-label={card.title}
                   data-tone={card.tone}
-                  className='console-surface console-metric monitor-metric relative min-w-0 rounded-xl border p-5'
+                  className='console-metric monitor-metric relative min-w-0 p-5'
                 >
                   <div className='flex items-center justify-between gap-2 text-xs font-medium'>
                     <span className='flex items-center gap-2'>
@@ -255,7 +261,7 @@ export function BenchmarkPage() {
                 </section>
               ))}
             </div>
-            <div className='flex flex-wrap items-center justify-between gap-3 border-b'>
+            <div className='benchmark-toolbar'>
               <div
                 role='group'
                 aria-label={t('All statuses')}
@@ -287,7 +293,7 @@ export function BenchmarkPage() {
                   </Button>
                 ))}
               </div>
-              <div className='flex flex-wrap gap-3 pb-2'>
+              <div className='benchmark-legend'>
                 {(
                   [
                     'passed',
@@ -302,7 +308,7 @@ export function BenchmarkPage() {
                   >
                     <span
                       className={cn(
-                        'size-1.5',
+                        'size-2 rounded-[1px]',
                         dotColorMap[statuses[s].variant]
                       )}
                       aria-hidden
@@ -310,30 +316,42 @@ export function BenchmarkPage() {
                     {statuses[s].label}
                   </span>
                 ))}
+                <span>
+                  <i data-status='disabled' aria-hidden />
+                  {t('Disabled')}
+                </span>
+                <span>
+                  <i data-status='empty' aria-hidden />
+                  {t('No checks')}
+                </span>
+                <NativeSelect
+                  aria-label={t('Benchmark group filter')}
+                  value={group}
+                  onChange={(e) => setGroup(e.target.value)}
+                  className='w-full sm:w-44'
+                >
+                  <NativeSelectOption value=''>
+                    {t('All groups')}
+                  </NativeSelectOption>
+                  {groups.map((g) => (
+                    <NativeSelectOption key={g.group} value={g.group}>
+                      {g.group}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
               </div>
             </div>
-            <div className='space-y-3'>
-              <NativeSelect
-                aria-label={t('Benchmark group filter')}
-                value={group}
-                onChange={(e) => setGroup(e.target.value)}
-                className='w-full sm:w-52'
+            <p className='benchmark-rule text-muted-foreground text-xs leading-5'>
+              <span
+                className='text-primary mr-2 font-mono text-[10px]'
+                aria-hidden
               >
-                <NativeSelectOption value=''>
-                  {t('All groups')}
-                </NativeSelectOption>
-                {groups.map((g) => (
-                  <NativeSelectOption key={g.group} value={g.group}>
-                    {g.group}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-              <p className='text-muted-foreground text-xs leading-5'>
-                {t(
-                  'A group probe samples one routed channel. A passed check does not prove model identity or overall intelligence.'
-                )}
-              </p>
-            </div>
+                RULE
+              </span>
+              {t(
+                'Scheduled candy logic and SVG checks for selected groups. Disabled checks do not count as successes or failures.'
+              )}
+            </p>
             {visible.length === 0 ? (
               <EmptyState
                 title={t('No matching groups')}
@@ -342,17 +360,18 @@ export function BenchmarkPage() {
                 )}
               />
             ) : (
-              <Accordion multiple className='gap-3'>
+              <div className='benchmark-frame'>
                 {visible.map((g) => (
                   <GroupCard
                     key={g.group}
                     group={g}
+                    now={data.updated_at}
                     paused={paused}
                     canRun={user?.role === ROLE.SUPER_ADMIN}
                     onOpen={setDetail}
                   />
                 ))}
-              </Accordion>
+              </div>
             )}
             <ArtworkGallery
               key={group}

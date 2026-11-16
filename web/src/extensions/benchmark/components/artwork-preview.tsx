@@ -42,9 +42,21 @@ export function ArtworkPreview(props: {
   className?: string
 }) {
   const { t } = useTranslation()
+  const [host, setHost] = useState<HTMLDivElement | null>(null)
+  const [scale, setScale] = useState(0)
+  useEffect(() => {
+    if (!host || props.paused) return
+    const resize = () =>
+      setScale(Math.min(host.clientWidth / 1200, host.clientHeight / 900))
+    resize()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(resize)
+    observer.observe(host)
+    return () => observer.disconnect()
+  }, [host, props.paused])
   const document = useMemo(
     () =>
-      `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${policy}"><meta name="referrer" content="no-referrer"><style>html,body{margin:0;min-height:100%;overflow:hidden}svg{max-width:100%}</style></head><body>${props.output}</body></html>`,
+      `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${policy}"><meta name="referrer" content="no-referrer"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}svg{max-width:100%;max-height:100%}</style></head><body>${props.output}</body></html>`,
     [props.output]
   )
   if (props.paused) {
@@ -52,7 +64,7 @@ export function ArtworkPreview(props: {
     return (
       <div
         className={cn(
-          'bg-muted text-muted-foreground flex min-h-40 items-center justify-center rounded-lg text-sm',
+          'bg-muted text-muted-foreground flex h-full min-h-0 items-center justify-center rounded-sm text-xs',
           props.className
         )}
       >
@@ -61,15 +73,25 @@ export function ArtworkPreview(props: {
     )
   }
   return (
-    <WebPreview className={cn('overflow-hidden', props.className)}>
-      <WebPreviewBody
-        title={t('SVG artwork preview')}
-        srcDoc={document}
-        sandbox='allow-scripts'
-        referrerPolicy='no-referrer'
-        allow=''
-      />
-    </WebPreview>
+    <div ref={setHost} className={cn('benchmark-preview', props.className)}>
+      <WebPreview className='overflow-hidden rounded-none border-0'>
+        <WebPreviewBody
+          title={t('SVG artwork preview')}
+          srcDoc={document}
+          sandbox='allow-scripts'
+          referrerPolicy='no-referrer'
+          allow=''
+          tabIndex={-1}
+          className='pointer-events-none absolute'
+          style={{
+            width: 1200,
+            height: 900,
+            transformOrigin: 'top left',
+            transform: `translate(${Math.max(0, ((host?.clientWidth ?? 0) - 1200 * scale) / 2)}px, ${Math.max(0, ((host?.clientHeight ?? 0) - 900 * scale) / 2)}px) scale(${scale})`,
+          }}
+        />
+      </WebPreview>
+    </div>
   )
 }
 
@@ -112,29 +134,32 @@ export function SavedArtwork(props: {
     return (
       <div
         ref={setContainer}
-        className={cn('min-h-40', props.className)}
+        className={cn('h-full min-h-0', props.className)}
         aria-label={t('SVG artwork preview')}
       />
     )
   }
   if (query.isPending) {
     return (
-      <div ref={setContainer} className={cn('min-h-40', props.className)}>
-        <LoadingState className='min-h-40' />
+      <div ref={setContainer} className={cn('h-full min-h-0', props.className)}>
+        <LoadingState className='h-full min-h-0' />
       </div>
     )
   }
   if (query.isError) {
     return (
       <div ref={setContainer} className={props.className}>
-        <ErrorState className='min-h-40' onRetry={() => void query.refetch()} />
+        <ErrorState
+          className='h-full min-h-0'
+          onRetry={() => void query.refetch()}
+        />
       </div>
     )
   }
   if (!query.data.output) {
     return (
       <div ref={setContainer} className={props.className}>
-        <EmptyState className='min-h-40' />
+        <EmptyState className='h-full min-h-0' />
       </div>
     )
   }
@@ -143,7 +168,7 @@ export function SavedArtwork(props: {
       <ArtworkPreview
         output={query.data.output}
         paused={false}
-        className='h-full min-h-40'
+        className='h-full min-h-0'
       />
     </div>
   )

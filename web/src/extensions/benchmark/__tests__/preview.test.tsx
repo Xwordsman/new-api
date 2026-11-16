@@ -37,6 +37,12 @@ it('renders generated code in an opaque sandbox without exposing a loading prop 
   expect(frame.getAttribute('srcdoc')).toContain("connect-src 'none'")
   expect(frame.getAttribute('srcdoc')).toContain("frame-src 'none'")
   expect(frame.getAttribute('srcdoc')).toContain(output)
+  expect(frame).toHaveStyle({
+    width: '1200px',
+    height: '900px',
+    transformOrigin: 'top left',
+  })
+  expect(frame).toHaveAttribute('tabindex', '-1')
   expect(screen.queryByText('lazy')).not.toBeInTheDocument()
   view.rerender(<ArtworkPreview output={output} paused />)
   expect(screen.queryByTitle('SVG artwork preview')).not.toBeInTheDocument()
