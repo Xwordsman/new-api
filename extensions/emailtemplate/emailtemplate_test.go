@@ -2,6 +2,7 @@ package emailtemplate
 
 import (
 	"bytes"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -46,10 +47,11 @@ func TestBundledTemplatesRenderAllScenariosAndLanguages(t *testing.T) {
 				compiled, err := compileTemplate(source)
 				require.NoError(t, err)
 				values := sampleVariables(source.Type, lang)
+				values["site_name"] = "MOTO & API"
 				subject, body, err := compiled.render(values)
 				require.NoError(t, err)
 				assert.Equal(t, values["original_subject"], subject)
-				assert.Contains(t, body, "Powered by new-api")
+				assert.Contains(t, body, "Powered by MOTO &amp; API")
 				assert.NotContains(t, body, "{{")
 				if source.Type == common.EmailTemplateVerification || source.Type == common.EmailTemplateEmailBinding {
 					assert.Contains(t, body, values["verification_code"])
@@ -57,6 +59,52 @@ func TestBundledTemplatesRenderAllScenariosAndLanguages(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestSavedTemplateFootersFollowSiteNameChanges(t *testing.T) {
+	preserveEmailOptions(t)
+	previousName := common.SystemName
+	t.Cleanup(func() { common.SystemName = previousName })
+	base := defaultTemplate(common.EmailTemplateVerification, i18n.LangEn)
+	legacy := base
+	legacy.HTML = strings.ReplaceAll(legacy.HTML, "Powered by {{site_name}}", "Powered by new-api")
+	legacy.HTML = strings.ReplaceAll(legacy.HTML, "#fafafe", "#fafafa")
+	legacy.HTML = strings.Replace(legacy.HTML, "</body>", "<p>Documentation mentions Powered by new-api.</p></body>", 1)
+	custom := base
+	custom.HTML = strings.ReplaceAll(custom.HTML, "Powered by {{site_name}}", "Custom footer")
+	for _, tc := range []struct {
+		name     string
+		template Template
+		footer   string
+	}{
+		{"saved default", base, "Powered by "},
+		{"saved legacy footer", legacy, "Powered by "},
+		{"custom footer", custom, "Custom footer"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			encoded, err := common.Marshal(Settings{Enabled: true, Templates: []Template{tc.template}})
+			require.NoError(t, err)
+			common.OptionMap[common.EmailTemplateOptionKey] = string(encoded)
+			data := common.EmailTemplateData{Type: base.Type, Language: base.Language, Variables: map[string]string{
+				"site_name": "Ignored caller name", "verification_code": "048291", "expires_in_minutes": "10", "message": "Confirm this operation",
+			}}
+			for _, name := range []string{"MOTO & API", "New <Site>"} {
+				common.SystemName = name
+				_, body := Render("Original subject", "Original body", data)
+				expected := tc.footer
+				if tc.footer == "Powered by " {
+					expected += html.EscapeString(name)
+				}
+				assert.Contains(t, body, "<br>"+expected+"</p></td></tr>")
+				assert.NotContains(t, body, "Ignored caller name")
+				assert.Equal(t, string(encoded), common.OptionMap[common.EmailTemplateOptionKey], "rendering must not rewrite saved settings")
+				if tc.name == "saved legacy footer" {
+					assert.Contains(t, body, "background:#fafafa;")
+					assert.Contains(t, body, "Documentation mentions Powered by new-api.")
+				}
+			}
+		})
 	}
 }
 

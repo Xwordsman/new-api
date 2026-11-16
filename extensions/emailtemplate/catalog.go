@@ -153,7 +153,7 @@ func defaultTemplate(kind, lang string) Template {
 <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border:1px solid #e9eaf1;border-radius:16px;overflow:hidden">
 <tr><td style="padding:28px 32px 20px;border-top:4px solid #5b53f5"><p style="margin:0 0 22px;font-size:13px;font-weight:600;letter-spacing:1px;color:#5b53f5">{{site_name}}</p><h1 style="margin:0;font-size:25px;line-height:1.4;font-weight:700;color:#0a2540">%s</h1></td></tr>
 <tr><td style="padding:8px 32px 32px">%s</td></tr>
-<tr><td style="padding:20px 32px;background:#fafafe;border-top:1px solid #eef0f6"><p style="margin:0;font-size:12px;line-height:1.8;color:#8893a7">%s<br>Powered by new-api</p></td></tr>
+<tr><td style="padding:20px 32px;background:#fafafe;border-top:1px solid #eef0f6"><p style="margin:0;font-size:12px;line-height:1.8;color:#8893a7">%s<br>Powered by {{site_name}}</p></td></tr>
 </table></td></tr></table>
 </body></html>`, lang, title, title, body, footer)
 	return Template{Type: kind, Language: lang, Subject: "{{original_subject}}", HTML: html}

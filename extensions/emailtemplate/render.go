@@ -39,6 +39,9 @@ func compileTemplate(source Template) (*compiledTemplate, error) {
 		strings.ContainsFunc(source.Subject, unicode.IsControl) || !utf8.ValidString(source.Subject+source.HTML) {
 		return nil, errInvalid
 	}
+	// Previously saved bundled footers also use the current site name. Match
+	// only that footer markup so other template text and custom layouts stay intact.
+	source.HTML = strings.ReplaceAll(source.HTML, "<br>Powered by new-api</p></td></tr>", "<br>Powered by {{site_name}}</p></td></tr>")
 	allowed := map[string]bool{}
 	for _, variable := range variables(source.Type) {
 		allowed[variable.Name] = true
