@@ -271,6 +271,15 @@ func GetTokenByIds(id int, userId int) (*Token, error) {
 	return &token, err
 }
 
+// GetTokenRouteForUpdate serializes price consent checks with routing edits.
+// The caller must supply a transaction; credential and quota fields are omitted.
+func GetTokenRouteForUpdate(tx *gorm.DB, id, userID int) (*Token, error) {
+	var token Token
+	err := lockForUpdate(tx).Select("id", "user_id", "group", "auto_groups", "cross_group_retry").
+		Where("id = ? AND user_id = ?", id, userID).Take(&token).Error
+	return &token, err
+}
+
 func GetTokenById(id int) (*Token, error) {
 	if id == 0 {
 		return nil, errors.New("token id is empty")
@@ -308,6 +317,10 @@ func GetTokenByKey(key string, fromDB bool) (token *Token, err error) {
 // changing the token schema or its Redis authentication metadata.
 var TokenCreatedHook func(*gorm.DB, *Token) error
 
+// TokenUpdatedHook participates in an owned token update transaction. Extensions
+// can compare the locked previous route with the route explicitly being saved.
+var TokenUpdatedHook func(tx *gorm.DB, previous, updated *Token) error
+
 func (token *Token) Insert() error {
 	return DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(token).Error; err != nil {
@@ -326,9 +339,26 @@ func (token *Token) Update() (err error) {
 	if cacheErr := invalidateTokenCacheForMutation(token.Key); cacheErr != nil {
 		common.SysLog(common.LogText("failed to invalidate token cache before update: %s", cacheErr.Error()))
 	}
-	return DB.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
-		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry", "auto_groups",
-		"allow_user_quota_query").Updates(token).Error
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var previous *Token
+		if TokenUpdatedHook != nil {
+			var err error
+			previous, err = GetTokenRouteForUpdate(tx, token.Id, token.UserId)
+			if err != nil {
+				return err
+			}
+		}
+		if err := tx.Model(token).Where("user_id = ?", token.UserId).
+			Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
+				"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry", "auto_groups",
+				"allow_user_quota_query").Updates(token).Error; err != nil {
+			return err
+		}
+		if TokenUpdatedHook != nil {
+			return TokenUpdatedHook(tx, previous, token)
+		}
+		return nil
+	})
 }
 
 func (token *Token) SelectUpdate() (err error) {

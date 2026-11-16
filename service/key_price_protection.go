@@ -6,9 +6,11 @@ import (
 	"errors"
 	"math"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/extensions/keypricing/policy"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
@@ -77,7 +79,7 @@ func TokenPriceRouteHash(token *model.Token, userGroup string) (string, error) {
 }
 
 // InstallKeyPriceProtection runs once at startup, after extension migrations.
-// The creation hook participates in the token insertion transaction.
+// Both hooks participate in the host token transaction.
 func InstallKeyPriceProtection() {
 	model.TokenCreatedHook = func(tx *gorm.DB, token *model.Token) error {
 		s, err := policy.GetSettings(tx)
@@ -95,6 +97,47 @@ func InstallKeyPriceProtection() {
 		}
 		return tx.Create(&policy.State{TokenID: token.Id, UserID: token.UserId, Version: 1, Protected: s.DefaultProtect || !s.AllowOptOut, RouteHash: routeHash, Accepted: string(encoded), AcceptedAt: now.Unix()}).Error
 	}
+	model.TokenUpdatedHook = func(tx *gorm.DB, previous, token *model.Token) error {
+		if previous.Group == token.Group && previous.AutoGroups == token.AutoGroups && previous.CrossGroupRetry == token.CrossGroupRetry {
+			return nil
+		}
+		s, err := policy.GetSettings(tx)
+		if err != nil {
+			return err
+		}
+		now := time.Now()
+		routeHash, rates, err := CaptureTokenGroupPrices(tx, token, now)
+		if err != nil {
+			return err
+		}
+		encoded, err := common.Marshal(rates)
+		if err != nil {
+			return err
+		}
+		state, exists, err := policy.ReadState(tx, token.Id, token.UserId)
+		if err != nil {
+			return err
+		}
+		protected := s.DefaultProtect || !s.AllowOptOut
+		if exists {
+			protected = state.Protected
+		}
+		// An explicit routing edit accepts the selected groups at today's prices.
+		// Name/status saves never reach here, so they cannot bypass a price pause.
+		updated := policy.State{TokenID: token.Id, UserID: token.UserId, Version: state.Version + 1, Protected: protected, RouteHash: routeHash, Accepted: string(encoded), AcceptedAt: now.Unix()}
+		if exists {
+			r := tx.Model(&policy.State{}).Where("token_id = ? AND user_id = ? AND version = ?", token.Id, token.UserId, state.Version).Select("*").Updates(&updated)
+			if r.Error != nil {
+				return r.Error
+			}
+			if r.RowsAffected != 1 {
+				return policy.ErrConflict
+			}
+		} else if err = tx.Create(&updated).Error; err != nil {
+			return err
+		}
+		return tx.Create(&policy.Event{TokenID: token.Id, UserID: token.UserId, ActorID: token.UserId, CreatedAt: now.Unix(), Action: "accepted", Reason: "group_changed", Revision: s.Revision}).Error
+	}
 }
 
 // CheckTokenGroupPrice is called before each upstream attempt, including free
@@ -109,14 +152,36 @@ func CheckTokenGroupPrice(c *gin.Context, info *relaycommon.RelayInfo, ratio flo
 		return nil
 	}
 	if err == nil {
-		var token model.Token
-		err = db.Select("id", "user_id", "group", "auto_groups", "cross_group_retry").Where("id = ? AND user_id = ?", info.TokenId, info.UserId).Take(&token).Error
-		if err == nil {
-			var routeHash string
-			routeHash, err = TokenPriceRouteHash(&token, info.UserGroup)
-			if err == nil {
-				err = policy.Check(db, s, token.Id, token.UserId, routeHash, info.UsingGroup, ratio, time.Now().Unix())
+		var result error
+		err = db.Transaction(func(tx *gorm.DB) error {
+			token, err := model.GetTokenRouteForUpdate(tx, info.TokenId, info.UserId)
+			if err != nil {
+				return err
 			}
+			// A request may have authenticated just before its owner edited the
+			// route. Reject that stale attempt without pausing the newly saved Key.
+			if group, present := common.GetContextKey(c, constant.ContextKeyTokenGroup); present {
+				groups, err := token.GetAutoGroups()
+				if err != nil {
+					return err
+				}
+				if group != token.Group || common.GetContextKeyBool(c, constant.ContextKeyTokenCrossGroupRetry) != token.CrossGroupRetry ||
+					!slices.Equal(c.GetStringSlice(string(constant.ContextKeyTokenAutoGroups)), groups) {
+					return policy.ErrConflict
+				}
+			}
+			routeHash, err := TokenPriceRouteHash(token, info.UserGroup)
+			if err != nil {
+				return err
+			}
+			result = policy.Check(tx, s, token.Id, token.UserId, routeHash, info.UsingGroup, ratio, time.Now().Unix())
+			if errors.Is(result, policy.ErrPaused) {
+				return nil // Commit the pause and its audit event.
+			}
+			return result
+		})
+		if err == nil {
+			err = result
 		}
 	}
 	if err == nil {

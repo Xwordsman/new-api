@@ -1,4 +1,4 @@
-package keypricing
+package keypricing_test
 
 import (
 	"bytes"
@@ -16,6 +16,8 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/controller"
+	"github.com/QuantumNous/new-api/extensions/keypricing"
 	"github.com/QuantumNous/new-api/extensions/keypricing/policy"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/middleware"
@@ -68,6 +70,7 @@ func priceDB(t *testing.T) *gorm.DB {
 	t.Cleanup(func() { require.NoError(t, conn.Close()) })
 	oldDB, oldLogs, oldType := model.DB, model.LOG_DB, common.MainDatabaseType()
 	oldRedis, oldBatch, oldHook := common.RedisEnabled, common.BatchUpdateEnabled, model.TokenCreatedHook
+	oldUpdatedHook := model.TokenUpdatedHook
 	oldRate, oldSecret, oldSecure, oldTrusted := common.CriticalRateLimitEnable, common.SessionSecret, common.SessionCookieSecure, common.SessionCookieTrustedURLs
 	oldDiscount := groupdiscount.Default
 	oldUsable, oldAuto := setting.UserUsableGroups2JSONString(), setting.AutoGroups2JsonString()
@@ -85,6 +88,7 @@ func priceDB(t *testing.T) *gorm.DB {
 	}
 	t.Cleanup(func() {
 		model.DB, model.LOG_DB, model.TokenCreatedHook = oldDB, oldLogs, oldHook
+		model.TokenUpdatedHook = oldUpdatedHook
 		common.SetMainDatabaseType(oldType)
 		common.RedisEnabled, common.BatchUpdateEnabled = oldRedis, oldBatch
 		common.CriticalRateLimitEnable, common.SessionSecret, common.SessionCookieSecure, common.SessionCookieTrustedURLs = oldRate, oldSecret, oldSecure, oldTrusted
@@ -134,7 +138,10 @@ func priceRequest(t *testing.T, router http.Handler, method, path, credential, o
 		encoded, err = common.Marshal(body)
 		require.NoError(t, err)
 	}
-	r := httptest.NewRequest(method, "http://price.example/api/extensions/key-price"+path, bytes.NewReader(encoded))
+	if !strings.HasPrefix(path, "/api/") {
+		path = "/api/extensions/key-price" + path
+	}
+	r := httptest.NewRequest(method, "http://price.example"+path, bytes.NewReader(encoded))
 	r.Header.Set("Content-Type", "application/json")
 	if credential != "" {
 		r.Header.Set("Authorization", "Bearer "+credential)
@@ -337,6 +344,105 @@ func TestBillingProtectionUsesFrozenPricesBeforeFreeModelsAndCrossGroupRetries(t
 	assert.Nil(t, service.CheckTokenGroupPrice(ctx, info, 100))
 }
 
+func TestOwnerRoutingEditsRefreshProtectionWithoutAcceptingUnchangedPrices(t *testing.T) {
+	db := priceDB(t)
+	owner, credential := priceUser(t, db, "owner", common.RoleCommonUser)
+	_, stranger := priceUser(t, db, "stranger", common.RoleCommonUser)
+	s := policy.Defaults()
+	s.Enabled = true
+	s, err := policy.SaveSettings(db, s, 99, time.Now().Unix())
+	require.NoError(t, err)
+	token := model.Token{UserId: owner.Id, Key: "owner-route-key", Status: common.TokenStatusDisabled, RemainQuota: 700, ExpiredTime: -1}
+	require.NoError(t, token.Insert())
+	router := gin.New()
+	keypricing.RegisterRoutes(router.Group("/api"))
+	router.PUT("/api/token/", middleware.UserAuth(), controller.UpdateToken)
+	quotePath := fmt.Sprintf("/keys/%d", token.Id)
+	for _, change := range []struct {
+		name, group, auto string
+		retry             bool
+		rates             map[string]float64
+	}{
+		{"explicit group", "premium", "", false, map[string]float64{"premium": 2}},
+		{"enable Auto retry", "auto", `["default","premium"]`, true, map[string]float64{"default": 1, "premium": 2}},
+		{"change Auto groups", "auto", `["premium"]`, true, map[string]float64{"premium": 2}},
+		{"disable Auto retry", "auto", `["premium"]`, false, map[string]float64{"premium": 2}},
+	} {
+		t.Run(change.name, func(t *testing.T) {
+			previous, err := model.GetTokenByIds(token.Id, owner.Id)
+			require.NoError(t, err)
+			inflight, _ := gin.CreateTestContext(httptest.NewRecorder())
+			inflight.Request = httptest.NewRequest("POST", "/v1/chat/completions", nil)
+			require.NoError(t, middleware.SetupContextForToken(inflight, previous))
+			_, result := priceRequest(t, router, "POST", quotePath+"/quote", credential, "http://price.example", nil)
+			require.True(t, result.Success, result.Message)
+			var quote struct{ Quote string }
+			require.NoError(t, common.Unmarshal(result.Data, &quote))
+			token.Group, token.AutoGroups, token.CrossGroupRetry = change.group, change.auto, change.retry
+			payload := map[string]any{"id": token.Id, "name": "renamed", "group": token.Group, "remain_quota": token.RemainQuota, "expired_time": token.ExpiredTime, "cross_group_retry": token.CrossGroupRetry}
+			if token.AutoGroups != "" {
+				payload["auto_groups"], err = token.GetAutoGroups()
+				require.NoError(t, err)
+			}
+			_, result = priceRequest(t, router, "PUT", "/api/token/", stranger, "http://price.example", payload)
+			assert.False(t, result.Success, "another owner cannot refresh this Key's price consent")
+			_, result = priceRequest(t, router, "PUT", "/api/token/", credential, "http://price.example", payload)
+			require.True(t, result.Success, result.Message)
+			state, exists, err := policy.ReadState(db, token.Id, owner.Id)
+			require.NoError(t, err)
+			require.True(t, exists)
+			hash, _, err := service.CaptureTokenGroupPrices(db, &token, time.Now())
+			require.NoError(t, err)
+			assert.Equal(t, hash, state.RouteHash)
+			var rates map[string]float64
+			require.NoError(t, common.UnmarshalJsonStr(state.Accepted, &rates))
+			assert.Equal(t, change.rates, rates)
+			info := &relaycommon.RelayInfo{TokenId: token.Id, UserId: owner.Id, UserGroup: owner.Group, UsingGroup: "premium"}
+			blocked := service.CheckTokenGroupPrice(inflight, info, 2)
+			require.NotNil(t, blocked, "an attempt routed before the edit must retry using the new configuration")
+			assert.Equal(t, http.StatusServiceUnavailable, blocked.StatusCode)
+			require.NoError(t, middleware.SetupContextForToken(inflight, &token))
+			for group, rate := range change.rates {
+				info.UsingGroup = group
+				assert.Nil(t, service.CheckTokenGroupPrice(inflight, info, rate), "an owner-selected group must not pause the Key")
+			}
+			_, result = priceRequest(t, router, "POST", quotePath+"/accept", credential, "http://price.example", map[string]any{"quote": quote.Quote, "protected": true})
+			assert.False(t, result.Success, "routing edits invalidate an old price confirmation")
+			var stored model.Token
+			require.NoError(t, db.First(&stored, token.Id).Error)
+			assert.Equal(t, common.TokenStatusDisabled, stored.Status)
+			assert.Equal(t, token.RemainQuota, stored.RemainQuota)
+			assert.Equal(t, token.ExpiredTime, stored.ExpiredTime)
+		})
+	}
+	state, _, err := policy.ReadState(db, token.Id, owner.Id)
+	require.NoError(t, err)
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"premium":2.5,"free":0}`))
+	token.Name = "name-only edit"
+	require.NoError(t, token.Update())
+	assert.ErrorIs(t, policy.Check(db, s, token.Id, owner.Id, state.RouteHash, "premium", 2.5, time.Now().Unix()), policy.ErrPaused, "saving without a routing change must not accept a real price increase")
+	_, result := priceRequest(t, router, "PUT", "/api/token/?status_only=true", credential, "http://price.example", map[string]any{"id": token.Id, "status": common.TokenStatusEnabled})
+	require.True(t, result.Success, result.Message)
+	token.Name = "save while paused"
+	require.NoError(t, token.Update())
+	paused, _, err := policy.ReadState(db, token.Id, owner.Id)
+	require.NoError(t, err)
+	assert.True(t, paused.Paused, "status and name edits cannot clear a price pause")
+	assert.Equal(t, "ratio_increased", paused.Reason)
+	assert.Equal(t, state.Accepted, paused.Accepted)
+	var events []policy.Event
+	require.NoError(t, db.Where("token_id = ? AND action = ?", token.Id, "accepted").Find(&events).Error)
+	assert.Len(t, events, 4)
+	for _, event := range events {
+		assert.Equal(t, owner.Id, event.ActorID)
+		assert.Equal(t, "group_changed", event.Reason)
+	}
+	encoded, err := common.Marshal(events)
+	require.NoError(t, err)
+	assert.NotContains(t, string(encoded), token.Key)
+	assert.NotContains(t, string(encoded), credential)
+}
+
 func TestQuotesRequireOwnerRootSessionOriginAndSingleUseConsent(t *testing.T) {
 	db := priceDB(t)
 	require.NoError(t, model.EnsureLegacyAccessTokenRetireAt(time.Now().Unix()))
@@ -356,7 +462,7 @@ func TestQuotesRequireOwnerRootSessionOriginAndSingleUseConsent(t *testing.T) {
 	require.NoError(t, err)
 	assert.ErrorIs(t, policy.Check(db, saved, token.Id, owner.Id, state.RouteHash, "default", 2, time.Now().Unix()), policy.ErrPaused)
 	router := gin.New()
-	RegisterRoutes(router.Group("/api"))
+	keypricing.RegisterRoutes(router.Group("/api"))
 	for _, route := range router.Routes() {
 		rule, ok := middleware.AccessTokenRouteRule(route.Method + " " + route.Path)
 		require.True(t, ok)
@@ -449,7 +555,7 @@ func TestQuotesRejectExpiryChangedPriceRouteStateSettingsAndForbiddenOptOut(t *t
 			token := model.Token{UserId: owner.Id, Key: "stale-quote-key", Group: "default"}
 			require.NoError(t, token.Insert())
 			router := gin.New()
-			RegisterRoutes(router.Group("/api"))
+			keypricing.RegisterRoutes(router.Group("/api"))
 			path := fmt.Sprintf("/keys/%d", token.Id)
 			_, response := priceRequest(t, router, "POST", path+"/quote", credential, "http://price.example", nil)
 			require.True(t, response.Success)
@@ -482,7 +588,7 @@ func TestQuotesRejectExpiryChangedPriceRouteStateSettingsAndForbiddenOptOut(t *t
 	}
 }
 
-func TestCaptureFailureRollsBackTheHostInsert(t *testing.T) {
+func TestCaptureFailureRollsBackHostMutations(t *testing.T) {
 	db := priceDB(t)
 	owner, _ := priceUser(t, db, "owner", common.RoleCommonUser)
 	original := model.TokenCreatedHook
@@ -499,4 +605,48 @@ func TestCaptureFailureRollsBackTheHostInsert(t *testing.T) {
 	assert.Zero(t, count)
 	require.NoError(t, db.Model(&model.Token{}).Where(&model.Token{Key: token.Key}).Count(&count).Error)
 	assert.Zero(t, count)
+	model.TokenCreatedHook = original
+	require.NoError(t, token.Insert())
+	state, _, err := policy.ReadState(db, token.Id, owner.Id)
+	require.NoError(t, err)
+	updatedHook := model.TokenUpdatedHook
+	model.TokenUpdatedHook = func(tx *gorm.DB, previous, updated *model.Token) error {
+		if err := updatedHook(tx, previous, updated); err != nil {
+			return err
+		}
+		return errors.New("later extension rejected edit")
+	}
+	token.Group = "premium"
+	require.Error(t, token.Update())
+	stored, err := model.GetTokenByIds(token.Id, owner.Id)
+	require.NoError(t, err)
+	assert.Equal(t, "default", stored.Group, "failed consent writes must roll back routing edits")
+	retained, _, err := policy.ReadState(db, token.Id, owner.Id)
+	require.NoError(t, err)
+	assert.Equal(t, state, retained)
+	require.NoError(t, db.Model(&policy.Event{}).Where("token_id = ?", token.Id).Count(&count).Error)
+	assert.Zero(t, count, "rolled-back edits cannot leave acceptance events")
+	model.TokenUpdatedHook = updatedHook
+	token.UserId++
+	require.Error(t, token.Update(), "a different owner cannot mutate the route or consent")
+	token.UserId = owner.Id
+	// Re-selecting a different route also repairs historical group-change pauses,
+	// while retaining the owner's opt-out preference and host token restrictions.
+	require.NoError(t, db.Model(&policy.State{}).Where("token_id = ?", token.Id).Updates(map[string]any{"protected": false, "paused": true, "reason": "group_changed"}).Error)
+	require.NoError(t, token.Update())
+	retained, _, err = policy.ReadState(db, token.Id, owner.Id)
+	require.NoError(t, err)
+	assert.False(t, retained.Paused)
+	assert.False(t, retained.Protected)
+	assert.Equal(t, `{"premium":2}`, retained.Accepted)
+	// An explicit edit enrolls a previously untracked Key at its new route prices.
+	require.NoError(t, db.Where("token_id = ?", token.Id).Delete(&policy.State{}).Error)
+	token.Group = "free"
+	require.NoError(t, token.Update())
+	retained, exists, err := policy.ReadState(db, token.Id, owner.Id)
+	require.NoError(t, err)
+	assert.True(t, exists)
+	assert.True(t, retained.Protected)
+	assert.False(t, retained.Paused)
+	assert.Equal(t, `{"free":0}`, retained.Accepted)
 }
