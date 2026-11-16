@@ -27,14 +27,19 @@ import { ErrorState } from '@/components/error-state'
 import { LoadingState } from '@/components/loading-state'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber, formatTimestamp } from '@/lib/format'
+import { ROLE } from '@/lib/roles'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth-store'
 
 import { getBenchmarkRun } from '../api'
-import { useRunStatuses } from '../hooks/use-run-statuses'
+import { runDisplayStatus, useRunStatuses } from '../hooks/use-run-statuses'
 import { ArtworkPreview } from './artwork-preview'
 import { RegenerateResult } from './regenerate-result'
+import { ResultActions } from './result-actions'
 
 // Inline results and the enlarged dialog share the same saved data and controls.
 export function RunResult(props: {
@@ -42,13 +47,17 @@ export function RunResult(props: {
   inline?: boolean
   paused: boolean
   onOpen?: (id: number) => void
+  onDeleted?: () => void
 }) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const statuses = useRunStatuses()
+  const role = useAuthStore((state) => state.auth.user?.role ?? ROLE.GUEST)
+  const [version, setVersion] = useState<number | null>(null)
+  const id = version ?? props.id
   const query = useQuery({
-    queryKey: ['benchmark', 'run', props.id],
-    queryFn: () => getBenchmarkRun(props.id),
+    queryKey: ['benchmark', 'run', id, version === null ? 'latest' : 'exact'],
+    queryFn: () => getBenchmarkRun(id, version === null),
     refetchInterval: (q) => (q.state.data?.status === 'running' ? 5000 : false),
   })
   if (query.isPending) return <LoadingState className='min-h-32' />
@@ -56,7 +65,7 @@ export function RunResult(props: {
   const run = query.data
   const statusLabel =
     run.kind === 'svg' && run.status === 'passed'
-      ? t('Generation successful')
+      ? t('SVG structure passed')
       : statuses[run.status].label
   return (
     <article
@@ -94,7 +103,79 @@ export function RunResult(props: {
           </StatusBadge>
         </div>
       </div>
-      <RegenerateResult key={run.id} run={run} onOpen={props.onOpen} />
+      {(run.versions?.length ?? 0) > 1 && (
+        <div className='flex flex-wrap items-center gap-2'>
+          <Label
+            htmlFor={`versions-${props.inline ? 'inline' : 'dialog'}-${props.id}`}
+          >
+            {t('Result versions')}
+          </Label>
+          <NativeSelect
+            id={`versions-${props.inline ? 'inline' : 'dialog'}-${props.id}`}
+            value={version ?? 'latest'}
+            onChange={(event) =>
+              setVersion(
+                event.target.value === 'latest'
+                  ? null
+                  : Number(event.target.value)
+              )
+            }
+          >
+            <NativeSelectOption value='latest'>
+              {t('Latest version')}
+            </NativeSelectOption>
+            {run.versions?.map((item) => (
+              <NativeSelectOption key={item.id} value={item.id}>
+                {formatTimestamp(item.created_at)} ·{' '}
+                {item.manual ? t('Manual regeneration') : t('Automatic check')}{' '}
+                · #{item.id}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </div>
+      )}
+      <RegenerateResult
+        key={run.id}
+        run={run}
+        onOpen={(next) => {
+          setVersion(next)
+          props.onOpen?.(next)
+        }}
+        onVersion={setVersion}
+      />
+      {run.kind === 'svg' && run.status === 'passed' && (
+        <div className='space-y-1'>
+          <StatusBadge
+            variant={statuses[runDisplayStatus(run)].variant}
+            label={
+              run.quality === 'normal'
+                ? t('Visual quality normal')
+                : statuses[runDisplayStatus(run)].label
+            }
+            copyable={false}
+          />
+          {run.quality_reason && (
+            <p className='text-muted-foreground text-xs break-words'>
+              {t('Review reason')}: {run.quality_reason}
+            </p>
+          )}
+          {!!run.reviewed_at && (
+            <p className='text-muted-foreground text-xs'>
+              {t('Administrator review')} · {formatTimestamp(run.reviewed_at)}
+            </p>
+          )}
+        </div>
+      )}
+      {role >= ROLE.ADMIN && (
+        <ResultActions
+          key={`${run.id}-${run.reviewed_at ?? 0}`}
+          run={run}
+          onDeleted={(next) => {
+            if (next) setVersion(next)
+            else props.onDeleted?.()
+          }}
+        />
+      )}
       {!props.inline && (
         <p className='text-muted-foreground font-mono text-[11px] break-all'>
           {run.group} · {run.model} · {formatTimestamp(run.created_at)}
@@ -270,9 +351,11 @@ export function RunDetail(props: { id: number; onClose: () => void }) {
         {paused ? t('Resume previews') : t('Pause previews')}
       </Button>
       <RunResult
+        key={id}
         id={id}
         paused={paused}
         onOpen={(next) => setSelected({ source: props.id, id: next })}
+        onDeleted={props.onClose}
       />
     </Dialog>
   )

@@ -38,15 +38,20 @@ import { formatNumber, formatTimestamp } from '@/lib/format'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { resolveModelProvider } from '@/lib/model-provider'
 
-import { groupStatus, useRunStatuses } from '../hooks/use-run-statuses'
+import {
+  groupStatus,
+  runDisplayStatus,
+  useRunStatuses,
+  type DisplayStatus,
+} from '../hooks/use-run-statuses'
 import { buildTimeline } from '../lib/timeline'
-import type { BenchmarkGroup, RunSummary, RunStatus } from '../types'
+import type { BenchmarkGroup, RunSummary } from '../types'
 import { SavedArtwork } from './artwork-preview'
 import { RunResult } from './run-detail'
 
-// A failure remains visible when manual retests share its scheduled window.
-const severity: Record<RunStatus, number> = {
+const severity: Record<DisplayStatus, number> = {
   passed: 0,
+  pending: 1,
   running: 1,
   interrupted: 2,
   invalid: 3,
@@ -54,6 +59,8 @@ const severity: Record<RunStatus, number> = {
   request_failed: 3,
   timeout: 3,
   wrong_answer: 4,
+  suspected: 4,
+  abnormal: 5,
 }
 
 export const GroupCard = memo(function GroupCard(props: {
@@ -69,9 +76,9 @@ export const GroupCard = memo(function GroupCard(props: {
   const g = props.group
   const [open, setOpen] = useState(false)
   const [selected, setSelected] = useState<RunSummary[]>([])
-  const runs = [...g.runs].sort(
-    (a, b) => b.created_at - a.created_at || b.id - a.id
-  )
+  const runs = g.runs
+    .filter((run) => !run.manual)
+    .sort((a, b) => b.created_at - a.created_at || b.id - a.id)
   const latestSVG = g.svg_enabled
     ? runs.find((r) => r.kind === 'svg' && r.status === 'passed')
     : undefined
@@ -84,13 +91,15 @@ export const GroupCard = memo(function GroupCard(props: {
       runs.find((r) => r.kind === 'candy')?.status === 'running') ||
     (g.svg_enabled && runs.find((r) => r.kind === 'svg')?.status === 'running')
   const labels = {
-    passed: t('No degradation detected'),
+    passed: t('Checks normal'),
+    pending: t('Awaiting visual review'),
     suspected: t('Suspected degradation'),
     failed: t('Request or output failure'),
     unknown: checking ? t('Checking') : t('No checks'),
   }
   const variants = {
     passed: 'success',
+    pending: 'neutral',
     suspected: 'danger',
     failed: 'warning',
     unknown: checking ? 'info' : 'neutral',
@@ -116,8 +125,11 @@ export const GroupCard = memo(function GroupCard(props: {
     props.now,
     props.historyHours
   )
-  const displayed = selected.length
-    ? selected
+  const selectedRuns = selected.flatMap((item) =>
+    runs.filter((run) => run.id === item.id)
+  )
+  const displayed = selectedRuns.length
+    ? selectedRuns
     : [
         latestCandy,
         g.svg_enabled ? runs.find((r) => r.kind === 'svg') : undefined,
@@ -177,7 +189,7 @@ export const GroupCard = memo(function GroupCard(props: {
             </div>
             <dl className='benchmark-group-stats'>
               <div>
-                <dt>{t('Success rate')}</dt>
+                <dt>{t('Basic check pass rate')}</dt>
                 <dd>
                   {total
                     ? `${formatNumber(((g.totals.candy_passed + g.totals.svg_passed) / total) * 100, locale)}%`
@@ -235,7 +247,8 @@ export const GroupCard = memo(function GroupCard(props: {
                         >(
                           (worst, run) =>
                             !worst ||
-                            severity[run.status] > severity[worst.status]
+                            severity[runDisplayStatus(run)] >
+                              severity[runDisplayStatus(worst)]
                               ? run
                               : worst,
                           undefined
@@ -246,8 +259,9 @@ export const GroupCard = memo(function GroupCard(props: {
                           state = 'disabled'
                           description = t('Disabled')
                         } else if (representative) {
-                          state = representative.status
-                          description = statuses[representative.status].label
+                          state = runDisplayStatus(representative)
+                          description =
+                            statuses[runDisplayStatus(representative)].label
                         }
                         const time = representative?.created_at ?? slot.start
                         return (
@@ -263,7 +277,7 @@ export const GroupCard = memo(function GroupCard(props: {
                                   aria-label={`${label} · ${formatTimestamp(time)} · ${description}`}
                                   aria-pressed={Boolean(
                                     open &&
-                                    selected.some((run) =>
+                                    selectedRuns.some((run) =>
                                       slot.runs.some((r) => r.id === run.id)
                                     )
                                   )}
@@ -373,6 +387,7 @@ export const GroupCard = memo(function GroupCard(props: {
                 inline
                 paused={props.paused}
                 onOpen={props.onOpen}
+                onDeleted={() => setSelected([])}
               />
             ))}
             {displayed.length === 0 && (

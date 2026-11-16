@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
 import { LoadingState } from '@/components/loading-state'
+import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import {
   Pagination,
@@ -33,6 +34,7 @@ import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber, formatTimestamp } from '@/lib/format'
 
 import { getBenchmarkArtworks } from '../api'
+import { runDisplayStatus, useRunStatuses } from '../hooks/use-run-statuses'
 import { SavedArtwork } from './artwork-preview'
 
 export function ArtworkGallery(props: {
@@ -43,6 +45,7 @@ export function ArtworkGallery(props: {
 }) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
+  const statuses = useRunStatuses()
   const [page, setPage] = useState(1)
   const query = useQuery({
     queryKey: ['benchmark', 'artworks', props.group, page],
@@ -51,6 +54,7 @@ export function ArtworkGallery(props: {
   })
   const data = query.data
   const pages = Math.max(1, Math.ceil((data?.total ?? 0) / 15))
+  if (data && page > pages) setPage(pages)
   return (
     <section className='mt-5 space-y-4' aria-label={t('SVG artwork gallery')}>
       <div className='flex items-center justify-between gap-3'>
@@ -59,6 +63,11 @@ export function ArtworkGallery(props: {
           {t('{{count}} artworks', { count: data?.total ?? 0 })}
         </span>
       </div>
+      <p className='text-muted-foreground text-xs'>
+        {t(
+          'The gallery shows the latest completed version of each result. Earlier versions remain in result details.'
+        )}
+      </p>
       {query.isPending && <LoadingState />}
       {query.isError && <ErrorState onRetry={() => void query.refetch()} />}
       {data?.items.length === 0 && (
@@ -82,6 +91,15 @@ export function ArtworkGallery(props: {
                   className='pointer-events-none h-52 rounded-none border-0'
                 />
                 <div className='space-y-2 border-t p-3'>
+                  <StatusBadge
+                    copyable={false}
+                    variant={statuses[runDisplayStatus(item)].variant}
+                    label={
+                      item.quality === 'normal'
+                        ? t('Visual quality normal')
+                        : statuses[runDisplayStatus(item)].label
+                    }
+                  />
                   <Button
                     variant='link'
                     className='h-auto w-full justify-start px-0 text-sm'

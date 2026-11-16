@@ -20,10 +20,19 @@ import { useTranslation } from 'react-i18next'
 
 import type { StatusVariant } from '@/components/status-badge'
 
-import type { BenchmarkGroup, RunStatus } from '../types'
+import type { BenchmarkGroup, RunStatus, RunSummary } from '../types'
+
+export type DisplayStatus = RunStatus | 'pending' | 'suspected' | 'abnormal'
+
+export function runDisplayStatus(run: RunSummary): DisplayStatus {
+  if (run.kind !== 'svg' || run.status !== 'passed') return run.status
+  if (!run.quality) return 'pending'
+  if (run.quality === 'normal') return 'passed'
+  return run.quality
+}
 
 export function useRunStatuses(): Record<
-  RunStatus,
+  DisplayStatus,
   { label: string; variant: StatusVariant }
 > {
   const { t } = useTranslation()
@@ -36,17 +45,25 @@ export function useRunStatuses(): Record<
     request_failed: { label: t('Request failed'), variant: 'warning' },
     timeout: { label: t('Timed out'), variant: 'warning' },
     interrupted: { label: t('Interrupted'), variant: 'neutral' },
+    pending: { label: t('Awaiting visual review'), variant: 'neutral' },
+    suspected: { label: t('Visual quality suspected'), variant: 'warning' },
+    abnormal: { label: t('Visual quality abnormal'), variant: 'danger' },
   }
 }
 
 export function groupStatus(
   group: BenchmarkGroup
-): 'passed' | 'suspected' | 'failed' | 'unknown' {
+): 'passed' | 'pending' | 'suspected' | 'failed' | 'unknown' {
   if (!group.enabled) return 'unknown'
   const candy =
-    group.candy_enabled && group.runs.find((r) => r.kind === 'candy')
-  const svg = group.svg_enabled && group.runs.find((r) => r.kind === 'svg')
+    group.candy_enabled &&
+    group.runs.find((r) => r.kind === 'candy' && !r.manual)
+  const svg =
+    group.svg_enabled && group.runs.find((r) => r.kind === 'svg' && !r.manual)
   if (candy && candy.status === 'wrong_answer') return 'suspected'
+  if (svg && (svg.quality === 'suspected' || svg.quality === 'abnormal')) {
+    return 'suspected'
+  }
   if (
     [candy, svg].some(
       (r) => r && r.status !== 'passed' && r.status !== 'running'
@@ -62,5 +79,6 @@ export function groupStatus(
     return 'unknown'
   }
   if ([candy, svg].some((r) => r && r.status === 'running')) return 'unknown'
+  if (svg && !svg.quality) return 'pending'
   return 'passed'
 }

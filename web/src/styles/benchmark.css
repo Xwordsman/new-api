@@ -218,11 +218,13 @@ For commercial licensing, please contact support@quantumnous.com
 .benchmark-lane-cell[data-status='passed'] {
   background: var(--success);
 }
-.benchmark-lane-cell[data-status='wrong_answer'] {
+.benchmark-lane-cell[data-status='wrong_answer'],
+.benchmark-lane-cell[data-status='abnormal'] {
   background: var(--destructive);
 }
 .benchmark-lane-cell:is(
   [data-status='invalid'],
+  [data-status='suspected'],
   [data-status='truncated'],
   [data-status='request_failed'],
   [data-status='timeout'],
@@ -232,6 +234,9 @@ For commercial licensing, please contact support@quantumnous.com
 }
 .benchmark-lane-cell[data-status='running'] {
   background: var(--info);
+}
+.benchmark-lane-cell[data-status='pending'] {
+  background: color-mix(in oklch, var(--muted-foreground) 65%, var(--card));
 }
 :is(.benchmark-lane-cell, .benchmark-legend i)[data-status='empty'] {
   background: color-mix(in oklch, var(--muted-foreground) 18%, var(--card));

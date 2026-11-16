@@ -28,6 +28,9 @@ func RegisterRoutes(api *gin.RouterGroup) {
 	admin.PUT("/settings", middleware.SessionCookieOriginGuard(), middleware.UserCriticalRateLimit("benchmark-admin"), updateSettings)
 	actions := api.Group("/extensions/benchmark/admin", middleware.AdminAuth(), middleware.DisableCache(), queryTimeout())
 	actions.POST("/runs/:id/regenerate", middleware.StrictSessionCookieOriginGuard(), middleware.UserCriticalRateLimit("benchmark-regenerate"), regenerateRun)
+	actions.PUT("/runs/:id/quality", middleware.StrictSessionCookieOriginGuard(), middleware.UserCriticalRateLimit("benchmark-history"), reviewRun)
+	actions.DELETE("/runs/:id", middleware.StrictSessionCookieOriginGuard(), middleware.UserCriticalRateLimit("benchmark-history"), deleteRun)
+	actions.POST("/cleanup", middleware.StrictSessionCookieOriginGuard(), middleware.UserCriticalRateLimit("benchmark-history"), cleanupRuns)
 }
 
 var errRegenerationBusy = errors.New("A benchmark regeneration is already running or queued")
@@ -75,7 +78,7 @@ func enqueueRegeneration(db *gorm.DB, source Run, administrator int) (Run, error
 	}
 	run := Run{GroupName: source.GroupName, Model: source.Model, Kind: source.Kind, PromptName: source.PromptName,
 		Prompt: source.Prompt, Expected: source.Expected, Status: "running", Manual: true,
-		SourceRunID: source.ID, RequestedBy: administrator, TaskID: taskID, CreatedAt: time.Now().Unix()}
+		SourceRunID: source.ID, RootRunID: source.seriesID(), RequestedBy: administrator, TaskID: taskID, CreatedAt: time.Now().Unix()}
 	key := regenerationTaskType
 	err = db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&model.SystemTask{TaskID: taskID, Type: key, ActiveKey: &key, Status: model.SystemTaskStatusPending}).Error; err != nil {
@@ -114,7 +117,7 @@ func respond(c *gin.Context, data any, err error) {
 		common.ApiSuccess(c, data)
 		return
 	}
-	if errors.Is(err, errInvalid) || errors.Is(err, errConflict) || errors.Is(err, errRegenerationBusy) || errors.Is(err, errRegenerationDisabled) {
+	if errors.Is(err, errInvalid) || errors.Is(err, errConflict) || errors.Is(err, errRegenerationBusy) || errors.Is(err, errRegenerationDisabled) || errors.Is(err, errHistoryInvalid) {
 		common.ApiError(c, err)
 		return
 	}
@@ -161,11 +164,13 @@ func updateSettings(c *gin.Context) {
 }
 
 type totals struct {
-	CandyTotal  int64 `json:"candy_total"`
-	CandyPassed int64 `json:"candy_passed"`
-	SVGTotal    int64 `json:"svg_total"`
-	SVGPassed   int64 `json:"svg_passed"`
-	Anomalies   int64 `json:"anomalies"`
+	CandyTotal     int64 `json:"candy_total"`
+	CandyPassed    int64 `json:"candy_passed"`
+	SVGTotal       int64 `json:"svg_total"`
+	SVGPassed      int64 `json:"svg_passed"`
+	Anomalies      int64 `json:"anomalies"`
+	AwaitingReview int64 `json:"awaiting_review"`
+	ManualTotal    int64 `json:"manual_total"`
 }
 
 type publicGroup struct {
@@ -220,23 +225,28 @@ func buildSnapshot(db *gorm.DB, s Settings, userGroup string, now int64) (snapsh
 			g.NextAt = nextAutomaticAt(latest.LastAutoAt, g.IntervalSeconds, now)
 		}
 		var runs []Run
-		err = db.Select("id", "kind", "status", "created_at", "latency_ms", "prompt_name", "manual", "source_run_id").Where("group_name = ? AND created_at >= ?", config.Group, now-int64(s.HistoryHours)*3600).Order("id DESC").Limit(600 * s.HistoryHours / 24).Find(&runs).Error
+		err = db.Select(summaryColumns).Where("group_name = ? AND created_at >= ? AND (manual = ? OR manual IS NULL)", config.Group, now-int64(s.HistoryHours)*3600, false).Order("id DESC").Limit(600 * s.HistoryHours / 24).Find(&runs).Error
 		if err != nil {
 			return data, err
 		}
 		for _, r := range runs {
 			g.Runs = append(g.Runs, r.summary())
 		}
-		// Totals cover every completed result, including when the timeline's
-		// bounded metadata sample is smaller than an unusually busy history.
+		// Automatic checks remain the statistical baseline. A manual version
+		// cannot replace a failure in the scheduled timeline or inflate its rate.
 		var counts []struct {
-			Kind, Status string
-			Count        int64
+			Kind, Status, Quality string
+			Manual                bool
+			Count                 int64
 		}
-		if err := db.Model(&Run{}).Select("kind, status, COUNT(*) AS count").Where("group_name = ? AND created_at >= ? AND status <> ?", config.Group, now-86400, "running").Group("kind, status").Scan(&counts).Error; err != nil {
+		if err := db.Model(&Run{}).Select("kind, status, quality, manual, COUNT(*) AS count").Where("group_name = ? AND created_at >= ? AND status <> ?", config.Group, now-86400, "running").Group("kind, status, quality, manual").Scan(&counts).Error; err != nil {
 			return data, err
 		}
 		for _, count := range counts {
+			if count.Manual {
+				g.Totals.ManualTotal += count.Count
+				continue
+			}
 			if count.Kind == "candy" {
 				g.Totals.CandyTotal += count.Count
 				if count.Status == "passed" {
@@ -247,9 +257,12 @@ func buildSnapshot(db *gorm.DB, s Settings, userGroup string, now int64) (snapsh
 				g.Totals.SVGTotal += count.Count
 				if count.Status == "passed" {
 					g.Totals.SVGPassed += count.Count
+					if count.Quality == "" {
+						g.Totals.AwaitingReview += count.Count
+					}
 				}
 			}
-			if count.Status != "passed" {
+			if count.Status != "passed" || (count.Kind == "svg" && (count.Quality == "suspected" || count.Quality == "abnormal")) {
 				g.Totals.Anomalies += count.Count
 			}
 		}
@@ -258,6 +271,8 @@ func buildSnapshot(db *gorm.DB, s Settings, userGroup string, now int64) (snapsh
 		data.Summary.SVGTotal += g.Totals.SVGTotal
 		data.Summary.SVGPassed += g.Totals.SVGPassed
 		data.Summary.Anomalies += g.Totals.Anomalies
+		data.Summary.AwaitingReview += g.Totals.AwaitingReview
+		data.Summary.ManualTotal += g.Totals.ManualTotal
 		data.Groups = append(data.Groups, g)
 	}
 	return data, nil
@@ -285,7 +300,27 @@ func getRun(c *gin.Context) {
 		c.Status(http.StatusNotFound)
 		return
 	}
-	respond(c, run, err)
+	if err != nil {
+		respond(c, nil, err)
+		return
+	}
+	var versions []RunSummary
+	if err = db.Model(&Run{}).Select(summaryColumns).Where("group_name = ? AND (id = ? OR root_run_id = ?)", run.GroupName, run.seriesID(), run.seriesID()).Order("id DESC").Find(&versions).Error; err != nil {
+		respond(c, nil, err)
+		return
+	}
+	if c.Query("latest") == "true" && len(versions) > 0 && versions[0].ID != run.ID {
+		group := run.GroupName
+		run = Run{}
+		if err = db.Where("id = ? AND group_name = ?", versions[0].ID, group).Take(&run).Error; err != nil {
+			respond(c, nil, err)
+			return
+		}
+	}
+	respond(c, struct {
+		Run
+		Versions []RunSummary `json:"versions"`
+	}{run, versions}, nil)
 }
 
 func getArtworks(c *gin.Context) {
@@ -307,7 +342,10 @@ func getArtworks(c *gin.Context) {
 			groups = append(groups, g.Group)
 		}
 	}
-	query := db.Model(&Run{}).Where("group_name IN ? AND kind = ? AND status = ?", groups, "svg", "passed")
+	// Select a completed version before filtering for success: a failed retest
+	// must not quietly resurrect an earlier successful image in the gallery.
+	latest := db.Model(&Run{}).Select("MAX(id)").Where("group_name IN ? AND kind = ? AND status <> ?", groups, "svg", "running").Group("CASE WHEN root_run_id > 0 THEN root_run_id ELSE id END")
+	query := db.Model(&Run{}).Where("id IN (?) AND status = ?", latest, "passed")
 	var total int64
 	if err = query.Count(&total).Error; err != nil {
 		respond(c, nil, err)
@@ -316,6 +354,6 @@ func getArtworks(c *gin.Context) {
 	// Artwork HTML is fetched only when opened. Listing stays bounded even
 	// when a model produces hundreds of kilobytes of animation code.
 	items := []Run{}
-	err = query.Select("id", "group_name", "model", "kind", "prompt_name", "status", "created_at", "latency_ms", "manual", "source_run_id").Order("id DESC").Offset((page - 1) * 15).Limit(15).Find(&items).Error
+	err = query.Select(summaryColumns + ", group_name, model").Order("id DESC").Offset((page - 1) * 15).Limit(15).Find(&items).Error
 	respond(c, gin.H{"items": items, "total": total, "page": page, "page_size": 15}, err)
 }

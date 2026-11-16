@@ -25,6 +25,9 @@ import type {
   BenchmarkSettings,
   SettingsResponse,
   Snapshot,
+  RunSummary,
+  HistorySelection,
+  CleanupPreview,
 } from './types'
 
 type Envelope<T> = { success: boolean; message: string; data: T }
@@ -55,9 +58,69 @@ export async function getBenchmarkSnapshot(): Promise<Snapshot> {
   ).data
 }
 
-export async function getBenchmarkRun(id: number): Promise<BenchmarkRun> {
+export async function getBenchmarkRun(
+  id: number,
+  latest = false
+): Promise<BenchmarkRun> {
   return requireServerSuccess(
-    (await api.get<Envelope<BenchmarkRun>>(`${base}/runs/${id}`)).data
+    (
+      await api.get<Envelope<BenchmarkRun>>(`${base}/runs/${id}`, {
+        params: { latest },
+      })
+    ).data
+  ).data
+}
+
+export async function reviewBenchmarkRun(
+  id: number,
+  quality: RunSummary['quality'],
+  reason: string,
+  reviewedAt: number
+) {
+  return requireServerSuccess(
+    (
+      await api.put<Envelope<{ reviewed_at: number }>>(
+        `${base}/admin/runs/${id}/quality`,
+        { quality, reason, reviewed_at: reviewedAt }
+      )
+    ).data
+  ).data
+}
+
+export async function deleteBenchmarkRun(id: number) {
+  return requireServerSuccess(
+    (
+      await api.delete<
+        Envelope<{ deleted_count: number; next_run_id: number }>
+      >(`${base}/admin/runs/${id}`)
+    ).data
+  ).data
+}
+
+export async function previewBenchmarkCleanup(
+  selection: HistorySelection
+): Promise<CleanupPreview> {
+  return requireServerSuccess(
+    (
+      await api.post<Envelope<CleanupPreview>>(`${base}/admin/cleanup`, {
+        ...selection,
+        preview: true,
+      })
+    ).data
+  ).data
+}
+
+export async function cleanupBenchmarkRuns(
+  selection: HistorySelection,
+  ids: number[]
+) {
+  return requireServerSuccess(
+    (
+      await api.post<Envelope<{ deleted_count: number }>>(
+        `${base}/admin/cleanup`,
+        { ...selection, ids, preview: false }
+      )
+    ).data
   ).data
 }
 

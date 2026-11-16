@@ -34,6 +34,7 @@ import { createAppQueryClient } from '@/lib/query-client'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
+import { groupStatus } from '../hooks/use-run-statuses'
 import { BenchmarkPage } from '../index'
 import type { BenchmarkGroup, BenchmarkRun, Snapshot } from '../types'
 
@@ -115,6 +116,37 @@ const snapshot: Snapshot = {
   },
 }
 
+it('keeps a structurally valid but unreviewed SVG pending instead of claiming normal intelligence', () => {
+  expect(
+    groupStatus({
+      ...group,
+      svg_enabled: true,
+      runs: [
+        { ...run, status: 'passed' },
+        { ...run, id: 23, kind: 'svg', status: 'passed' },
+      ],
+    })
+  ).toBe('pending')
+})
+
+it('does not let a successful manual regeneration hide an automatic candy failure', () => {
+  expect(
+    groupStatus({
+      ...group,
+      runs: [
+        {
+          ...run,
+          id: 23,
+          status: 'passed',
+          manual: true,
+          source_run_id: run.id,
+        },
+        run,
+      ],
+    })
+  ).toBe('suspected')
+})
+
 function renderPage(data = snapshot, translations: i18n = i18next) {
   const client = createAppQueryClient()
   client.setDefaultOptions({
@@ -162,10 +194,18 @@ it('translates Chinese benchmark labels and statuses and updates them when the l
   expect(
     screen.getByRole('button', { name: /糖果逻辑 · .*答案不符/ })
   ).toBeVisible()
+  expect(screen.getByRole('button', { name: /^待评估/ })).toBeVisible()
+  expect(screen.getByRole('region', { name: 'SVG结构通过率' })).toBeVisible()
   await act(() => translations.changeLanguage('en'))
   expect(screen.getByRole('heading', { name: 'Model benchmark' })).toBeVisible()
   expect(
     screen.getByRole('button', { name: /Candy logic · .*Answer mismatch/ })
+  ).toBeVisible()
+  expect(
+    screen.getByRole('button', { name: /^Awaiting visual review/ })
+  ).toBeVisible()
+  expect(
+    screen.getByRole('region', { name: 'SVG structure pass rate' })
   ).toBeVisible()
 })
 
@@ -492,6 +532,9 @@ it('hides regeneration from ordinary users even when an original result is open'
     .getState()
     .auth.setUser({ id: 2, username: 'member', role: ROLE.USER })
   renderPage()
+  expect(
+    screen.queryByRole('button', { name: 'Clean up history' })
+  ).not.toBeInTheDocument()
   await user.click(await screen.findByRole('button', { name: 'gpt-public' }))
   expect(await screen.findByText('The saved candy question')).toBeVisible()
   expect(
@@ -500,8 +543,295 @@ it('hides regeneration from ordinary users even when an original result is open'
   await user.click(screen.getByRole('button', { name: 'View original output' }))
   const dialog = await screen.findByRole('dialog', { name: 'Benchmark result' })
   expect(
+    within(dialog).queryByRole('button', { name: 'Delete result' })
+  ).not.toBeInTheDocument()
+  expect(
+    within(dialog).queryByRole('button', { name: 'Review visual quality' })
+  ).not.toBeInTheDocument()
+  expect(
     within(dialog).queryByRole('button', { name: 'Regenerate result' })
   ).not.toBeInTheDocument()
+})
+
+it('requires a reason for an adverse visual review and displays the saved assessment without changing structural status', async () => {
+  const user = userEvent.setup()
+  useAuthStore
+    .getState()
+    .auth.setUser({ id: 1, username: 'admin', role: ROLE.ADMIN })
+  let svg: BenchmarkRun = {
+    ...run,
+    kind: 'svg',
+    status: 'passed',
+    output: '<svg><circle/></svg>',
+    quality: '',
+  }
+  const data = {
+    ...snapshot,
+    groups: [
+      { ...group, candy_enabled: false, svg_enabled: true, runs: [svg] },
+    ],
+  }
+  const get = renderPage(data)
+  get.mockImplementation(async (url) => {
+    if (url.endsWith('/snapshot')) return { data: { success: true, data } }
+    if (url.endsWith('/artworks')) {
+      return { data: { success: true, data: { items: [], total: 0 } } }
+    }
+    return { data: { success: true, data: svg } }
+  })
+  const put = vi.spyOn(api, 'put').mockImplementation(async () => {
+    svg = {
+      ...svg,
+      quality: 'abnormal',
+      quality_reason: 'Detached wheels',
+      reviewed_at: 1800000010,
+    }
+    return { data: { success: true, data: { reviewed_at: svg.reviewed_at } } }
+  })
+  await user.click(await screen.findByRole('button', { name: 'gpt-public' }))
+  await user.click(
+    await screen.findByRole('button', { name: 'Review visual quality' })
+  )
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Review visual quality',
+  })
+  await user.selectOptions(
+    within(dialog).getByRole('combobox', { name: 'Visual quality' }),
+    'abnormal'
+  )
+  await user.click(within(dialog).getByRole('button', { name: 'Save review' }))
+  expect(await within(dialog).findByRole('alert')).toBeVisible()
+  expect(
+    within(dialog).getByRole('textbox', { name: 'Review reason' })
+  ).toHaveAttribute('aria-invalid', 'true')
+  expect(put).not.toHaveBeenCalled()
+  await user.type(
+    within(dialog).getByRole('textbox', { name: 'Review reason' }),
+    'Detached wheels'
+  )
+  await user.click(within(dialog).getByRole('button', { name: 'Save review' }))
+  expect(
+    await screen.findByText('Review reason: Detached wheels')
+  ).toBeVisible()
+  const result = screen
+    .getByText('Review reason: Detached wheels')
+    .closest('article')
+  if (!result) throw new Error('The review must remain attached to its result')
+  expect(within(result).getByText('Visual quality abnormal')).toBeVisible()
+  expect(within(result).getByText('SVG structure passed')).toBeVisible()
+  expect(put).toHaveBeenCalledExactlyOnceWith(
+    '/api/extensions/benchmark/admin/runs/21/quality',
+    { quality: 'abnormal', reason: 'Detached wheels', reviewed_at: 0 }
+  )
+})
+
+it('shows the latest result by default and lets a user switch to the original version', async () => {
+  const user = userEvent.setup()
+  const get = renderPage()
+  const latest: BenchmarkRun = {
+    ...run,
+    id: 31,
+    manual: true,
+    source_run_id: run.id,
+    status: 'passed',
+    output: '21',
+  }
+  const versions = [latest, run]
+  get.mockImplementation(async (url, config) => {
+    if (url.endsWith('/snapshot')) {
+      return { data: { success: true, data: snapshot } }
+    }
+    if (url.endsWith('/artworks')) {
+      return { data: { success: true, data: { items: [], total: 0 } } }
+    }
+    const params = config?.params as { latest?: boolean } | undefined
+    return {
+      data: {
+        success: true,
+        data: { ...(params?.latest ? latest : run), versions },
+      },
+    }
+  })
+  await user.click(await screen.findByRole('button', { name: 'gpt-public' }))
+  const select = await screen.findByRole('combobox', {
+    name: 'Result versions',
+  })
+  expect(select).toHaveValue('latest')
+  expect(screen.getByText('Manual regeneration')).toBeVisible()
+  await user.selectOptions(select, '21')
+  expect(await screen.findByText('29', { exact: true })).toBeVisible()
+  expect(select).toHaveValue('21')
+  expect(get).toHaveBeenCalledWith('/api/extensions/benchmark/runs/21', {
+    params: { latest: false },
+  })
+})
+
+it('keeps deletion confirmation open on failure and closes a deleted result after a successful retry', async () => {
+  const user = userEvent.setup()
+  useAuthStore
+    .getState()
+    .auth.setUser({ id: 1, username: 'admin', role: ROLE.ADMIN })
+  const get = renderPage()
+  const remove = vi
+    .spyOn(api, 'delete')
+    .mockResolvedValueOnce({
+      data: { success: false, message: 'Unable to load benchmark data' },
+    })
+    .mockImplementation(async () => {
+      get.mockImplementation(async (url) => ({
+        data: {
+          success: true,
+          data: url.endsWith('/artworks')
+            ? { items: [], total: 0 }
+            : { ...snapshot, groups: [] },
+        },
+      }))
+      return {
+        data: { success: true, data: { deleted_count: 1, next_run_id: 0 } },
+      }
+    })
+  await user.click(await screen.findByRole('button', { name: 'gpt-public' }))
+  await user.click(
+    await screen.findByRole('button', { name: 'View original output' })
+  )
+  const result = await screen.findByRole('dialog', { name: 'Benchmark result' })
+  await user.click(
+    await within(result).findByRole('button', { name: 'Delete result' })
+  )
+  const confirm = await screen.findByRole('alertdialog', {
+    name: 'Delete this benchmark result?',
+  })
+  expect(remove).not.toHaveBeenCalled()
+  await user.click(
+    within(confirm).getByRole('button', { name: 'Delete result' })
+  )
+  await waitFor(() =>
+    expect(
+      within(confirm).getByRole('button', { name: 'Delete result' })
+    ).toBeEnabled()
+  )
+  expect(confirm).toBeVisible()
+  await user.click(
+    within(confirm).getByRole('button', { name: 'Delete result' })
+  )
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('dialog', { name: 'Benchmark result' })
+    ).not.toBeInTheDocument()
+  )
+  expect(remove).toHaveBeenLastCalledWith(
+    '/api/extensions/benchmark/admin/runs/21'
+  )
+})
+
+it('previews a group history selection and deletes exactly those versions after confirmation', async () => {
+  const user = userEvent.setup()
+  useAuthStore
+    .getState()
+    .auth.setUser({ id: 1, username: 'admin', role: ROLE.ADMIN })
+  renderPage()
+  const post = vi
+    .spyOn(api, 'post')
+    .mockResolvedValueOnce({
+      data: { success: true, data: { count: 2, ids: [21, 31] } },
+    })
+    .mockResolvedValueOnce({
+      data: { success: true, data: { deleted_count: 2 } },
+    })
+  await user.click(
+    await screen.findByRole('button', { name: 'Clean up history' })
+  )
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Clean up benchmark history',
+  })
+  await user.selectOptions(
+    within(dialog).getByRole('combobox', { name: 'Group' }),
+    'gpt-public'
+  )
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Preview cleanup' })
+  )
+  const confirm = await screen.findByRole('alertdialog', {
+    name: 'Delete selected benchmark results?',
+  })
+  expect(post).toHaveBeenCalledTimes(1)
+  const selection = post.mock.calls[0][1] as {
+    group: string
+    after: number
+    before: number
+    preview: boolean
+  }
+  expect(selection).toMatchObject({ group: 'gpt-public', preview: true })
+  await user.click(
+    within(confirm).getByRole('button', { name: 'Delete results' })
+  )
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('dialog', { name: 'Clean up benchmark history' })
+    ).not.toBeInTheDocument()
+  )
+  expect(post).toHaveBeenLastCalledWith(
+    '/api/extensions/benchmark/admin/cleanup',
+    { ...selection, preview: false, ids: [21, 31] }
+  )
+})
+
+it('returns the artwork gallery to the last available page after history deletion reduces its page count', async () => {
+  const user = userEvent.setup()
+  let total = 16
+  const get = renderPage()
+  get.mockImplementation(async (url, config) => {
+    if (url.endsWith('/snapshot')) {
+      return { data: { success: true, data: snapshot } }
+    }
+    if (url.endsWith('/artworks')) {
+      const params = config?.params as { page?: number } | undefined
+      const page = params?.page ?? 1
+      return {
+        data: {
+          success: true,
+          data: {
+            items:
+              page === 1 || total > 15
+                ? [
+                    {
+                      ...run,
+                      id: 30 + page,
+                      kind: 'svg',
+                      status: 'passed',
+                      prompt_name: `Artwork page ${page}`,
+                    },
+                  ]
+                : [],
+            total,
+            page,
+            page_size: 15,
+          },
+        },
+      }
+    }
+    return { data: { success: true, data: run } }
+  })
+  const gallery = await screen.findByRole('region', {
+    name: 'SVG artwork gallery',
+  })
+  await waitFor(() =>
+    expect(within(gallery).getByRole('button', { name: 'Next' })).toBeEnabled()
+  )
+  await user.click(within(gallery).getByRole('button', { name: 'Next' }))
+  expect(
+    await within(gallery).findByRole('button', { name: 'Artwork page 2' })
+  ).toBeVisible()
+  total = 1
+  await act(async () => {
+    await clients[0].invalidateQueries({ queryKey: ['benchmark', 'artworks'] })
+  })
+  expect(
+    await within(gallery).findByRole('button', { name: 'Artwork page 1' })
+  ).toBeVisible()
+  expect(
+    within(gallery).getByRole('button', { name: 'Previous' })
+  ).toBeDisabled()
 })
 
 it('queues an administrator regeneration once, opens the new record and preserves access to the original result and automatic schedule', async () => {
@@ -573,6 +903,12 @@ it('queues an administrator regeneration once, opens the new record and preserve
   expect(
     within(dialog).getByRole('button', { name: 'Regenerate result' })
   ).toBeDisabled()
+  expect(
+    within(dialog).getByRole('button', { name: 'Delete result' })
+  ).toBeDisabled()
+  expect(
+    within(dialog).queryByRole('button', { name: 'Review visual quality' })
+  ).not.toBeInTheDocument()
   expect(
     clients[0].getQueryData<Snapshot>(['benchmark', 'snapshot'])?.groups[0]
       .next_at

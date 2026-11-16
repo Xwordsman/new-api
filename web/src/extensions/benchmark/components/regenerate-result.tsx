@@ -33,6 +33,7 @@ import type { BenchmarkRun } from '../types'
 export function RegenerateResult(props: {
   run: BenchmarkRun
   onOpen?: (id: number) => void
+  onVersion?: (id: number) => void
 }) {
   const { t } = useTranslation()
   const role = useAuthStore((state) => state.auth.user?.role ?? ROLE.GUEST)
@@ -49,6 +50,9 @@ export function RegenerateResult(props: {
     },
   })
   const sourceRunID = props.run.source_run_id
+  const sourceExists =
+    !props.run.versions ||
+    props.run.versions.some((version) => version.id === sourceRunID)
   if (role < ROLE.ADMIN && !props.run.manual && !sourceRunID) return null
   return (
     <div className='flex flex-wrap items-center gap-2'>
@@ -57,11 +61,11 @@ export function RegenerateResult(props: {
           {t('Manual regeneration')}
         </span>
       )}
-      {!!sourceRunID && props.onOpen && (
+      {!!sourceRunID && sourceExists && (props.onVersion || props.onOpen) && (
         <Button
           variant='link'
           size='sm'
-          onClick={() => props.onOpen?.(sourceRunID)}
+          onClick={() => (props.onVersion ?? props.onOpen)?.(sourceRunID)}
         >
           {t('View original result')}
         </Button>

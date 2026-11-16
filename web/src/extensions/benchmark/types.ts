@@ -63,6 +63,10 @@ export type RunSummary = {
   prompt_name: string
   manual?: boolean
   source_run_id?: number
+  root_run_id?: number
+  quality?: '' | 'normal' | 'suspected' | 'abnormal'
+  quality_reason?: string
+  reviewed_at?: number
 }
 
 export type BenchmarkRun = RunSummary & {
@@ -76,6 +80,7 @@ export type BenchmarkRun = RunSummary & {
   input_tokens: number
   output_tokens: number
   manual: boolean
+  versions?: RunSummary[]
 }
 
 export type Totals = {
@@ -84,7 +89,12 @@ export type Totals = {
   svg_total: number
   svg_passed: number
   anomalies: number
+  awaiting_review?: number
+  manual_total?: number
 }
+
+export type HistorySelection = { group: string; after: number; before: number }
+export type CleanupPreview = { ids: number[]; count: number }
 
 export type BenchmarkGroup = BenchmarkGroupSettings & {
   interval_seconds: number

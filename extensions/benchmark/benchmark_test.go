@@ -51,13 +51,146 @@ func benchmarkTestDB(t *testing.T, dialect string) *gorm.DB {
 		connection.SetMaxOpenConns(1)
 	}
 	t.Cleanup(func() { require.NoError(t, connection.Close()) })
-	for _, table := range []any{&Run{}, &GroupState{}, &model.Option{}, &model.SystemTask{}} {
+	for _, table := range []any{&Run{}, &GroupState{}, &HistoryAudit{}, &model.Option{}, &model.SystemTask{}} {
 		require.NoError(t, db.Migrator().DropTable(table))
 	}
 	require.NoError(t, db.AutoMigrate(&model.Option{}, &model.SystemTask{}))
 	require.NoError(t, Migrate(db))
 	require.NoError(t, Migrate(db))
 	return db
+}
+
+func TestBenchmarkHistoryMatrix(t *testing.T) {
+	dialects := []string{"sqlite"}
+	if os.Getenv("BENCHMARK_TEST_EXTERNAL") == "1" {
+		dialects = append(dialects, "mysql", "postgres")
+	}
+	for _, dialect := range dialects {
+		t.Run(dialect, func(t *testing.T) {
+			db := benchmarkTestDB(t, dialect)
+			var version string
+			versionSQL := "SELECT VERSION()"
+			if dialect == "sqlite" {
+				versionSQL = "SELECT sqlite_version()"
+			}
+			require.NoError(t, db.Raw(versionSQL).Scan(&version).Error)
+			t.Logf("Verified database: %s %s", dialect, version)
+			s := benchmarkTestSettings(t)
+			_, err := saveSettings(db, s)
+			require.NoError(t, err)
+			now := time.Now().Unix()
+			state := GroupState{GroupName: "public", LastAutoAt: now - 10, SVGSequence: 7}
+			require.NoError(t, db.Create(&state).Error)
+			// Upgrade the released schema with a two-generation manual chain.
+			added := []string{"RootRunID", "Quality", "QualityReason", "ReviewedBy", "ReviewedAt"}
+			for _, field := range added {
+				require.NoError(t, db.Migrator().DropColumn(&Run{}, field))
+			}
+			require.NoError(t, db.Migrator().DropTable(&HistoryAudit{}))
+			original := Run{GroupName: "public", Kind: "svg", Status: "passed", Output: "<svg><circle/></svg>", CreatedAt: now - 100}
+			require.NoError(t, db.Omit(added...).Create(&original).Error)
+			first := Run{GroupName: "public", Kind: "svg", Status: "passed", Manual: true, SourceRunID: original.ID, CreatedAt: now - 90}
+			require.NoError(t, db.Omit(added...).Create(&first).Error)
+			second := first
+			second.ID, second.SourceRunID, second.CreatedAt = 0, first.ID, now-80
+			require.NoError(t, db.Omit(added...).Create(&second).Error)
+			require.NoError(t, Migrate(db))
+			require.NoError(t, Migrate(db))
+			var saved Run
+			require.NoError(t, db.First(&saved, original.ID).Error)
+			assert.Equal(t, original, saved)
+			saved = Run{}
+			require.NoError(t, db.First(&saved, second.ID).Error)
+			assert.Equal(t, original.ID, saved.RootRunID)
+			assert.Equal(t, first.ID, saved.SourceRunID)
+			assert.True(t, db.Migrator().HasIndex(&Run{}, "idx_benchmark_root"))
+			assert.True(t, db.Migrator().HasIndex(&Run{}, "idx_benchmark_source"))
+			previousDB := model.DB
+			model.DB = db
+			t.Cleanup(func() { model.DB = previousDB })
+			router := gin.New()
+			router.Use(func(c *gin.Context) { c.Set("id", 42); c.Set("user_group", "member") })
+			router.GET("/runs/:id", getRun)
+			router.GET("/artworks", getArtworks)
+			router.PUT("/runs/:id/quality", reviewRun)
+			router.DELETE("/runs/:id", deleteRun)
+			router.POST("/cleanup", cleanupRuns)
+			request := func(method, path string, body any) *httptest.ResponseRecorder {
+				encoded, err := common.Marshal(body)
+				require.NoError(t, err)
+				recorder := httptest.NewRecorder()
+				router.ServeHTTP(recorder, httptest.NewRequest(method, path, strings.NewReader(string(encoded))))
+				return recorder
+			}
+			path := "/runs/" + strconv.FormatInt(original.ID, 10)
+			response := request(http.MethodGet, path+"?latest=true", nil)
+			var detail struct {
+				Data struct {
+					Run
+					Versions []RunSummary `json:"versions"`
+				} `json:"data"`
+			}
+			require.NoError(t, common.Unmarshal(response.Body.Bytes(), &detail))
+			assert.Equal(t, second.ID, detail.Data.ID)
+			assert.Len(t, detail.Data.Versions, 3)
+			response = request(http.MethodGet, "/artworks", nil)
+			assert.Contains(t, response.Body.String(), `"total":1`)
+			before, err := buildSnapshot(db, s, "member", now)
+			require.NoError(t, err)
+			assert.Equal(t, totals{SVGTotal: 1, SVGPassed: 1, AwaitingReview: 1, ManualTotal: 2}, before.Summary)
+			assert.Len(t, before.Groups[0].Runs, 1)
+			assert.Contains(t, request(http.MethodPut, path+"/quality", gin.H{"quality": "abnormal"}).Body.String(), `"success":false`)
+			response = request(http.MethodPut, path+"/quality", gin.H{"quality": "abnormal", "reason": "Detached wheels", "reviewed_at": 0})
+			assert.Contains(t, response.Body.String(), `"success":true`)
+			assert.Contains(t, request(http.MethodPut, path+"/quality", gin.H{"quality": "normal", "reviewed_at": 0}).Body.String(), `"success":false`, "stale reviewer must not overwrite a newer decision")
+			after, err := buildSnapshot(db, s, "member", now)
+			require.NoError(t, err)
+			assert.Equal(t, int64(1), after.Summary.Anomalies)
+			assert.Zero(t, after.Summary.AwaitingReview)
+			assert.Equal(t, before.Groups[0].NextAt, after.Groups[0].NextAt)
+			// Auditing is atomic: losing the audit store must preserve the result.
+			require.NoError(t, db.Migrator().DropTable(&HistoryAudit{}))
+			_, err = deleteHistory(db, []int64{first.ID}, 42)
+			require.Error(t, err)
+			var count int64
+			require.NoError(t, db.Model(&Run{}).Where("id = ?", first.ID).Count(&count).Error)
+			assert.Equal(t, int64(1), count)
+			require.NoError(t, Migrate(db))
+			response = request(http.MethodDelete, path, nil)
+			assert.Contains(t, response.Body.String(), `"deleted_count":1`)
+			assert.Contains(t, response.Body.String(), `"next_run_id":`+strconv.FormatInt(second.ID, 10))
+			response = request(http.MethodGet, "/runs/"+strconv.FormatInt(second.ID, 10), nil)
+			assert.NotContains(t, response.Body.String(), `"output":"<svg><circle/></svg>"`)
+			assert.Contains(t, response.Body.String(), `"root_run_id":`+strconv.FormatInt(original.ID, 10))
+			private := Run{GroupName: "private", Kind: "svg", Status: "passed", CreatedAt: now - 50}
+			running := Run{GroupName: "public", Kind: "svg", Status: "running", CreatedAt: now - 50}
+			require.NoError(t, db.Create(&private).Error)
+			require.NoError(t, db.Create(&running).Error)
+			assert.Equal(t, http.StatusNotFound, request(http.MethodDelete, "/runs/"+strconv.FormatInt(private.ID, 10), nil).Code)
+			assert.Contains(t, request(http.MethodDelete, "/runs/"+strconv.FormatInt(running.ID, 10), nil).Body.String(), `"success":false`)
+			criteria := gin.H{"group": "public", "after": now - 200, "before": now, "preview": true}
+			response = request(http.MethodPost, "/cleanup", criteria)
+			var preview struct {
+				Data struct {
+					IDs   []int64 `json:"ids"`
+					Count int     `json:"count"`
+				} `json:"data"`
+			}
+			require.NoError(t, common.Unmarshal(response.Body.Bytes(), &preview))
+			assert.Equal(t, []int64{first.ID, second.ID}, preview.Data.IDs)
+			criteria["preview"], criteria["ids"] = false, append([]int64{private.ID}, preview.Data.IDs...)
+			assert.Contains(t, request(http.MethodPost, "/cleanup", criteria).Body.String(), `"success":false`)
+			criteria["ids"] = preview.Data.IDs
+			assert.Contains(t, request(http.MethodPost, "/cleanup", criteria).Body.String(), `"deleted_count":2`)
+			require.NoError(t, db.Model(&HistoryAudit{}).Count(&count).Error)
+			assert.Equal(t, int64(3), count)
+			var cursor GroupState
+			require.NoError(t, db.First(&cursor).Error)
+			assert.Equal(t, state, cursor)
+			require.NoError(t, Migrate(db))
+			require.NoError(t, Migrate(db))
+		})
+	}
 }
 
 func benchmarkTestSettings(t *testing.T) Settings {
@@ -659,8 +792,10 @@ func TestBenchmarkRegenerationAdminAuthorization(t *testing.T) {
 	}
 	router := gin.New()
 	RegisterRoutes(router.Group("/api"))
-	request := func(role int, origin string, id int64) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(http.MethodPost, "http://benchmark.example/api/extensions/benchmark/admin/runs/"+strconv.FormatInt(id, 10)+"/regenerate", nil)
+	requestOperation := func(role int, origin, method, path string, body any) *httptest.ResponseRecorder {
+		encoded, err := common.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(method, "http://benchmark.example/api/extensions/benchmark/admin"+path, strings.NewReader(string(encoded)))
 		if credentials[role] != "" {
 			req.Header.Set("Authorization", "Bearer "+credentials[role])
 		}
@@ -670,6 +805,9 @@ func TestBenchmarkRegenerationAdminAuthorization(t *testing.T) {
 		response := httptest.NewRecorder()
 		router.ServeHTTP(response, req)
 		return response
+	}
+	request := func(role int, origin string, id int64) *httptest.ResponseRecorder {
+		return requestOperation(role, origin, http.MethodPost, "/runs/"+strconv.FormatInt(id, 10)+"/regenerate", nil)
 	}
 	for _, role := range []int{0, common.RoleCommonUser} {
 		assert.Contains(t, []int{http.StatusUnauthorized, http.StatusForbidden}, request(role, "http://benchmark.example", source.ID).Code)
@@ -718,7 +856,39 @@ func TestBenchmarkRegenerationAdminAuthorization(t *testing.T) {
 			require.NoError(t, db.Model(&source).Update("status", "wrong_answer").Error)
 		})
 	}
+	for _, operation := range []struct{ method, path string }{
+		{http.MethodPut, "/runs/" + strconv.FormatInt(source.ID, 10) + "/quality"},
+		{http.MethodDelete, "/runs/" + strconv.FormatInt(source.ID, 10)},
+		{http.MethodPost, "/cleanup"},
+	} {
+		for _, role := range []int{0, common.RoleCommonUser} {
+			assert.Contains(t, []int{http.StatusUnauthorized, http.StatusForbidden}, requestOperation(role, "http://benchmark.example", operation.method, operation.path, nil).Code)
+		}
+		for _, origin := range []string{"", "https://untrusted.example"} {
+			assert.Equal(t, http.StatusForbidden, requestOperation(common.RoleAdminUser, origin, operation.method, operation.path, nil).Code)
+		}
+	}
+	for _, role := range []int{common.RoleAdminUser, common.RoleRootUser} {
+		public := Run{GroupName: "public", Kind: "svg", Status: "passed", CreatedAt: time.Now().Unix() - 300}
+		require.NoError(t, db.Create(&public).Error)
+		path := "/runs/" + strconv.FormatInt(public.ID, 10)
+		assert.Contains(t, requestOperation(role, "http://benchmark.example", http.MethodPut, path+"/quality", gin.H{"quality": "normal", "reviewed_at": 0}).Body.String(), `"success":true`)
+		assert.Contains(t, requestOperation(role, "http://benchmark.example", http.MethodPost, "/cleanup", gin.H{"group": "public", "after": public.CreatedAt - 1, "before": public.CreatedAt + 1, "preview": true}).Body.String(), `"success":true`)
+		assert.Contains(t, requestOperation(role, "http://benchmark.example", http.MethodDelete, path, nil).Body.String(), `"success":true`)
+	}
+	privatePath := "/runs/" + strconv.FormatInt(private.ID, 10)
+	assert.Equal(t, http.StatusNotFound, requestOperation(common.RoleAdminUser, "http://benchmark.example", http.MethodPut, privatePath+"/quality", gin.H{"quality": "normal"}).Code)
+	assert.Equal(t, http.StatusNotFound, requestOperation(common.RoleAdminUser, "http://benchmark.example", http.MethodDelete, privatePath, nil).Code)
+	response := requestOperation(common.RoleAdminUser, "http://benchmark.example", http.MethodPost, "/cleanup", gin.H{"group": "private", "after": time.Now().Unix() - 600, "before": time.Now().Unix(), "preview": false, "ids": []int64{private.ID}})
+	assert.Contains(t, response.Body.String(), `"success":false`)
 	session := sessions[common.RoleAdminUser]
 	require.NoError(t, db.Model(&session).Update("status", "revoked").Error)
 	assert.Equal(t, http.StatusUnauthorized, request(common.RoleAdminUser, "http://benchmark.example", source.ID).Code)
+	for _, operation := range []struct{ method, path string }{
+		{http.MethodPut, privatePath + "/quality"},
+		{http.MethodDelete, privatePath},
+		{http.MethodPost, "/cleanup"},
+	} {
+		assert.Equal(t, http.StatusUnauthorized, requestOperation(common.RoleAdminUser, "http://benchmark.example", operation.method, operation.path, nil).Code)
+	}
 }

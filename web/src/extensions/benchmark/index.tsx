@@ -42,11 +42,14 @@ import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Switch } from '@/components/ui/switch'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber } from '@/lib/format'
+import { ROLE } from '@/lib/roles'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth-store'
 
 import { getBenchmarkSnapshot } from './api'
 import { ArtworkGallery } from './components/artwork-gallery'
 import { GroupCard } from './components/group-card'
+import { HistoryCleanup } from './components/history-cleanup'
 import { RunDetail } from './components/run-detail'
 import { groupStatus, useRunStatuses } from './hooks/use-run-statuses'
 
@@ -56,6 +59,7 @@ import '@/styles/benchmark.css'
 export function BenchmarkPage() {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
+  const role = useAuthStore((state) => state.auth.user?.role ?? ROLE.GUEST)
   const [automatic, setAutomatic] = useState(true)
   const [paused, setPaused] = useState(false)
   const [filter, setFilter] = useState('all')
@@ -116,7 +120,7 @@ export function BenchmarkPage() {
       }),
     },
     {
-      title: t('SVG success rate'),
+      title: t('SVG structure pass rate'),
       code: 'ARTWORK',
       icon: PenTool,
       tone: 'speed',
@@ -124,9 +128,9 @@ export function BenchmarkPage() {
         ? formatNumber((summary.svg_passed / summary.svg_total) * 100, locale)
         : '—',
       suffix: '%',
-      description: t(
-        'SVG success indicates valid structure, not visual quality.'
-      ),
+      description: t('{{count}} automatic SVG results await visual review.', {
+        count: summary?.awaiting_review ?? 0,
+      }),
     },
     {
       title: t('Anomalies'),
@@ -136,13 +140,14 @@ export function BenchmarkPage() {
       value: formatNumber(summary?.anomalies ?? 0, locale),
       suffix: '',
       description: t(
-        'Answer mismatches, request failures and incomplete output are retained.'
+        'Automatic answer mismatches, request failures, incomplete output and adverse visual reviews.'
       ),
     },
   ]
   const filters = [
     { value: 'all', label: t('All') },
-    { value: 'passed', label: t('No degradation detected') },
+    { value: 'passed', label: t('Checks normal') },
+    { value: 'pending', label: t('Awaiting visual review') },
     { value: 'suspected', label: t('Suspected degradation') },
     { value: 'failed', label: t('Request or output failure') },
     { value: 'unknown', label: t('No checks') },
@@ -176,6 +181,9 @@ export function BenchmarkPage() {
         )}
         actions={
           <div className='monitor-controls flex flex-wrap items-center gap-3'>
+            {role >= ROLE.ADMIN && (
+              <HistoryCleanup groups={groups.map((item) => item.group)} />
+            )}
             <div className='flex items-center gap-2'>
               <Switch
                 id='benchmark-auto'
@@ -294,6 +302,8 @@ export function BenchmarkPage() {
                 {(
                   [
                     'passed',
+                    'pending',
+                    'abnormal',
                     'wrong_answer',
                     'request_failed',
                     'running',
@@ -346,7 +356,8 @@ export function BenchmarkPage() {
                 RULE
               </span>
               {t(
-                'Scheduled candy logic and SVG checks for selected groups. Disabled checks do not count as successes or failures.'
+                'Rates and timeline use automatic checks only. {{count}} completed manual regenerations in the last 24 hours are shown separately in result versions.',
+                { count: summary?.manual_total ?? 0 }
               )}
             </p>
             {visible.length === 0 ? (
