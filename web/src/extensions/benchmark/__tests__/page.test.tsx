@@ -16,12 +16,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { readFileSync } from 'node:fs'
+
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import i18next, { type i18n } from 'i18next'
+import postcss from 'postcss'
 import { I18nextProvider, initReactI18next } from 'react-i18next'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import en from '@/i18n/locales/en.json'
 import zh from '@/i18n/locales/zh.json'
@@ -34,7 +37,19 @@ import { BenchmarkPage } from '../index'
 import type { BenchmarkGroup, BenchmarkRun, Snapshot } from '../types'
 
 const clients: QueryClient[] = []
+let stylesheet: HTMLStyleElement
+beforeEach(() => {
+  const css = postcss.parse(readFileSync('src/styles/benchmark.css', 'utf8'))
+  // jsdom has no container layout; responsive behavior is checked in-browser.
+  css.walkAtRules('container', (rule) => {
+    rule.remove()
+  })
+  stylesheet = document.createElement('style')
+  stylesheet.textContent = css.toString()
+  document.head.append(stylesheet)
+})
 afterEach(() => {
+  stylesheet.remove()
   clients.forEach((client) => client.clear())
   clients.length = 0
   useAuthStore.getState().auth.setUser(null)
@@ -188,7 +203,7 @@ it('filters groups by status and selection, then opens the saved question and or
   expect(
     screen.getByRole('button', { name: /Candy logic · .*Answer mismatch/ })
   ).toHaveAttribute('aria-pressed', 'true')
-  await user.click(screen.getByRole('button', { name: 'View details' }))
+  await user.click(screen.getByRole('button', { name: 'View original output' }))
   const dialog = await screen.findByRole('dialog', { name: 'Benchmark result' })
   expect(
     await within(dialog).findByText('The saved candy question')
@@ -214,7 +229,7 @@ it('expands and collapses group results from the keyboard', async () => {
   expect(screen.queryByText('The saved candy question')).not.toBeInTheDocument()
 })
 
-it('lets the root administrator expand a group and queue a retest without modifying automatic settings', async () => {
+it('lets root view saved results and refresh the page without allowing a manual detection', async () => {
   const user = userEvent.setup()
   useAuthStore
     .getState()
@@ -226,12 +241,11 @@ it('lets the root administrator expand a group and queue a retest without modify
   await user.click(await screen.findByRole('button', { name: 'gpt-public' }))
   expect(await screen.findByText('The saved candy question')).toBeVisible()
   expect(screen.getByText('Expected answer')).toBeVisible()
-  await user.click(screen.getByRole('button', { name: 'Retest group' }))
-  await waitFor(() =>
-    expect(post).toHaveBeenCalledWith('/api/extensions/benchmark/admin/run', {
-      group: 'gpt-public',
-    })
-  )
+  expect(
+    screen.queryByRole('button', { name: 'Retest group' })
+  ).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Refresh' }))
+  expect(post).not.toHaveBeenCalled()
   expect(screen.getByRole('switch', { name: 'Auto refresh' })).toBeChecked()
 })
 
@@ -246,6 +260,69 @@ it('keeps empty hourly slots visible instead of stretching a single result acros
   expect(
     within(lane).getByRole('button', { name: /Answer mismatch/ })
   ).toHaveAttribute('aria-pressed', 'false')
+  for (const cell of within(lane).getAllByRole('button')) {
+    const style = getComputedStyle(cell)
+    expect(style.height).toBe('28px')
+    expect(style.maxWidth).toBe('16px')
+    expect(style.flexShrink).toBe('1')
+  }
+})
+
+it('preserves saved question line breaks and caps the expanded SVG preview at 400 by 300 without limiting the dialog', async () => {
+  const user = userEvent.setup()
+  const question =
+    'Saved question\n\n| Shape | Apple |\n| Circle | 7 |\n\nReturn one number.'
+  const svg: BenchmarkRun = {
+    ...run,
+    id: 23,
+    kind: 'svg',
+    status: 'passed',
+    prompt_name: 'Giraffe on a skateboard',
+    output: '<svg><circle r="10"/></svg>',
+  }
+  const data = {
+    ...snapshot,
+    groups: [{ ...group, svg_enabled: true, runs: [run, svg] }],
+  }
+  const get = renderPage(data)
+  get.mockImplementation(async (url) => {
+    if (url.endsWith('/snapshot')) return { data: { success: true, data } }
+    if (url.endsWith('/artworks')) {
+      return { data: { success: true, data: { items: [], total: 0 } } }
+    }
+    return {
+      data: {
+        success: true,
+        data: url.endsWith('/runs/23') ? svg : { ...run, prompt: question },
+      },
+    }
+  })
+  await user.click(await screen.findByRole('button', { name: 'gpt-public' }))
+  const prompt = await screen.findByLabelText('Saved prompt')
+  expect(prompt.textContent).toBe(question)
+  expect(getComputedStyle(prompt).whiteSpace).toBe('pre-wrap')
+  expect(screen.getByText('Model final answer')).toBeVisible()
+  expect(screen.getByText(/final answer must exactly match 21/)).toBeVisible()
+  const artwork = await screen.findByRole('figure', {
+    name: 'Giraffe on a skateboard',
+  })
+  const preview = within(artwork)
+    .getByTitle('SVG artwork preview')
+    .closest('.benchmark-preview')
+  expect(preview).not.toBeNull()
+  expect(getComputedStyle(preview as Element).maxWidth).toBe('400px')
+  expect(getComputedStyle(preview as Element).aspectRatio).toBe('4 / 3')
+  expect(within(artwork).getByText('gpt-public')).toBeVisible()
+  expect(within(artwork).getByText('1.2s')).toBeVisible()
+  await user.click(
+    within(artwork).getByRole('button', { name: 'View details' })
+  )
+  const dialog = await screen.findByRole('dialog', { name: 'Benchmark result' })
+  const enlarged = within(dialog)
+    .getByTitle('SVG artwork preview')
+    .closest('.benchmark-preview')
+  expect(enlarged).not.toBeNull()
+  expect(getComputedStyle(enlarged as Element).maxWidth).not.toBe('400px')
 })
 
 it('shows an active SVG check as checking when the candy check has already passed', async () => {

@@ -173,11 +173,13 @@ For commercial licensing, please contact support@quantumnous.com
 .benchmark-lane-cells {
   min-width: 0;
   display: flex;
+  justify-content: space-between;
   gap: 3px;
 }
 .benchmark-lane-cell {
   height: 28px;
   width: auto;
+  max-width: 16px;
   min-width: 0;
   padding: 0;
   border: 0;
@@ -309,33 +311,97 @@ For commercial licensing, please contact support@quantumnous.com
 .benchmark-expanded {
   padding: 16px 20px 20px;
   border-top: 1px solid var(--border);
-  background: color-mix(in oklch, var(--muted) 25%, var(--card));
+  background: var(--card);
 }
 .benchmark-results {
+  position: relative;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-.benchmark-results > .benchmark-result {
-  background: var(--card);
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px;
+  background: var(--card);
+}
+.benchmark-results-close {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  z-index: 1;
+}
+.benchmark-result-inline {
+  padding: 16px 18px;
+}
+.benchmark-result-inline + .benchmark-result-inline {
+  border-left: 1px solid var(--border);
+}
+.benchmark-result-inline:only-of-type {
+  grid-column: 1 / -1;
+}
+.benchmark-result-inline:last-child .benchmark-result-heading {
+  padding-right: 28px;
+}
+.benchmark-result-time {
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 1px 6px;
+  color: var(--muted-foreground);
+  font: 11px/16px var(--font-mono);
+}
+.benchmark-result-status {
+  height: 20px;
+  border: 1px solid color-mix(in oklch, currentColor 45%, transparent);
+  border-radius: 2px;
+  background: color-mix(in oklch, currentColor 5%, var(--card));
+  font-size: 11px;
 }
 .benchmark-prompt {
   max-height: 360px;
   overflow: auto;
-  font-size: 12px;
-  line-height: 1.7;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 0.7);
+  padding: 10px 12px;
+  font: 12px/1.9 var(--font-sans);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
-.benchmark-prompt table {
-  width: 100%;
-  border-collapse: collapse;
+.benchmark-answers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.benchmark-answers > div {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 0.7);
+  padding: 10px 12px;
+}
+.benchmark-run-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--muted-foreground);
   font-size: 11px;
 }
-.benchmark-prompt :is(th, td) {
+.benchmark-run-metrics > div {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
   border: 1px solid var(--border);
-  padding: 5px 8px;
+  border-radius: 2px;
+  padding: 1px 6px;
+}
+.benchmark-run-metrics dd {
+  font-family: var(--font-mono);
+}
+.benchmark-result-artwork {
+  width: 100%;
+  max-width: 400px;
+}
+.benchmark-inline-preview {
+  width: 100%;
+  max-width: 400px;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 0.7);
 }
 .benchmark-preview {
   position: relative;
@@ -412,6 +478,13 @@ For commercial licensing, please contact support@quantumnous.com
   }
   .benchmark-results {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .benchmark-result-inline + .benchmark-result-inline {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+  .benchmark-result-inline:first-of-type .benchmark-result-heading {
+    padding-right: 28px;
   }
   .benchmark-expanded {
     padding: 16px;

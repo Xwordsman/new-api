@@ -16,11 +16,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { BrainCircuit, Candy, Expand, PenTool, RotateCw, X } from 'lucide-react'
+import { BrainCircuit, Candy, Expand, PenTool, X } from 'lucide-react'
 import { memo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 
 import { StatusBadge } from '@/components/status-badge'
 import {
@@ -40,7 +38,6 @@ import { formatNumber, formatTimestamp } from '@/lib/format'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { resolveModelProvider } from '@/lib/model-provider'
 
-import { runBenchmark } from '../api'
 import { groupStatus, useRunStatuses } from '../hooks/use-run-statuses'
 import { buildTimeline } from '../lib/timeline'
 import type { BenchmarkGroup, RunSummary, RunStatus } from '../types'
@@ -62,13 +59,11 @@ const severity: Record<RunStatus, number> = {
 export const GroupCard = memo(function GroupCard(props: {
   group: BenchmarkGroup
   now: number
-  canRun: boolean
   paused: boolean
   onOpen: (id: number) => void
 }) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
-  const queryClient = useQueryClient()
   const statuses = useRunStatuses()
   const g = props.group
   const [open, setOpen] = useState(false)
@@ -117,15 +112,6 @@ export const GroupCard = memo(function GroupCard(props: {
         latestCandy,
         g.svg_enabled ? runs.find((r) => r.kind === 'svg') : undefined,
       ].filter((r): r is RunSummary => Boolean(r))
-  const retest = useMutation({
-    mutationFn: () => runBenchmark(g.group),
-    onSuccess: async () => {
-      toast.success(t('Benchmark queued'))
-      await queryClient.invalidateQueries({
-        queryKey: ['benchmark', 'snapshot'],
-      })
-    },
-  })
   return (
     <Accordion
       value={open ? [g.group] : []}
@@ -352,37 +338,16 @@ export const GroupCard = memo(function GroupCard(props: {
           </article>
         </div>
         <AccordionContent className='benchmark-expanded'>
-          <div className='mb-4 flex items-center justify-between gap-3'>
-            <span className='text-muted-foreground text-xs'>
-              {t('Benchmark result')}
-            </span>
-            <div className='flex items-center gap-2'>
-              {props.canRun && (
-                <Button
-                  size='sm'
-                  variant='outline'
-                  disabled={
-                    !g.enabled ||
-                    retest.isPending ||
-                    runs.some((r) => r.status === 'running')
-                  }
-                  onClick={() => retest.mutate()}
-                >
-                  <RotateCw aria-hidden />
-                  {t('Retest group')}
-                </Button>
-              )}
-              <Button
-                size='icon-sm'
-                variant='ghost'
-                aria-label={t('Close')}
-                onClick={() => setOpen(false)}
-              >
-                <X aria-hidden />
-              </Button>
-            </div>
-          </div>
           <div className='benchmark-results'>
+            <Button
+              size='icon-sm'
+              variant='ghost'
+              className='benchmark-results-close'
+              aria-label={t('Close')}
+              onClick={() => setOpen(false)}
+            >
+              <X aria-hidden />
+            </Button>
             {displayed.map((run) => (
               <RunResult
                 key={run.id}

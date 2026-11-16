@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
+import { Expand } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -26,9 +27,9 @@ import { ErrorState } from '@/components/error-state'
 import { LoadingState } from '@/components/loading-state'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
-import { Markdown } from '@/components/ui/markdown'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber, formatTimestamp } from '@/lib/format'
+import { cn } from '@/lib/utils'
 
 import { getBenchmarkRun } from '../api'
 import { useRunStatuses } from '../hooks/use-run-statuses'
@@ -52,38 +53,83 @@ export function RunResult(props: {
   if (query.isPending) return <LoadingState className='min-h-32' />
   if (query.isError) return <ErrorState onRetry={() => void query.refetch()} />
   const run = query.data
+  const statusLabel =
+    run.kind === 'svg' && run.status === 'passed'
+      ? t('Generation successful')
+      : statuses[run.status].label
   return (
-    <article className='benchmark-result min-w-0 space-y-4'>
-      <div className='flex flex-wrap items-center justify-between gap-2'>
-        <h3 className='text-sm font-semibold'>
+    <article
+      className={cn(
+        'benchmark-result min-w-0 space-y-3',
+        props.inline && 'benchmark-result-inline'
+      )}
+    >
+      <div className='benchmark-result-heading flex flex-wrap items-center justify-between gap-2'>
+        <h3 className='flex items-center gap-2 text-xs font-semibold'>
+          {props.inline && (
+            <span className='text-primary font-mono text-[10px]' aria-hidden>
+              {run.kind === 'candy' ? 'A' : 'B'}
+            </span>
+          )}
           {run.kind === 'candy' ? t('Candy logic') : t('SVG drawing')}
         </h3>
-        <StatusBadge {...statuses[run.status]} copyable={false} />
+        <div className='flex flex-wrap items-center gap-1.5'>
+          {props.inline && run.kind === 'candy' && (
+            <time
+              className='benchmark-result-time'
+              dateTime={new Date(run.created_at * 1000).toISOString()}
+            >
+              {formatTimestamp(run.created_at).slice(5, 16)}
+            </time>
+          )}
+          <StatusBadge
+            variant={statuses[run.status].variant}
+            label={statusLabel}
+            copyable={false}
+            className='benchmark-result-status'
+          >
+            <span className='size-1.5 shrink-0 bg-current' aria-hidden />
+            {statusLabel}
+          </StatusBadge>
+        </div>
       </div>
-      <p className='text-muted-foreground font-mono text-[11px] break-all'>
-        {run.group} · {run.model} · {formatTimestamp(run.created_at)}
-      </p>
+      {!props.inline && (
+        <p className='text-muted-foreground font-mono text-[11px] break-all'>
+          {run.group} · {run.model} · {formatTimestamp(run.created_at)}
+        </p>
+      )}
       {run.kind === 'candy' && (
         <>
           {props.inline && (
-            <section className='benchmark-prompt'>
-              <Markdown>{run.prompt}</Markdown>
-            </section>
+            <pre className='benchmark-prompt' aria-label={t('Saved prompt')}>
+              {run.prompt}
+            </pre>
           )}
-          <dl className='bg-muted/30 grid grid-cols-2 gap-4 rounded-sm border p-3'>
+          <dl className='benchmark-answers'>
             <div>
               <dt className='text-muted-foreground text-xs'>
                 {t('Expected answer')}
               </dt>
-              <dd className='mt-1 font-mono text-xl break-all'>
+              <dd
+                className={cn(
+                  'mt-1 font-mono text-xl break-all',
+                  run.status === 'passed' && 'text-success'
+                )}
+              >
                 {run.expected || '—'}
               </dd>
             </div>
             <div>
               <dt className='text-muted-foreground text-xs'>
-                {t('Actual answer')}
+                {props.inline ? t('Model final answer') : t('Actual answer')}
               </dt>
-              <dd className='mt-1 max-h-40 overflow-auto font-mono text-xl break-all whitespace-pre-wrap'>
+              <dd
+                className={cn(
+                  'mt-1 max-h-40 overflow-auto font-mono text-xl break-all whitespace-pre-wrap',
+                  run.status === 'passed' && 'text-success',
+                  run.status === 'wrong_answer' && 'text-destructive'
+                )}
+              >
                 {run.output || '—'}
               </dd>
             </div>
@@ -91,50 +137,80 @@ export function RunResult(props: {
         </>
       )}
       {run.kind === 'svg' && run.output && (
-        <section className='space-y-2'>
-          <ArtworkPreview
-            output={run.output}
-            paused={props.paused}
-            className={
-              props.inline ? 'aspect-[4/3] w-full' : 'h-[min(60vh,560px)]'
-            }
-          />
-          <p className='text-sm font-medium'>{run.prompt_name}</p>
-        </section>
-      )}
-      <dl className='flex flex-wrap gap-x-5 gap-y-2 text-xs'>
-        <div>
-          <dt className='text-muted-foreground'>{t('Latency')}</dt>
-          <dd className='mt-1 font-mono'>
-            {formatNumber(run.latency_ms / 1000, locale)} s
-          </dd>
-        </div>
-        <div>
-          <dt className='text-muted-foreground'>{t('Input tokens')}</dt>
-          <dd className='mt-1 font-mono'>
-            {formatNumber(run.input_tokens, locale)}
-          </dd>
-        </div>
-        <div>
-          <dt className='text-muted-foreground'>{t('Output tokens')}</dt>
-          <dd className='mt-1 font-mono'>
-            {formatNumber(run.output_tokens, locale)}
-          </dd>
-        </div>
-      </dl>
-      {run.manual && (
-        <p className='text-muted-foreground text-xs'>{t('Manual retest')}</p>
-      )}
-      {props.inline ? (
-        <Button
-          size='sm'
-          variant='link'
-          className='h-auto p-0'
-          onClick={() => props.onOpen?.(run.id)}
+        <figure
+          aria-label={run.prompt_name || t('SVG drawing')}
+          className={cn(
+            'space-y-1.5',
+            props.inline && 'benchmark-result-artwork'
+          )}
         >
-          {t('View details')}
-        </Button>
-      ) : (
+          <div className='relative'>
+            <ArtworkPreview
+              output={run.output}
+              paused={props.paused}
+              className={
+                props.inline
+                  ? 'benchmark-inline-preview'
+                  : 'h-[min(60vh,560px)]'
+              }
+            />
+            {props.inline && (
+              <Button
+                size='icon-sm'
+                variant='secondary'
+                className='benchmark-enlarge'
+                aria-label={t('View details')}
+                onClick={() => props.onOpen?.(run.id)}
+              >
+                <Expand aria-hidden />
+              </Button>
+            )}
+          </div>
+          <figcaption className='benchmark-art-caption'>
+            <div>
+              <strong title={run.prompt_name}>
+                {run.prompt_name || t('SVG drawing')}
+              </strong>
+              <span>{formatNumber(run.latency_ms / 1000, locale)}s</span>
+            </div>
+            <div>
+              <time dateTime={new Date(run.created_at * 1000).toISOString()}>
+                {formatTimestamp(run.created_at).slice(5, 16)}
+              </time>
+              <span className='truncate'>{run.group}</span>
+            </div>
+          </figcaption>
+        </figure>
+      )}
+      {(run.kind === 'candy' || !props.inline) && (
+        <div className='flex flex-wrap items-center gap-x-4 gap-y-2'>
+          <dl className='benchmark-run-metrics'>
+            <div>
+              <dt className='text-muted-foreground'>{t('Latency')}</dt>
+              <dd>{formatNumber(run.latency_ms / 1000, locale)} s</dd>
+            </div>
+            <div>
+              <dt className='text-muted-foreground'>{t('Input tokens')}</dt>
+              <dd>{formatNumber(run.input_tokens, locale)}</dd>
+            </div>
+            <div>
+              <dt className='text-muted-foreground'>{t('Output tokens')}</dt>
+              <dd>{formatNumber(run.output_tokens, locale)}</dd>
+            </div>
+          </dl>
+          {props.inline && (
+            <Button
+              size='sm'
+              variant='link'
+              className='h-auto p-0'
+              onClick={() => props.onOpen?.(run.id)}
+            >
+              {t('View original output')}
+            </Button>
+          )}
+        </div>
+      )}
+      {!props.inline && (
         <>
           <section className='space-y-2'>
             <div className='flex items-center justify-between'>
@@ -156,11 +232,21 @@ export function RunResult(props: {
           </section>
         </>
       )}
-      <p className='text-muted-foreground text-xs leading-5'>
-        {t(
-          'A group probe samples one routed channel. A passed check does not prove model identity or overall intelligence.'
-        )}
-      </p>
+      {(run.kind === 'candy' || !props.inline) && (
+        <p className='text-muted-foreground text-[11px] leading-5'>
+          {run.kind === 'candy' && (
+            <>
+              {t(
+                'Passing rule: the final answer must exactly match {{answer}} after trimming whitespace; answers embedded in reasoning are not accepted.',
+                { answer: run.expected || '—' }
+              )}{' '}
+            </>
+          )}
+          {t(
+            'A group probe samples one routed channel. A passed check does not prove model identity or overall intelligence.'
+          )}
+        </p>
+      )}
     </article>
   )
 }

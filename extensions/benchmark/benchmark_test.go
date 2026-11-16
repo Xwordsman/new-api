@@ -86,6 +86,15 @@ func benchmarkTestSettings(t *testing.T) Settings {
 	return s
 }
 
+func TestBenchmarkHasNoManualDetectionEndpoint(t *testing.T) {
+	router := gin.New()
+	RegisterRoutes(router.Group("/api"))
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/extensions/benchmark/admin/run", strings.NewReader(`{"group":"public"}`))
+	router.ServeHTTP(response, request)
+	assert.Equal(t, http.StatusNotFound, response.Code)
+}
+
 func TestBenchmarkSettingsAndScheduleMatrix(t *testing.T) {
 	dialects := []string{"sqlite"}
 	if os.Getenv("BENCHMARK_TEST_EXTERNAL") == "1" {

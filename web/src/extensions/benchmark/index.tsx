@@ -42,9 +42,7 @@ import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Switch } from '@/components/ui/switch'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatNumber } from '@/lib/format'
-import { ROLE } from '@/lib/roles'
 import { cn } from '@/lib/utils'
-import { useAuthStore } from '@/stores/auth-store'
 
 import { getBenchmarkSnapshot } from './api'
 import { ArtworkGallery } from './components/artwork-gallery'
@@ -58,7 +56,6 @@ import '@/styles/benchmark.css'
 export function BenchmarkPage() {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
-  const user = useAuthStore((s) => s.auth.user)
   const [automatic, setAutomatic] = useState(true)
   const [paused, setPaused] = useState(false)
   const [filter, setFilter] = useState('all')
@@ -367,7 +364,6 @@ export function BenchmarkPage() {
                     group={g}
                     now={data.updated_at}
                     paused={paused}
-                    canRun={user?.role === ROLE.SUPER_ADMIN}
                     onOpen={setDetail}
                   />
                 ))}

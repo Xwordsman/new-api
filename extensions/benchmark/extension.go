@@ -26,7 +26,6 @@ func RegisterRoutes(api *gin.RouterGroup) {
 	admin := api.Group("/extensions/benchmark/admin", middleware.RootAuth(), middleware.DisableCache(), queryTimeout())
 	admin.GET("/settings", adminSettings)
 	admin.PUT("/settings", middleware.SessionCookieOriginGuard(), middleware.UserCriticalRateLimit("benchmark-admin"), updateSettings)
-	admin.POST("/run", middleware.SessionCookieOriginGuard(), middleware.UserCriticalRateLimit("benchmark-run"), manualRun)
 }
 
 func queryTimeout() gin.HandlerFunc {
@@ -87,34 +86,6 @@ func updateSettings(c *gin.Context) {
 	}
 	saved, err := saveSettings(model.DB.WithContext(c.Request.Context()), s)
 	respond(c, saved, err)
-}
-
-func manualRun(c *gin.Context) {
-	var payload taskPayload
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4096)
-	if common.DecodeJson(c.Request.Body, &payload) != nil || payload.Group == "" {
-		respond(c, nil, errInvalid)
-		return
-	}
-	s, _, err := getSettings(model.DB.WithContext(c.Request.Context()))
-	if err != nil {
-		respond(c, nil, err)
-		return
-	}
-	if !s.Enabled || !slices.ContainsFunc(s.Groups, func(g GroupSettings) bool { return g.Group == payload.Group && g.Enabled }) {
-		respond(c, nil, errInvalid)
-		return
-	}
-	_, created, err := service.EnqueueSystemTask(taskType, payload)
-	if err != nil {
-		respond(c, nil, err)
-		return
-	}
-	if !created {
-		common.ApiErrorT(c, "A benchmark batch is already running. Try again after it finishes.")
-		return
-	}
-	respond(c, gin.H{"queued": true}, nil)
 }
 
 type totals struct {

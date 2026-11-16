@@ -73,15 +73,3 @@ export async function getBenchmarkArtworks(
     ).data
   ).data
 }
-
-export async function runBenchmark(
-  group: string
-): Promise<{ queued: boolean }> {
-  return requireServerSuccess(
-    (
-      await api.post<Envelope<{ queued: boolean }>>(`${base}/admin/run`, {
-        group,
-      })
-    ).data
-  ).data
-}
