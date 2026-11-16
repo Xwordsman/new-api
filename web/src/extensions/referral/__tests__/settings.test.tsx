@@ -36,7 +36,7 @@ afterEach(() => {
   useAuthStore.getState().auth.reset()
 })
 
-it('saves all four configurable rules and preserves edits after a rejected save', async () => {
+it('saves the fixed invitation bonus with payment rules and preserves edits after a rejected save', async () => {
   const user = userEvent.setup()
   const put = vi
     .spyOn(api, 'put')
@@ -52,6 +52,8 @@ it('saves all four configurable rules and preserves edits after a rejected save'
       <SettingsForm
         settings={{
           enabled: true,
+          signup_bonus_enabled: false,
+          signup_bonus_quota: 0,
           rate_bps: 500,
           window_days: 30,
           cooling_hours: 24,
@@ -63,6 +65,16 @@ it('saves all four configurable rules and preserves edits after a rejected save'
       />
     </QueryClientProvider>
   )
+  const bonus = screen.getByRole('spinbutton', {
+    name: 'Signup bonus per invitee (USD)',
+  })
+  expect(bonus).toBeDisabled()
+  await user.click(
+    screen.getByRole('switch', { name: 'Enable fixed invitation bonus' })
+  )
+  expect(bonus).toBeEnabled()
+  await user.clear(bonus)
+  await user.type(bonus, '1')
   for (const [label, value] of [
     ['Reward rate (%)', '7.25'],
     ['Reward window (days)', '45'],
@@ -87,6 +99,8 @@ it('saves all four configurable rules and preserves edits after a rejected save'
     '/api/extensions/referral/admin/settings',
     expect.objectContaining({
       rate_bps: 725,
+      signup_bonus_enabled: true,
+      signup_bonus_quota: 500_000,
       window_days: 45,
       cooling_hours: 12,
       cap_quota: 75_000_000,
@@ -143,6 +157,8 @@ it('keeps the referral entry after a rejected disable and hides it immediately a
     <SettingsForm
       settings={{
         enabled: true,
+        signup_bonus_enabled: false,
+        signup_bonus_quota: 0,
         rate_bps: 500,
         window_days: 30,
         cooling_hours: 24,

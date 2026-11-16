@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -42,6 +43,10 @@ func Observe(tx *gorm.DB, userID int, ip, agent string) error {
 }
 
 func Register(tx *gorm.DB, userID, inviterID int, registeredAt int64) error {
+	return registerInvitation(tx, userID, inviterID, registeredAt, true)
+}
+
+func registerInvitation(tx *gorm.DB, userID, inviterID int, registeredAt int64, signup bool) error {
 	settings, err := GetSettings(tx)
 	// Model tests and installations before extension initialization have no tables.
 	// Production migrations run before accepting registrations.
@@ -68,6 +73,9 @@ func Register(tx *gorm.DB, userID, inviterID int, registeredAt int64) error {
 		state, reason = "ineligible", "Referral program was paused at registration"
 	}
 	binding := Binding{UserID: userID, InviterID: inviterID, RegisteredAt: registeredAt, ExpiresAt: registeredAt + int64(settings.WindowDays)*86400, RateBPS: settings.RateBPS, CapQuota: settings.CapQuota, CoolingHours: settings.CoolingHours, SettingsVersion: settings.Version, State: state, Reason: reason, Historical: historical}
+	if signup && settings.Enabled && settings.SignupBonusEnabled && !historical {
+		binding.SignupBonusQuota = settings.SignupBonusQuota
+	}
 	result := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&binding)
 	if result.Error != nil || result.RowsAffected == 0 {
 		return result.Error
@@ -93,13 +101,68 @@ func ImportHistory(tx *gorm.DB, inviterID int) error {
 				if registeredAt <= 0 {
 					registeredAt = 1
 				}
-				if err := Register(batch, user.ID, user.InviterID, registeredAt); err != nil {
+				if err := registerInvitation(batch, user.ID, user.InviterID, registeredAt, false); err != nil {
 					return err
 				}
 			}
 		}
 		return nil
 	}).Error
+}
+
+// CompleteSignup runs after registration risk checks, inside the signup or
+// review transaction. The binding is the one-time gift ledger; payment rewards
+// and their cap/window/cooling rules are deliberately independent.
+func CompleteSignup(tx *gorm.DB, userID int) error {
+	var binding Binding
+	if err := tx.First(&binding, "user_id = ?", userID).Error; err != nil {
+		if isMissing(err) {
+			return nil
+		}
+		return err
+	}
+	if binding.SignupBonusQuota <= 0 || binding.SignupBonusPaidAt > 0 || binding.State != "active" || binding.Historical {
+		return nil
+	}
+	settings, err := GetSettings(tx)
+	if err != nil {
+		return err
+	}
+	if !settings.Enabled {
+		return nil
+	}
+	account, err := lockAccount(tx, binding.InviterID)
+	if err != nil {
+		return err
+	}
+	if err := Lock(tx).First(&binding, binding.ID).Error; err != nil {
+		return err
+	}
+	if binding.SignupBonusPaidAt > 0 || binding.State != "active" || binding.Historical {
+		return nil
+	}
+	if err := activeUsers(tx, binding.InviterID, binding.UserID); err != nil {
+		if err != ErrUnavailable {
+			return err
+		}
+		return tx.Model(&binding).Updates(map[string]any{"state": "review", "reason": "Account eligibility requires review", "reviewed_at": 0}).Error
+	}
+	offset := min(binding.SignupBonusQuota, account.Debt)
+	balance, balanceErr := checkedAdd(account.Balance, binding.SignupBonusQuota-offset)
+	earned, earnedErr := checkedAdd(account.Earned, binding.SignupBonusQuota)
+	if balanceErr != nil || earnedErr != nil {
+		// A full inviter account must not prevent a new user from registering.
+		return tx.Model(&binding).Updates(map[string]any{"state": "review", "reason": "Referral reward balance requires review", "reviewed_at": 0}).Error
+	}
+	account.Balance, account.Earned, account.Debt = balance, earned, account.Debt-offset
+	if err := tx.Save(&account).Error; err != nil {
+		return err
+	}
+	binding.SignupBonusPaidAt = time.Now().Unix()
+	if err := tx.Model(&binding).Update("signup_bonus_paid_at", binding.SignupBonusPaidAt).Error; err != nil {
+		return err
+	}
+	return tx.Create(&Audit{UserID: binding.UserID, Action: "signup_bonus", Detail: common.GetJsonString(map[string]any{"inviter_id": binding.InviterID, "quota": binding.SignupBonusQuota, "offset": offset, "settings_version": binding.SettingsVersion}), CreatedAt: binding.SignupBonusPaidAt}).Error
 }
 
 func checkQualification(tx *gorm.DB, binding *Binding) error {

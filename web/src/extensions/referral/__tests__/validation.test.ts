@@ -22,6 +22,8 @@ import { referralActionSchema, referralSettingsSchema } from '../lib/schema'
 
 const settings = {
   enabled: true,
+  signup_bonus_enabled: false,
+  signup_bonus_usd: 1,
   rate: 5,
   window_days: 30,
   cooling_hours: 24,
@@ -51,6 +53,9 @@ describe('referral settings validation', () => {
     { cny_per_usd: '0' },
     { cny_per_usd: 'Infinity' },
     { cny_per_usd: '10001' },
+    { signup_bonus_usd: -1 },
+    { signup_bonus_usd: 1_000_001 },
+    { signup_bonus_enabled: true, signup_bonus_usd: 0 },
   ])('rejects an out-of-range setting: %j', (invalid) => {
     expect(
       referralSettingsSchema.safeParse({ ...settings, ...invalid }).success

@@ -33,14 +33,16 @@ func Digest(salt, value string) string {
 }
 
 type Input struct {
-	Stage, Source, Email, IP, Device string
-	InviterID                        int
-	VerifiedEmail                    bool
+	Stage, Source, Email, IP, Device, UserAgent string
+	InviterID                                   int
+	VerifiedEmail                               bool
 }
 
 type Decision struct {
-	Settings Settings
-	Event    Event
+	Settings          Settings
+	Event             Event
+	RegistrationIP    string
+	RegistrationAgent string
 }
 type signupKey struct{}
 
@@ -76,6 +78,10 @@ func domainMatches(domain string, list []string) bool {
 		}
 	}
 	return false
+}
+
+func RestrictedDomain(domain string, s Settings) bool {
+	return domain != "" && !domainMatches(domain, s.DomainExceptions) && (domainMatches(domain, s.BlockedDomains) || s.AllowOnly && !domainMatches(domain, s.AllowedDomains))
 }
 
 func raise(event *Event, action, reason string) {
@@ -137,7 +143,7 @@ func Evaluate(db *gorm.DB, input Input, now time.Time) (*Decision, error) {
 					return err
 				}
 			}
-			if domain != "" && !domainMatches(domain, s.DomainExceptions) && (domainMatches(domain, s.BlockedDomains) || s.AllowOnly && !domainMatches(domain, s.AllowedDomains)) {
+			if RestrictedDomain(domain, s) {
 				raise(&e, s.DomainAction, "email-domain")
 			}
 			if input.Stage == "register" && input.Source != "password" && !input.VerifiedEmail {
@@ -171,7 +177,8 @@ func Evaluate(db *gorm.DB, input Input, now time.Time) (*Decision, error) {
 	if err != nil {
 		return nil, err
 	}
-	d := &Decision{Settings: s, Event: e}
+	ip, agent := memberClientMetadata(input.IP, input.UserAgent)
+	d := &Decision{Settings: s, Event: e, RegistrationIP: ip, RegistrationAgent: agent}
 	if e.Enforced && e.Action == "deny" {
 		return d, ErrDenied
 	}
@@ -203,6 +210,15 @@ func AfterSignup(tx *gorm.DB, userID int, now time.Time) error {
 	account := Account{UserID: userID, EventID: e.ID, CreatedAt: now.Unix(), DeviceHash: e.DeviceHash, NetworkHash: e.NetworkHash, EmailHash: e.EmailHash, InviterID: e.InviterID, State: state}
 	if err := tx.Create(&account).Error; err != nil {
 		return err
+	}
+	policy, err := GetMemberPolicy(tx)
+	if err != nil {
+		return err
+	}
+	if policy.CaptureEnabled {
+		if err := tx.Create(&MemberProfile{UserID: userID, RegistrationIP: d.RegistrationIP, RegistrationAgent: d.RegistrationAgent, RegistrationSource: e.Source, RegisteredAt: now.Unix()}).Error; err != nil {
+			return err
+		}
 	}
 	if state == "review" && s.HoldReferral {
 		if err := tx.Table("extension_referral_bindings").Where("user_id = ?", userID).Updates(map[string]any{"state": "review", "reason": "Registration risk requires review", "reviewed_at": 0}).Error; err != nil {

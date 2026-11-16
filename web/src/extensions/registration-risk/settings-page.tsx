@@ -30,6 +30,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { checkAlerts, getSettings, registrationQueryKey } from './api'
+import { MemberAnalysis } from './components/member-analysis'
+import { MemberDirectory } from './components/member-directory'
 import { RiskRecords } from './components/risk-records'
 import { RegistrationSettingsForm } from './components/settings-form'
 
@@ -72,10 +74,14 @@ export function RegistrationRiskSettingsPage() {
       <SectionPageLayout.Content>
         <div className='w-full space-y-5 pb-6'>
           <Tabs value={tab} onValueChange={setTab}>
-            <TabsList>
+            <TabsList className='h-auto flex-wrap'>
               <TabsTrigger value='settings'>{t('Settings')}</TabsTrigger>
               <TabsTrigger value='records'>
                 {t('Risk records and review')}
+              </TabsTrigger>
+              <TabsTrigger value='members'>{t('Member profiles')}</TabsTrigger>
+              <TabsTrigger value='analysis'>
+                {t('Existing-member analysis')}
               </TabsTrigger>
             </TabsList>
             <TabsContent value='settings' className='pt-4'>
@@ -89,6 +95,12 @@ export function RegistrationRiskSettingsPage() {
             </TabsContent>
             <TabsContent value='records' className='pt-4'>
               <RiskRecords />
+            </TabsContent>
+            <TabsContent value='members' className='pt-4'>
+              {tab === 'members' && <MemberDirectory />}
+            </TabsContent>
+            <TabsContent value='analysis' className='pt-4'>
+              {tab === 'analysis' && <MemberAnalysis />}
             </TabsContent>
           </Tabs>
         </div>

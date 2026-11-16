@@ -12,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/extensions/checkin/policy"
 	"github.com/QuantumNous/new-api/extensions/referral/ledger"
+	"github.com/QuantumNous/new-api/extensions/registrationrisk/guard"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
@@ -41,7 +42,8 @@ func referralTestDB(t *testing.T, dialect string) *gorm.DB {
 	case "postgres":
 		dsn := os.Getenv("REFERRAL_TEST_POSTGRES_DSN")
 		require.Contains(t, dsn, "/referral_ledger_test?")
-		dialector = postgres.Open(dsn)
+		// Fixtures rebuild schemas in place; do not reuse plans from old columns.
+		dialector = postgres.New(postgres.Config{DSN: dsn, PreferSimpleProtocol: true})
 	}
 	db, err := gorm.Open(dialector, &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
@@ -51,7 +53,7 @@ func referralTestDB(t *testing.T, dialect string) *gorm.DB {
 		connection.SetMaxOpenConns(1)
 	}
 	t.Cleanup(func() { require.NoError(t, connection.Close()) })
-	for _, table := range []any{&ledger.RefundNotice{}, &ledger.Audit{}, &ledger.Transfer{}, &ledger.Reward{}, &ledger.PaymentIdentity{}, &ledger.Signal{}, &ledger.Binding{}, &ledger.Account{}, &ledger.Settings{}, &model.UserSession{}, &model.UserAccessToken{}, &model.AuditLog{}, &model.Option{}, &model.TopUp{}, &model.User{}} {
+	for _, table := range []any{&guard.Payer{}, &guard.Audit{}, &guard.Alert{}, &guard.Reservation{}, &guard.Grant{}, &guard.Account{}, &guard.Event{}, &guard.Challenge{}, &guard.Counter{}, &guard.Secret{}, &ledger.RefundNotice{}, &ledger.Audit{}, &ledger.Transfer{}, &ledger.Reward{}, &ledger.PaymentIdentity{}, &ledger.Signal{}, &ledger.Binding{}, &ledger.Account{}, &ledger.Settings{}, &model.Log{}, &model.UserSession{}, &model.UserAccessToken{}, &model.AuditLog{}, &model.Option{}, &model.TopUp{}, &model.User{}} {
 		require.NoError(t, db.Migrator().DropTable(table))
 	}
 	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.UserAccessToken{}, &model.AuditLog{}, &model.Option{}, &model.TopUp{}))
@@ -399,12 +401,14 @@ func TestReferralAccountingMatrix(t *testing.T) {
 				oldDB, oldLog := model.DB, model.LOG_DB
 				oldMainType, oldLogType, oldRedis := common.MainDatabaseType(), common.LogDatabaseType(), common.RedisEnabled
 				oldSignup, oldPayment, oldTransfer := model.ReferralRegistrationHook, model.ReferralPaymentHook, model.ReferralTransferHook
+				oldCompleted := model.ReferralSignupCompletedHook
 				oldSignupQuota := common.QuotaForNewUser
 				t.Cleanup(func() {
 					model.DB, model.LOG_DB = oldDB, oldLog
 					common.SetDatabaseTypes(oldMainType, oldLogType)
 					common.RedisEnabled, common.QuotaForNewUser = oldRedis, oldSignupQuota
 					model.ReferralRegistrationHook, model.ReferralPaymentHook, model.ReferralTransferHook = oldSignup, oldPayment, oldTransfer
+					model.ReferralSignupCompletedHook = oldCompleted
 				})
 				model.DB, model.LOG_DB = db, db
 				common.SetDatabaseTypes(common.DatabaseType(dialect), common.DatabaseType(dialect))
@@ -412,6 +416,10 @@ func TestReferralAccountingMatrix(t *testing.T) {
 				model.ReferralRegistrationHook, model.ReferralPaymentHook, model.ReferralTransferHook = nil, nil, nil
 				// Slave startup skips migrations but must still install hooks.
 				Initialize(db)
+				settings, err := ledger.GetSettings(db)
+				require.NoError(t, err)
+				settings.SignupBonusEnabled, settings.SignupBonusQuota = true, 500000
+				require.NoError(t, ledger.UpdateSettings(db, settings, 6))
 				require.NotNil(t, model.ReferralTransferHook)
 				user := model.User{Username: "host-invitee", Status: common.UserStatusEnabled, Group: "default", CreatedAt: referralEpoch + 1}
 				require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
@@ -421,6 +429,7 @@ func TestReferralAccountingMatrix(t *testing.T) {
 				require.NoError(t, db.First(&binding, "user_id = ?", user.Id).Error)
 				assert.Equal(t, "active", binding.State)
 				assert.Equal(t, 321, user.Quota, "normal signup gifts are retained")
+				assert.Equal(t, 500000, referralAccount(t, db).Balance, "fixed invitation reward is automatic")
 				abort := fmt.Errorf("abort signup")
 				rolledBack := model.User{Username: "rolled-back-signup", Status: common.UserStatusEnabled, CreatedAt: referralEpoch + 1}
 				require.ErrorIs(t, db.Transaction(func(tx *gorm.DB) error {
@@ -432,6 +441,38 @@ func TestReferralAccountingMatrix(t *testing.T) {
 				var count int64
 				require.NoError(t, db.Model(&ledger.Binding{}).Where("user_id = ?", rolledBack.Id).Count(&count).Error)
 				assert.Zero(t, count)
+				assert.Equal(t, 500000, referralAccount(t, db).Balance, "failed signup cannot leave an invitation reward")
+				// Registration risk must hold the bonus before the final signup hook.
+				require.NoError(t, guard.Migrate(db))
+				event := guard.Event{Stage: "register", Action: "review", Enforced: true}
+				require.NoError(t, db.Create(&event).Error)
+				risky := model.User{Username: "risk-held-invitee", Status: common.UserStatusEnabled, CreatedAt: referralEpoch + 1}
+				require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+					tx = ledger.WithSignupContext(tx, "192.0.2.22", "host-signup")
+					tx = guard.WithDecision(tx, &guard.Decision{Event: event, Settings: guard.Settings{HoldReferral: true}})
+					return risky.InsertWithTx(tx, 1)
+				}))
+				var held ledger.Binding
+				require.NoError(t, db.First(&held, "user_id = ?", risky.Id).Error)
+				assert.Equal(t, "review", held.State)
+				assert.Zero(t, held.SignupBonusPaidAt)
+				assert.Equal(t, 500000, referralAccount(t, db).Balance)
+				response := httptest.NewRecorder()
+				context, _ := gin.CreateTestContext(response)
+				context.Set("id", 1)
+				dashboard(context)
+				var summary struct {
+					Success bool
+					Data    struct{ Pending, Review, Claimable int }
+				}
+				require.NoError(t, common.Unmarshal(response.Body.Bytes(), &summary))
+				require.True(t, summary.Success)
+				assert.Equal(t, 500000, summary.Data.Pending, "held gifts are visible to the inviter")
+				assert.Equal(t, 500000, summary.Data.Review)
+				assert.Zero(t, summary.Data.Claimable, "risk-held gifts cannot be claimed")
+				require.NoError(t, ledger.Review(db, held.ID, 6, true, "Verified real invited user"))
+				require.NoError(t, ledger.Review(db, held.ID, 6, true, "Repeated review approval"))
+				assert.Equal(t, 1000000, referralAccount(t, db).Balance)
 				order := model.TopUp{UserId: user.Id, TradeNo: "host-recharge", Money: 200, Amount: 100, PaymentProvider: model.PaymentProviderStripe, PaymentMethod: model.PaymentMethodStripe, Status: common.TopUpStatusPending}
 				require.NoError(t, db.Create(&order).Error)
 				payment := ledger.Payment{Amount: "100", Currency: "USD", Reference: "host-payment", Payer: "host-payer", PaidAt: referralEpoch + 2}
@@ -453,6 +494,147 @@ func TestReferralAccountingMatrix(t *testing.T) {
 				assert.Zero(t, count, "failed wallet credit cannot leave a referral reward")
 				require.NoError(t, db.First(&binding, binding.ID).Error)
 				assert.Equal(t, reward.Quota, binding.Reserved, "failed callback cannot consume the invitee cap")
+			})
+			t.Run("signup bonus snapshots replay isolation and paid rewards remain independent", func(t *testing.T) {
+				db := referralTestDB(t, dialect)
+				settings, err := ledger.GetSettings(db)
+				require.NoError(t, err)
+				settings.SignupBonusEnabled, settings.SignupBonusQuota = true, 500000
+				require.NoError(t, ledger.UpdateSettings(db, settings, 6))
+				binding := referredUser(t, db, 2, "192.0.2.2")
+				require.NoError(t, db.Transaction(func(tx *gorm.DB) error { return ledger.CompleteSignup(tx, 2) }))
+				require.NoError(t, ledger.Register(db, 2, 1, referralEpoch))
+				require.NoError(t, db.Transaction(func(tx *gorm.DB) error { return ledger.CompleteSignup(tx, 2) }))
+				assert.Equal(t, 500000, referralAccount(t, db).Balance)
+				assert.Equal(t, 500000, referralAccount(t, db).Earned)
+				var count int64
+				require.NoError(t, db.Model(&ledger.Audit{}).Where("action = ?", "signup_bonus").Count(&count).Error)
+				assert.EqualValues(t, 1, count)
+				require.NoError(t, db.Model(&model.TopUp{}).Count(&count).Error)
+				assert.Zero(t, count, "gifts never become paid top-ups")
+				require.NoError(t, db.Model(&ledger.Reward{}).Count(&count).Error)
+				assert.Zero(t, count, "gifts never generate percentage commissions")
+				// A shared network waits for review and retains its original amount.
+				held := referredUser(t, db, 3, "192.0.2.2")
+				assert.Equal(t, "review", held.State)
+				require.NoError(t, db.Transaction(func(tx *gorm.DB) error { return ledger.CompleteSignup(tx, 3) }))
+				settings, err = ledger.GetSettings(db)
+				require.NoError(t, err)
+				settings.SignupBonusQuota = 1000000
+				require.NoError(t, ledger.UpdateSettings(db, settings, 6))
+				require.NoError(t, ledger.Review(db, held.ID, 6, false, "Duplicate account suspected"))
+				assert.Equal(t, 500000, referralAccount(t, db).Balance)
+				require.NoError(t, ledger.Review(db, held.ID, 6, true, "Independent account confirmed"))
+				assert.Equal(t, 1000000, referralAccount(t, db).Balance)
+				// Fixed bonuses do not consume the payment commission cap.
+				reward := paidReferral(t, db, 2, "bonus-independent-cap", "4000", referralEpoch+1)
+				assert.Equal(t, binding.CapQuota, reward.Quota)
+				require.NoError(t, db.First(&binding, binding.ID).Error)
+				assert.Positive(t, binding.SignupBonusPaidAt)
+				assert.Equal(t, reward.Quota, binding.Reserved)
+			})
+			t.Run("disabled historical invalid and imported invitations receive no signup bonus", func(t *testing.T) {
+				db := referralTestDB(t, dialect)
+				disabled := referredUser(t, db, 2, "192.0.2.2")
+				assert.Zero(t, disabled.SignupBonusQuota)
+				settings, err := ledger.GetSettings(db)
+				require.NoError(t, err)
+				settings.SignupBonusEnabled, settings.SignupBonusQuota = true, 500000
+				require.NoError(t, ledger.UpdateSettings(db, settings, 6))
+				require.NoError(t, ledger.Register(db, 3, 1, referralEpoch-1))
+				require.NoError(t, db.Model(&model.User{}).Where("id = ?", 4).Updates(map[string]any{"inviter_id": 1, "created_at": referralEpoch + 1}).Error)
+				require.NoError(t, ledger.ImportHistory(db, 1))
+				var imported ledger.Binding
+				require.NoError(t, db.First(&imported, "user_id = ?", 4).Error)
+				assert.Zero(t, imported.SignupBonusQuota, "imported users cannot receive a retroactive signup gift")
+				for _, id := range []int{2, 3, 4} {
+					var binding ledger.Binding
+					require.NoError(t, db.First(&binding, "user_id = ?", id).Error)
+					require.NoError(t, ledger.Review(db, binding.ID, 6, true, "Verified existing invitation"))
+					require.NoError(t, db.Transaction(func(tx *gorm.DB) error { return ledger.CompleteSignup(tx, id) }))
+				}
+				require.NoError(t, ledger.Register(db, 1, 1, referralEpoch))
+				require.NoError(t, ledger.Register(db, 5, 0, referralEpoch))
+				require.NoError(t, db.Transaction(func(tx *gorm.DB) error { return ledger.CompleteSignup(tx, 5) }))
+				assert.Zero(t, referralAccount(t, db).Balance)
+				settings, err = ledger.GetSettings(db)
+				require.NoError(t, err)
+				settings.SignupBonusQuota = -1
+				assert.ErrorIs(t, ledger.UpdateSettings(db, settings, 6), ledger.ErrInvalid)
+				settings.SignupBonusQuota = 0
+				assert.ErrorIs(t, ledger.UpdateSettings(db, settings, 6), ledger.ErrInvalid)
+			})
+			t.Run("full referral account holds signup bonus and debt offsets the gift", func(t *testing.T) {
+				db := referralTestDB(t, dialect)
+				settings, err := ledger.GetSettings(db)
+				require.NoError(t, err)
+				settings.SignupBonusEnabled, settings.SignupBonusQuota = true, 500000
+				require.NoError(t, ledger.UpdateSettings(db, settings, 6))
+				require.NoError(t, db.Create(&ledger.Account{UserID: 1, Balance: common.MaxWalletQuota}).Error)
+				binding := referredUser(t, db, 2, "192.0.2.2")
+				require.NoError(t, db.Transaction(func(tx *gorm.DB) error { return ledger.CompleteSignup(tx, 2) }))
+				require.NoError(t, db.First(&binding, binding.ID).Error)
+				assert.Equal(t, "review", binding.State)
+				assert.Zero(t, binding.SignupBonusPaidAt)
+				require.NoError(t, db.Model(&ledger.Account{}).Where("user_id = ?", 1).Updates(map[string]any{"balance": 0, "debt": 200000}).Error)
+				require.NoError(t, ledger.Review(db, binding.ID, 6, true, "Balance capacity restored"))
+				account := referralAccount(t, db)
+				assert.Equal(t, 300000, account.Balance)
+				assert.Zero(t, account.Debt)
+				assert.Equal(t, 500000, account.Earned)
+			})
+			t.Run("concurrent review approvals credit the signup bonus once", func(t *testing.T) {
+				db := referralTestDB(t, dialect)
+				settings, err := ledger.GetSettings(db)
+				require.NoError(t, err)
+				settings.SignupBonusEnabled, settings.SignupBonusQuota = true, 500000
+				require.NoError(t, ledger.UpdateSettings(db, settings, 6))
+				// Missing registration signals require approval.
+				require.NoError(t, ledger.Register(db, 2, 1, referralEpoch))
+				var binding ledger.Binding
+				require.NoError(t, db.First(&binding, "user_id = ?", 2).Error)
+				assert.Equal(t, "review", binding.State)
+				var wg sync.WaitGroup
+				results := make(chan error, 2)
+				for range 2 {
+					wg.Go(func() { results <- ledger.Review(db, binding.ID, 6, true, "Verified invitation approval") })
+				}
+				wg.Wait()
+				close(results)
+				for err := range results {
+					require.NoError(t, err)
+				}
+				assert.Equal(t, 500000, referralAccount(t, db).Balance)
+			})
+			t.Run("existing schema upgrades twice without backfilling or losing balances", func(t *testing.T) {
+				db := referralTestDB(t, dialect)
+				binding := referredUser(t, db, 2, "192.0.2.2")
+				reward := paidReferral(t, db, 2, "before-upgrade", "100", referralEpoch+1)
+				_, err := ledger.Claim(db, 1, reward.ID, reward.AvailableAt)
+				require.NoError(t, err)
+				before := referralAccount(t, db)
+				// Recreate the released schema by removing only the new columns.
+				for _, column := range []string{"SignupBonusEnabled", "SignupBonusQuota"} {
+					require.NoError(t, db.Migrator().DropColumn(&ledger.Settings{}, column))
+				}
+				for _, column := range []string{"SignupBonusQuota", "SignupBonusPaidAt"} {
+					require.NoError(t, db.Migrator().DropColumn(&ledger.Binding{}, column))
+				}
+				require.NoError(t, Migrate(db))
+				require.NoError(t, Migrate(db))
+				settings, err := ledger.GetSettings(db)
+				require.NoError(t, err)
+				assert.False(t, settings.SignupBonusEnabled)
+				assert.Zero(t, settings.SignupBonusQuota)
+				require.NoError(t, db.First(&binding, binding.ID).Error)
+				assert.Zero(t, binding.SignupBonusQuota)
+				assert.Zero(t, binding.SignupBonusPaidAt)
+				assert.Equal(t, reward.Quota, binding.Reserved)
+				assert.Equal(t, before, referralAccount(t, db))
+				require.NoError(t, ledger.Register(db, 2, 1, referralEpoch))
+				var count int64
+				require.NoError(t, db.Model(&ledger.Binding{}).Where("user_id = ?", 2).Count(&count).Error)
+				assert.EqualValues(t, 1, count)
 			})
 			t.Run("legacy balances import once and historical invitations require approval", func(t *testing.T) {
 				db := referralTestDB(t, dialect)

@@ -202,6 +202,9 @@ func setupLoginAtAuthVersion(user *model.User, expectedAuthVersion int64, c *gin
 func writeLoginResponse(c *gin.Context, user *model.User, bundle *service.AuthBundle) {
 	c.Set("login_method", bundle.Session.LoginMethod)
 	model.UpdateUserLastLoginAt(user.Id)
+	if err := guard.RecordMemberLogin(model.DB.WithContext(c.Request.Context()), user.Id, c.ClientIP(), c.Request.UserAgent(), bundle.Session.LoginMethod, time.Now()); err != nil {
+		common.SysError("registration member login metadata update failed: " + err.Error())
+	}
 	service.WriteRefreshCookie(c, bundle.RefreshToken)
 	setAuthNoStore(c)
 	recordLoginAudit(user, c)

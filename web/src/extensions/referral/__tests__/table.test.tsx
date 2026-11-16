@@ -17,14 +17,77 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 
+import { Invitees } from '../components/invitees'
 import { ReferralTable } from '../components/referral-table'
-import type { ReferralTransfer } from '../types'
+import type { Invitee, ReferralTransfer } from '../types'
+
+it('shows issued fixed bonuses separately from invitations awaiting risk review', async () => {
+  const invitee: Invitee = {
+    id: 1,
+    user_id: 2,
+    inviter_id: 1,
+    username: 'invited-user',
+    registered_at: 1700000000,
+    expires_at: 1702592000,
+    rate_bps: 500,
+    cap_quota: 50_000_000,
+    cooling_hours: 24,
+    settings_version: 1,
+    state: 'active',
+    reason: '',
+    reserved: 0,
+    historical: false,
+    reviewed_at: 0,
+    signup_bonus_quota: 500_000,
+    signup_bonus_paid_at: 1700000001,
+    net_paid: 0,
+    earned: 0,
+    pending: 0,
+  }
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: {
+      success: true,
+      data: {
+        items: [
+          invitee,
+          {
+            ...invitee,
+            id: 2,
+            user_id: 3,
+            username: 'review-user',
+            state: 'review',
+            signup_bonus_paid_at: 0,
+          },
+        ],
+        total: 2,
+      },
+    },
+  })
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  render(
+    <QueryClientProvider client={client}>
+      <Invitees now={1700000100} onClaim={vi.fn()} claiming={false} enabled />
+    </QueryClientProvider>
+  )
+  const issued = await screen.findByRole('row', { name: /invited-user/ })
+  expect(within(issued).getByText('Automatically issued')).toBeVisible()
+  const review = screen.getByRole('row', { name: /review-user/ })
+  expect(
+    within(review).queryByText('Automatically issued')
+  ).not.toBeInTheDocument()
+  expect(within(review).getAllByText('Under review').length).toBeGreaterThan(0)
+  expect(
+    screen.getByRole('columnheader', { name: 'Fixed invitation bonus' })
+  ).toBeVisible()
+})
 
 it('shows a recoverable error after loading and an empty state after retry', async () => {
   const user = userEvent.setup()

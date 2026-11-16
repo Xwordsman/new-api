@@ -2,6 +2,7 @@ package registrationrisk
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -71,7 +72,7 @@ func riskDB(t *testing.T, dialect string) *gorm.DB {
 		common.SetMainDatabaseType(oldType)
 		common.RedisEnabled, common.BatchUpdateEnabled = oldRedis, oldBatch
 	})
-	for _, table := range []any{&guard.Secret{}, &guard.Counter{}, &guard.Challenge{}, &guard.Event{}, &guard.Account{}, &guard.Grant{}, &guard.Reservation{}, &guard.Alert{}, &guard.Audit{}, &guard.Payer{}, &ledger.Binding{}, &model.UserSession{}, &model.UserAccessToken{}, &model.AuditLog{}, &model.SystemTask{}, &model.SystemTaskLock{}, &model.User{}, &model.Token{}, &model.Option{}} {
+	for _, table := range []any{&guard.MemberProfile{}, &guard.MemberFinding{}, &guard.Secret{}, &guard.Counter{}, &guard.Challenge{}, &guard.Event{}, &guard.Account{}, &guard.Grant{}, &guard.Reservation{}, &guard.Alert{}, &guard.Audit{}, &guard.Payer{}, &ledger.Binding{}, &model.UserSession{}, &model.UserAccessToken{}, &model.AuditLog{}, &model.SystemTask{}, &model.SystemTaskLock{}, &model.User{}, &model.Token{}, &model.Option{}} {
 		require.NoError(t, db.Migrator().DropTable(table))
 	}
 	require.NoError(t, db.AutoMigrate(&model.User{}, &model.Token{}, &model.Option{}, &ledger.Binding{}))
@@ -566,6 +567,23 @@ func TestRiskRoutesRequireRootSessionOriginAndOwnCredit(t *testing.T) {
 		{"GET", "/admin/settings", "member", "", "", 403, false},
 		{"GET", "/admin/settings", "admin", "", "", 403, false},
 		{"GET", "/admin/settings", "root", "", "", 200, true},
+		{"GET", "/admin/members", "member", "", "", 403, false},
+		{"GET", "/admin/members", "admin", "", "", 403, false},
+		{"GET", "/admin/members", "root", "", "", 200, true},
+		{"GET", "/admin/members?user_id=bad", "root", "", "", 200, false},
+		{"GET", "/admin/member-policy", "member", "", "", 403, false},
+		{"GET", "/admin/member-policy", "root", "", "", 200, true},
+		{"GET", "/admin/member-analysis", "admin", "", "", 403, false},
+		{"GET", "/admin/member-analysis", "root", "", "", 200, true},
+		{"POST", "/admin/members/review", "root", "", "{}", 403, false},
+		{"POST", "/admin/members/review", "root", "https://foreign.example", "{}", 403, false},
+		{"POST", "/admin/members/review", "root", "https://registrationrisk.example", "{}", 200, false},
+		{"PUT", "/admin/member-policy", "root", "https://foreign.example", "{}", 403, false},
+		{"PUT", "/admin/member-policy", "root", "https://registrationrisk.example", "{}", 200, false},
+		{"POST", "/admin/member-analysis", "root", "https://foreign.example", "", 403, false},
+		{"POST", "/admin/member-analysis", "root", "", "", 403, false},
+		{"POST", "/admin/member-analysis", "member", "https://registrationrisk.example", "", 403, false},
+		{"POST", "/admin/member-analysis", "root", "https://registrationrisk.example", "", 200, true},
 		{"GET", "/admin/records?kind=invalid", "root", "", "", 200, false},
 		{"PUT", "/admin/settings", "root", "https://foreign.example", "{}", 403, false},
 		{"PUT", "/admin/settings", "root", "https://registrationrisk.example", "{broken", 200, false},
@@ -649,4 +667,197 @@ func TestAlertsDeduplicateRetrySeparatelyAndRetainLedgers(t *testing.T) {
 	assert.EqualValues(t, 1, count)
 	require.NoError(t, db.Model(&guard.Grant{}).Count(&count).Error)
 	assert.EqualValues(t, 1, count, "retention never deletes accounting ledgers")
+}
+
+func TestMemberProfilesAndAnalysisDatabaseMatrix(t *testing.T) {
+	dialects := []string{"sqlite"}
+	if selected := os.Getenv("REGISTRATIONRISK_TEST_DIALECT"); selected != "" {
+		dialects = []string{selected}
+	} else if os.Getenv("REGISTRATIONRISK_TEST_EXTERNAL") == "1" {
+		dialects = append(dialects, "mysql", "postgres")
+	}
+	for _, dialect := range dialects {
+		t.Run(dialect, func(t *testing.T) {
+			db := riskDB(t, dialect)
+			now := time.Now().Truncate(time.Second)
+			var version string
+			if dialect == "sqlite" {
+				require.NoError(t, db.Raw("SELECT sqlite_version()").Scan(&version).Error)
+			} else {
+				require.NoError(t, db.Raw("SELECT version()").Scan(&version).Error)
+			}
+			t.Log(dialect, version)
+			// Represent the released schema: existing users/risk accounts and no
+			// member tables. Upgrading twice preserves history without inventing it.
+			require.NoError(t, db.Migrator().DropTable(&guard.MemberFinding{}, &guard.MemberProfile{}))
+			legacy := model.User{Username: "legacy", Email: "old@example.com", Role: common.RoleCommonUser, Status: common.UserStatusEnabled, Quota: 123, Remark: "account note", CreatedAt: now.Unix() - 400*86400}
+			require.NoError(t, db.Create(&legacy).Error)
+			require.NoError(t, db.Create(&guard.Account{UserID: legacy.Id, State: "active", CreatedAt: legacy.CreatedAt, DeviceHash: "old-device"}).Error)
+			require.NoError(t, guard.Migrate(db))
+			require.NoError(t, guard.Migrate(db))
+			var membersBefore []memberRow
+			require.NoError(t, memberQuery(db).Select(memberColumns).Scan(&membersBefore).Error)
+			require.Len(t, membersBefore, 1)
+			assert.Empty(t, membersBefore[0].RegistrationIP)
+			assert.Equal(t, "account note", membersBefore[0].Remark)
+			assert.Equal(t, "active", membersBefore[0].Qualification)
+
+			s := guard.Defaults()
+			s.Mode, s.BonusEnabled = "off", false
+			s.BlockedDomains, s.DomainExceptions = []string{"mail.tm"}, []string{"trusted.mail.tm"}
+			_, err := guard.SaveSettings(db, s)
+			require.NoError(t, err)
+			decision, err := guard.Evaluate(db, guard.Input{Stage: "register", Source: "oauth", Email: "new@mail.tm", IP: "::ffff:192.0.2.10", UserAgent: "Browser\n" + strings.Repeat("界", 400)}, now)
+			require.NoError(t, err)
+			err = db.Transaction(func(tx *gorm.DB) error {
+				if err := guard.AfterSignup(guard.WithDecision(tx, decision), 99, now); err != nil {
+					return err
+				}
+				return errors.New("abort registration")
+			})
+			require.Error(t, err)
+			var count int64
+			require.NoError(t, db.Model(&guard.MemberProfile{}).Count(&count).Error)
+			assert.Zero(t, count, "failed registration must not create a member profile")
+			newUser := model.User{Username: "new-member", AffCode: "new-member", Email: "new@mail.tm", CreatedAt: now.Unix(), Status: common.UserStatusEnabled, Quota: 456}
+			require.NoError(t, db.Create(&newUser).Error)
+			require.NoError(t, db.Transaction(func(tx *gorm.DB) error { return guard.AfterSignup(guard.WithDecision(tx, decision), newUser.Id, now) }))
+			assert.ErrorIs(t, guard.AfterSignup(guard.WithDecision(db, decision), 99, now), guard.ErrDenied)
+			var profile guard.MemberProfile
+			require.NoError(t, db.First(&profile, "user_id = ?", newUser.Id).Error)
+			assert.Equal(t, "192.0.2.10", profile.RegistrationIP)
+			assert.NotContains(t, profile.RegistrationAgent, "\n")
+			assert.LessOrEqual(t, len(profile.RegistrationAgent), 1024)
+			assert.Equal(t, "oauth", profile.RegistrationSource)
+			require.Error(t, db.Create(&guard.MemberProfile{UserID: newUser.Id}).Error, "unique user profile must survive migration")
+			require.NoError(t, guard.ReviewMember(db, newUser.Id, legacy.Id, 0, "watch", "check shared household", now))
+			assert.ErrorIs(t, guard.ReviewMember(db, newUser.Id, legacy.Id, 0, "cleared", "stale review", now), guard.ErrConflict)
+			assert.ErrorIs(t, guard.ReviewMember(db, newUser.Id, legacy.Id, 1, "cleared", " ", now), guard.ErrInvalid)
+			assert.ErrorIs(t, guard.ReviewMember(db, newUser.Id, legacy.Id, 1, "invalid", "note", now), guard.ErrInvalid)
+			require.NoError(t, guard.RecordMemberLogin(db, newUser.Id, "198.51.100.20", "Login Browser", "passkey", now))
+			require.NoError(t, guard.RecordMemberLogin(db, newUser.Id, "198.51.100.99", "Old Browser", "oauth", now.Add(-time.Second)))
+			require.NoError(t, db.First(&profile, "user_id = ?", newUser.Id).Error)
+			assert.Equal(t, "Login Browser", profile.LastLoginAgent)
+			assert.Equal(t, "passkey", profile.LastLoginMethod)
+			assert.Equal(t, "192.0.2.10", profile.RegistrationIP)
+			assert.Equal(t, "check shared household", profile.Note)
+			assert.EqualValues(t, 1, profile.Version)
+			require.NoError(t, guard.RecordMemberLogin(db, legacy.Id, "198.51.100.20", "Legacy Browser", "oauth", now))
+			policy := guard.DefaultMemberPolicy()
+			policy.DeviceLimit, policy.SignupIPLimit, policy.LoginIPLimit = 2, 2, 2
+			policy.NetworkLimit, policy.InviterLimit, policy.PayerLimit = 0, 0, 2
+			require.NoError(t, guard.SaveMemberPolicy(db, policy, legacy.Id, now))
+			assert.ErrorIs(t, guard.SaveMemberPolicy(db, policy, legacy.Id, now), guard.ErrConflict)
+			policy.Revision++
+			invalid := policy
+			invalid.LoginIPLimit = 1
+			assert.ErrorIs(t, guard.SaveMemberPolicy(db, invalid, legacy.Id, now), guard.ErrInvalid)
+			require.NoError(t, db.Create(&[]guard.Payer{{Digest: "trusted-payer", UserID: legacy.Id}, {Digest: "trusted-payer", UserID: newUser.Id}}).Error)
+			unknown := model.User{Username: "unknown", AffCode: "unknown", Email: "human@trusted.mail.tm", Status: common.UserStatusEnabled}
+			require.NoError(t, db.Create(&unknown).Error)
+			require.NoError(t, db.Model(&guard.Account{}).Where("user_id = ?", newUser.Id).Update("state", "review").Error)
+			summary, err := analyzeMembers(db, "first-snapshot", memberAnalysisPayload{ActorID: legacy.Id, Policy: policy}, now)
+			require.NoError(t, err)
+			assert.Equal(t, 3, summary.Total)
+			assert.Equal(t, 2, summary.Flagged)
+			assert.Equal(t, 1, summary.Insufficient)
+			var findings []guard.MemberFinding
+			require.NoError(t, db.Order("user_id").Find(&findings).Error)
+			require.Len(t, findings, 3)
+			assert.Equal(t, []guard.MemberSignal{{Code: "login-ip", Count: 2, Threshold: 2, RelatedIDs: []int{newUser.Id}}, {Code: "payer", Count: 2, Threshold: 2, RelatedIDs: []int{newUser.Id}}}, findings[0].Signals)
+			assert.Equal(t, []guard.MemberSignal{{Code: "login-ip", Count: 2, Threshold: 2, RelatedIDs: []int{legacy.Id}}, {Code: "payer", Count: 2, Threshold: 2, RelatedIDs: []int{legacy.Id}}, {Code: "domain", Count: 1, RelatedIDs: []int{}}, {Code: "qualification", Count: 1, RelatedIDs: []int{}}}, findings[1].Signals)
+			assert.Empty(t, findings[2].Signals, "blank metadata and allowed domain exceptions never form signals")
+			assert.Equal(t, "unavailable", findings[2].Coverage)
+			_, err = analyzeMembers(db, "first-snapshot", memberAnalysisPayload{ActorID: legacy.Id, Policy: policy}, now)
+			require.NoError(t, err, "resumed snapshot replaces its own rows")
+			require.NoError(t, db.Model(&guard.MemberFinding{}).Count(&count).Error)
+			assert.EqualValues(t, 3, count)
+			require.NoError(t, guard.Migrate(db))
+			require.NoError(t, guard.Migrate(db))
+			stored, err := guard.GetMemberPolicy(db)
+			require.NoError(t, err)
+			assert.Equal(t, policy, stored)
+			stored.CaptureEnabled = false
+			require.NoError(t, guard.SaveMemberPolicy(db, stored, legacy.Id, now))
+			require.NoError(t, guard.RecordMemberLogin(db, newUser.Id, "192.0.2.99", "Disabled capture", "oauth", now.Add(time.Hour)))
+			require.NoError(t, db.First(&profile, "user_id = ?", newUser.Id).Error)
+			assert.Equal(t, "198.51.100.20", profile.LastLoginIP)
+			require.NoError(t, guard.PurgeMemberMetadata(db, now.Add(181*24*time.Hour)))
+			require.NoError(t, db.First(&profile, "user_id = ?", newUser.Id).Error)
+			assert.Empty(t, profile.RegistrationIP)
+			assert.Empty(t, profile.LastLoginAgent)
+			assert.Equal(t, now.Unix(), profile.RegisteredAt)
+			assert.Equal(t, "check shared household", profile.Note)
+			var user model.User
+			require.NoError(t, db.First(&user, newUser.Id).Error)
+			assert.Equal(t, 456, user.Quota)
+			assert.Equal(t, common.UserStatusEnabled, user.Status, "analysis and profile review never ban users or alter funds")
+		})
+	}
+}
+
+func TestMemberAnalysisTasksRetainCompletedResultsAndHidePrivateFields(t *testing.T) {
+	db := riskDB(t, "sqlite")
+	require.NoError(t, db.AutoMigrate(&model.SystemTask{}, &model.SystemTaskLock{}))
+	user := model.User{Username: "member", Password: "private-hash", Email: "person@example.com", AccessToken: nil, Status: common.UserStatusEnabled}
+	require.NoError(t, db.Create(&user).Error)
+	p := guard.DefaultMemberPolicy()
+	first, created, err := service.EnqueueSystemTask(memberTaskType, memberAnalysisPayload{ActorID: user.Id, Policy: p})
+	require.NoError(t, err)
+	assert.True(t, created)
+	again, created, err := service.EnqueueSystemTask(memberTaskType, memberAnalysisPayload{ActorID: user.Id, Policy: p})
+	require.NoError(t, err)
+	assert.False(t, created)
+	assert.Equal(t, first.TaskID, again.TaskID)
+	task, claimed, err := model.ClaimSystemTask(first.ID, memberTaskType, "member-test", time.Now().Unix()+60)
+	require.NoError(t, err)
+	require.True(t, claimed)
+	memberAnalysisHandler{}.Run(context.Background(), task, "member-test")
+	finished, err := model.GetSystemTaskByTaskID(task.TaskID)
+	require.NoError(t, err)
+	require.Equal(t, model.SystemTaskStatusSucceeded, finished.Status)
+	for _, status := range []model.SystemTaskStatus{model.SystemTaskStatusPending, model.SystemTaskStatusFailed} {
+		if status == model.SystemTaskStatusPending {
+			_, _, err = service.EnqueueSystemTask(memberTaskType, memberAnalysisPayload{ActorID: user.Id, Policy: p})
+			require.NoError(t, err)
+		} else {
+			require.NoError(t, db.Model(&model.SystemTask{}).Where("status = ?", model.SystemTaskStatusPending).Updates(map[string]any{"status": status, "active_key": nil, "error": "private database diagnostics"}).Error)
+		}
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("GET", "/?kind=all", nil)
+		memberAnalysis(c)
+		var result struct {
+			Success bool
+			Data    struct {
+				Status model.SystemTaskStatus
+				Total  int
+				Items  []guard.MemberFinding
+			}
+		}
+		require.NoError(t, common.Unmarshal(w.Body.Bytes(), &result))
+		require.True(t, result.Success, w.Body.String())
+		assert.Equal(t, status, result.Data.Status)
+		assert.Equal(t, 1, result.Data.Total)
+		require.Len(t, result.Data.Items, 1)
+		assert.Equal(t, user.Id, result.Data.Items[0].UserID)
+		assert.NotContains(t, w.Body.String(), "private database diagnostics")
+	}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", fmt.Sprintf("/?user_id=%d", user.Id), nil)
+	members(c)
+	assert.NotContains(t, w.Body.String(), "private-hash")
+	assert.NotContains(t, w.Body.String(), "password")
+	assert.NotContains(t, w.Body.String(), "device_hash")
+	assert.Contains(t, w.Body.String(), "person@example.com")
+	last, _, err := service.EnqueueSystemTask(memberTaskType, memberAnalysisPayload{ActorID: user.Id, Policy: p})
+	require.NoError(t, err)
+	task, claimed, err = model.ClaimSystemTask(last.ID, memberTaskType, "member-test", time.Now().Unix()+60)
+	require.NoError(t, err)
+	require.True(t, claimed)
+	memberAnalysisHandler{}.Run(context.Background(), task, "member-test")
+	var oldCount int64
+	require.NoError(t, db.Model(&guard.MemberFinding{}).Where("task_id = ?", first.TaskID).Count(&oldCount).Error)
+	assert.Zero(t, oldCount, "publishing a successful snapshot prunes older completed results")
 }

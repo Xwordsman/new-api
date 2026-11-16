@@ -46,6 +46,9 @@ func UpdateSettings(db *gorm.DB, value Settings, actor int) error {
 	if err != nil || rate.LessThan(decimal.NewFromFloat(0.01)) || rate.GreaterThan(decimal.NewFromInt(10000)) || value.RateBPS < 0 || value.RateBPS > 10000 || value.WindowDays < 1 || value.WindowDays > 3650 || value.CoolingHours < 0 || value.CoolingHours > 8760 || value.CapQuota < 1 || value.CapQuota > common.MaxWalletQuota/100 {
 		return ErrInvalid
 	}
+	if value.SignupBonusQuota < 0 || value.SignupBonusQuota > common.MaxWalletQuota/100 || value.SignupBonusEnabled && value.SignupBonusQuota == 0 {
+		return ErrInvalid
+	}
 	return db.Transaction(func(tx *gorm.DB) error {
 		var old Settings
 		if err := Lock(tx).First(&old, 1).Error; err != nil {

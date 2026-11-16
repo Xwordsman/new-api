@@ -706,7 +706,13 @@ func (user *User) Insert(inviterId int) error {
 					return err
 				}
 			}
-			return guard.AfterSignup(tx, user.Id, time.Now())
+			if err := guard.AfterSignup(tx, user.Id, time.Now()); err != nil {
+				return err
+			}
+			if ReferralSignupCompletedHook != nil {
+				return ReferralSignupCompletedHook(tx, user.Id)
+			}
+			return nil
 		})
 	}); err != nil {
 		return err
@@ -781,7 +787,13 @@ func (user *User) InsertWithTx(tx *gorm.DB, inviterId int) error {
 				return err
 			}
 		}
-		return guard.AfterSignup(tx, user.Id, time.Now())
+		if err := guard.AfterSignup(tx, user.Id, time.Now()); err != nil {
+			return err
+		}
+		if ReferralSignupCompletedHook != nil {
+			return ReferralSignupCompletedHook(tx, user.Id)
+		}
+		return nil
 	})
 }
 

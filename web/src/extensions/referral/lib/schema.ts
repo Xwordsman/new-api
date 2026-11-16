@@ -21,39 +21,49 @@ import { z } from 'zod'
 const invalid = 'Invalid referral parameters'
 const reason = 'Enter a reason between 3 and 500 characters.'
 
-export const referralSettingsSchema = z.object({
-  enabled: z.boolean(),
-  rate: z
-    .number({ error: invalid })
-    .min(0, invalid)
-    .max(100, invalid)
-    .refine(
-      (value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-8,
-      invalid
-    ),
-  window_days: z
-    .number({ error: invalid })
-    .int(invalid)
-    .min(1, invalid)
-    .max(3650, invalid),
-  cooling_hours: z
-    .number({ error: invalid })
-    .int(invalid)
-    .min(0, invalid)
-    .max(8760, invalid),
-  cap_usd: z
-    .number({ error: invalid })
-    .min(0.01, invalid)
-    .max(1_000_000, invalid),
-  cny_per_usd: z
-    .string()
-    .max(32, invalid)
-    .regex(/^\d+(\.\d+)?$/, invalid)
-    .refine(
-      (value) => Number(value) >= 0.01 && Number(value) <= 10000,
-      invalid
-    ),
-})
+export const referralSettingsSchema = z
+  .object({
+    enabled: z.boolean(),
+    signup_bonus_enabled: z.boolean(),
+    signup_bonus_usd: z
+      .number({ error: invalid })
+      .min(0, invalid)
+      .max(1_000_000, invalid),
+    rate: z
+      .number({ error: invalid })
+      .min(0, invalid)
+      .max(100, invalid)
+      .refine(
+        (value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-8,
+        invalid
+      ),
+    window_days: z
+      .number({ error: invalid })
+      .int(invalid)
+      .min(1, invalid)
+      .max(3650, invalid),
+    cooling_hours: z
+      .number({ error: invalid })
+      .int(invalid)
+      .min(0, invalid)
+      .max(8760, invalid),
+    cap_usd: z
+      .number({ error: invalid })
+      .min(0.01, invalid)
+      .max(1_000_000, invalid),
+    cny_per_usd: z
+      .string()
+      .max(32, invalid)
+      .regex(/^\d+(\.\d+)?$/, invalid)
+      .refine(
+        (value) => Number(value) >= 0.01 && Number(value) <= 10000,
+        invalid
+      ),
+  })
+  .refine(
+    (value) => !value.signup_bonus_enabled || value.signup_bonus_usd >= 0.01,
+    { message: invalid, path: ['signup_bonus_usd'] }
+  )
 export type ReferralSettingsValues = z.infer<typeof referralSettingsSchema>
 
 export const referralActionSchema = z.object({

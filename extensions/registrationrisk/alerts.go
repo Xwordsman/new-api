@@ -26,7 +26,10 @@ type taskPayload struct {
 	Force bool `json:"force"`
 }
 
-func RegisterTasks()                        { service.RegisterSystemTaskHandler(taskHandler{}) }
+func RegisterTasks() {
+	service.RegisterSystemTaskHandler(taskHandler{})
+	service.RegisterSystemTaskHandler(memberAnalysisHandler{})
+}
 func (taskHandler) Type() string            { return taskType }
 func (taskHandler) Interval() time.Duration { return time.Minute }
 func (taskHandler) NewPayload() any         { return taskPayload{} }
@@ -68,6 +71,9 @@ func maintain(db *gorm.DB, now time.Time, force bool) error {
 		return err
 	}
 	if runs == 1 || force {
+		if err := guard.PurgeMemberMetadata(db, now); err != nil {
+			return err
+		}
 		cutoff := now.Unix() - int64(s.RetentionDays)*86400
 		for _, table := range []any{&guard.Event{}, &guard.Audit{}} {
 			if err := db.Where("created_at < ?", cutoff).Delete(table).Error; err != nil {

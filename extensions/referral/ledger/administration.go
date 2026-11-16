@@ -51,8 +51,8 @@ func ImportLegacyBalances(db *gorm.DB) error {
 	}).Error
 }
 
-// Review changes qualification only. Historical payments are never inferred or
-// awarded automatically; each backfilled order needs a separate reconciliation.
+// Review approves qualification and releases a pending signup bonus. Historical
+// payments are never inferred; backfilled orders need separate reconciliation.
 func Review(db *gorm.DB, id, actor int, approve bool, reason string) error {
 	reason = strings.TrimSpace(reason)
 	if len(reason) < 3 || len(reason) > 500 {
@@ -79,7 +79,13 @@ func Review(db *gorm.DB, id, actor int, approve bool, reason string) error {
 		if err := tx.Save(&binding).Error; err != nil {
 			return err
 		}
-		return tx.Create(&Audit{ActorID: actor, UserID: binding.UserID, Action: "review", Detail: common.GetJsonString(map[string]any{"approve": approve, "reason": reason}), CreatedAt: time.Now().Unix()}).Error
+		if err := tx.Create(&Audit{ActorID: actor, UserID: binding.UserID, Action: "review", Detail: common.GetJsonString(map[string]any{"approve": approve, "reason": reason}), CreatedAt: time.Now().Unix()}).Error; err != nil {
+			return err
+		}
+		if approve {
+			return CompleteSignup(tx, binding.UserID)
+		}
+		return nil
 	})
 }
 

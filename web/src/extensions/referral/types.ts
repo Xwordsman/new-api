@@ -18,6 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 export type ReferralSettings = {
   enabled: boolean
+  signup_bonus_enabled: boolean
+  signup_bonus_quota: number
   rate_bps: number
   window_days: number
   cooling_hours: number
@@ -61,6 +63,8 @@ export type Invitee = {
   reserved: number
   historical: boolean
   reviewed_at: number
+  signup_bonus_quota: number
+  signup_bonus_paid_at: number
   net_paid: number
   earned: number
   pending: number

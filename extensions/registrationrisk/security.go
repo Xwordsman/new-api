@@ -59,7 +59,7 @@ func Evaluate(c *gin.Context, stage, source, email string, inviterID int, verifi
 	if err != nil {
 		return nil, err
 	}
-	return guard.Evaluate(model.DB.WithContext(c.Request.Context()), guard.Input{Stage: stage, Source: source, Email: email, IP: c.ClientIP(), Device: device, InviterID: inviterID, VerifiedEmail: verified}, time.Now())
+	return guard.Evaluate(model.DB.WithContext(c.Request.Context()), guard.Input{Stage: stage, Source: source, Email: email, IP: c.ClientIP(), Device: device, UserAgent: c.Request.UserAgent(), InviterID: inviterID, VerifiedEmail: verified}, time.Now())
 }
 
 // SignupContext preserves the host's referral context and adds a decision that

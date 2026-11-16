@@ -31,6 +31,8 @@ import type { ReferralDashboard } from '../types'
 const dashboard: ReferralDashboard = {
   settings: {
     enabled: true,
+    signup_bonus_enabled: false,
+    signup_bonus_quota: 0,
     rate_bps: 500,
     window_days: 30,
     cooling_hours: 24,

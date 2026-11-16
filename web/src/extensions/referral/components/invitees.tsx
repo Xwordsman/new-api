@@ -121,6 +121,31 @@ export function Invitees(props: {
       ),
     },
     {
+      id: 'signup_bonus',
+      header: t('Fixed invitation bonus'),
+      cell: (row) => {
+        if (row.signup_bonus_quota <= 0) return '—'
+        let status = <ReferralState state={row.state} />
+        if (row.signup_bonus_paid_at > 0) {
+          status = (
+            <p className='text-muted-foreground text-xs'>
+              {t('Automatically issued')}
+            </p>
+          )
+        } else if (row.state === 'active') {
+          status = (
+            <p className='text-muted-foreground text-xs'>{t('Pending')}</p>
+          )
+        }
+        return (
+          <div className='space-y-1'>
+            <p className='tabular-nums'>{money(row.signup_bonus_quota)}</p>
+            {status}
+          </div>
+        )
+      },
+    },
+    {
       id: 'state',
       header: t('Status'),
       cell: (row) => {

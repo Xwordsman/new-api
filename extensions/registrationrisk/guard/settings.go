@@ -259,7 +259,7 @@ func SaveSettings(db *gorm.DB, s Settings) (Settings, error) {
 }
 
 func Migrate(db *gorm.DB) error {
-	if err := db.AutoMigrate(&Secret{}, &Counter{}, &Challenge{}, &Event{}, &Account{}, &Grant{}, &Reservation{}, &Alert{}, &Audit{}, &Payer{}); err != nil {
+	if err := db.AutoMigrate(&Secret{}, &Counter{}, &Challenge{}, &Event{}, &Account{}, &Grant{}, &Reservation{}, &Alert{}, &Audit{}, &Payer{}, &MemberProfile{}, &MemberFinding{}); err != nil {
 		return err
 	}
 	var salt [32]byte

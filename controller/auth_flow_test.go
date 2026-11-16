@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/extensions/registrationrisk/guard"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/oauth"
 	"github.com/QuantumNous/new-api/service"
@@ -79,6 +80,9 @@ func TestSecurityLoginCodeCompletesOnce(t *testing.T) {
 			challenge, err := service.StartLoginVerification(user, "password", nil)
 			require.NoError(t, err)
 			require.NotNil(t, challenge)
+			var profiles int64
+			require.NoError(t, model.DB.Model(&guard.MemberProfile{}).Where("user_id = ?", user.Id).Count(&profiles).Error)
+			assert.Zero(t, profiles, "an unfinished authentication challenge must not record a successful login")
 			code, err := totp.GenerateCode(factor.Secret, time.Now())
 			require.NoError(t, err)
 			if test.backup {
@@ -94,7 +98,13 @@ func TestSecurityLoginCodeCompletesOnce(t *testing.T) {
 			router.POST("/api/user/login/2fa", Verify2FALogin)
 			for attempt := range 2 {
 				response := httptest.NewRecorder()
-				router.ServeHTTP(response, httptest.NewRequest("POST", test.path, strings.NewReader(string(body))))
+				request := httptest.NewRequest("POST", test.path, strings.NewReader(string(body)))
+				request.RemoteAddr = "192.0.2.10:12345"
+				request.Header.Set("User-Agent", "Completed login browser")
+				if attempt > 0 {
+					request.Header.Set("User-Agent", "Replayed request browser")
+				}
+				router.ServeHTTP(response, request)
 				var result securityEnrollmentResponse
 				require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
 				assert.Equal(t, attempt == 0, result.Success, response.Body.String())
@@ -107,6 +117,11 @@ func TestSecurityLoginCodeCompletesOnce(t *testing.T) {
 				} else {
 					assert.Empty(t, response.Header().Values("Set-Cookie"))
 				}
+				var profile guard.MemberProfile
+				require.NoError(t, model.DB.First(&profile, "user_id = ?", user.Id).Error)
+				assert.Equal(t, "192.0.2.10", profile.LastLoginIP)
+				assert.Equal(t, "Completed login browser", profile.LastLoginAgent, "replayed authentication cannot overwrite the latest successful login")
+				assert.Empty(t, profile.RegistrationIP, "login must not invent historical registration metadata")
 			}
 			count, err := model.CountActiveUserSessions(user.Id, time.Now().Unix())
 			require.NoError(t, err)

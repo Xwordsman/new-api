@@ -55,9 +55,16 @@ export function RulesDialog(props: {
         </div>
       )}
       <ol className='list-decimal space-y-3 pl-5'>
+        {settings?.signup_bonus_enabled && (
+          <li>
+            {t(
+              'Fixed invitation bonuses are credited automatically after qualification checks and are separate from recharge commissions. Existing users receive no retroactive bonus.'
+            )}
+          </li>
+        )}
         <li>
           {t(
-            'Rewards apply only to verified wallet payments, net of refunds. Gifts, redemption codes, subscriptions and referral transfers do not qualify.'
+            'Recharge commissions apply only to eligible paid top-ups, net of refunds. Gifts and referral transfers never qualify.'
           )}
         </li>
         <li>

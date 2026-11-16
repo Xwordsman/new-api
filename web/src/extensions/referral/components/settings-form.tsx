@@ -54,6 +54,8 @@ export function SettingsForm(props: { settings: ReferralSettings }) {
     resolver: zodResolver(referralSettingsSchema),
     defaultValues: {
       enabled: true,
+      signup_bonus_enabled: false,
+      signup_bonus_usd: 1,
       rate: 5,
       window_days: 30,
       cooling_hours: 24,
@@ -66,6 +68,11 @@ export function SettingsForm(props: { settings: ReferralSettings }) {
       ...props.settings,
       rate: props.settings.rate_bps / 100,
       cap_usd: props.settings.cap_quota / currency.quotaPerUnit,
+      signup_bonus_enabled: props.settings.signup_bonus_enabled,
+      signup_bonus_usd:
+        props.settings.signup_bonus_quota > 0
+          ? props.settings.signup_bonus_quota / currency.quotaPerUnit
+          : 1,
     })
   }, [props.settings, form, currency.quotaPerUnit])
   const save = useMutation({
@@ -73,6 +80,10 @@ export function SettingsForm(props: { settings: ReferralSettings }) {
       saveReferralSettings({
         ...props.settings,
         enabled: values.enabled,
+        signup_bonus_enabled: values.signup_bonus_enabled,
+        signup_bonus_quota: Math.round(
+          values.signup_bonus_usd * currency.quotaPerUnit
+        ),
         rate_bps: Math.round(values.rate * 100),
         window_days: values.window_days,
         cooling_hours: values.cooling_hours,
@@ -87,6 +98,7 @@ export function SettingsForm(props: { settings: ReferralSettings }) {
       toast.success(t('Referral settings saved'))
     },
   })
+  const signupBonusEnabled = form.watch('signup_bonus_enabled')
   const fields = [
     {
       name: 'rate',
@@ -162,6 +174,52 @@ export function SettingsForm(props: { settings: ReferralSettings }) {
             </FormItem>
           )}
         />
+        <div className='space-y-4 rounded-lg border p-4'>
+          <FormField
+            control={form.control}
+            name='signup_bonus_enabled'
+            render={({ field }) => (
+              <FormItem className='flex items-center justify-between gap-4'>
+                <FormLabel>{t('Enable fixed invitation bonus')}</FormLabel>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    disabled={save.isPending}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name='signup_bonus_usd'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Signup bonus per invitee (USD)')}</FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    type='number'
+                    min={0.01}
+                    max={1_000_000}
+                    step={0.01}
+                    disabled={save.isPending || !signupBonusEnabled}
+                    onChange={(event) =>
+                      field.onChange(event.target.valueAsNumber)
+                    }
+                  />
+                </FormControl>
+                <FormDescription>
+                  {t(
+                    'Automatically credits available referral rewards after a qualifying registration. Risky invitations require review. Applies only to new invitations; gifts never count as paid top-ups or generate recharge commissions.'
+                  )}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
         <div className='grid gap-5 sm:grid-cols-2'>
           {fields.map((item) => (
             <FormField

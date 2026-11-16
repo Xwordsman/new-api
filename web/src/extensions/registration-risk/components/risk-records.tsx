@@ -105,6 +105,11 @@ export function RiskRecords() {
     settings: t('Policy settings updated'),
     'grant-active': t('Promotional credit approved'),
     'grant-rejected': t('Promotional credit rejected'),
+    'member-watch': t('Needs attention'),
+    'member-cleared': t('Reviewed'),
+    'member-unreviewed': t('Not reviewed'),
+    'member-policy': t('Member analysis settings saved'),
+    'member-analysis': t('Existing-member analysis'),
   }
   const columns: StaticDataTableColumn<RiskRecord>[] = [
     { id: 'time', header: t('Time'), cell: (row) => date(row.created_at) },
@@ -296,12 +301,20 @@ export function RiskRecords() {
       {
         id: 'reason',
         header: t('Review reason'),
-        cell: (row) =>
-          row.reason?.startsWith('Policy revision ')
-            ? t('Policy revision {{revision}}', {
-                revision: row.reason.slice(16),
-              })
-            : row.reason,
+        cell: (row) => {
+          if (
+            row.action === 'member-policy' ||
+            row.action === 'member-analysis'
+          ) {
+            return labels[row.action]
+          }
+          if (row.reason?.startsWith('Policy revision ')) {
+            return t('Policy revision {{revision}}', {
+              revision: row.reason.slice(16),
+            })
+          }
+          return row.reason
+        },
       }
     )
   }
@@ -314,6 +327,11 @@ export function RiskRecords() {
   ]
   return (
     <div className='space-y-4'>
+      <p className='text-muted-foreground text-sm'>
+        {t(
+          'Risk events record signup attempts, including unsuccessful attempts. Promotional-credit review controls rewards; it is separate from member profile review.'
+        )}
+      </p>
       <p className='text-muted-foreground text-sm'>
         {t(
           'Browser and network matches are weak signals. Review the context before rejecting rewards. Related-attempt filters use keyed digests without exposing raw IP addresses.'

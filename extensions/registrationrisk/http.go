@@ -29,6 +29,12 @@ func RegisterRoutes(api *gin.RouterGroup) {
 	admin.GET("/settings", getSettings)
 	admin.PUT("/settings", middleware.SessionCookieOriginGuard(), middleware.UserCriticalRateLimit("registration-risk-settings"), putSettings)
 	admin.GET("/records", records)
+	admin.GET("/members", members)
+	admin.POST("/members/review", middleware.StrictSessionCookieOriginGuard(), middleware.UserCriticalRateLimit("registration-member-review"), memberReview)
+	admin.GET("/member-policy", memberPolicy)
+	admin.PUT("/member-policy", middleware.StrictSessionCookieOriginGuard(), middleware.UserCriticalRateLimit("registration-member-policy"), putMemberPolicy)
+	admin.GET("/member-analysis", memberAnalysis)
+	admin.POST("/member-analysis", middleware.StrictSessionCookieOriginGuard(), middleware.UserCriticalRateLimit("registration-member-analysis"), startMemberAnalysis)
 	admin.POST("/review", middleware.SessionCookieOriginGuard(), middleware.UserCriticalRateLimit("registration-risk-review"), review)
 	admin.POST("/check-alerts", middleware.SessionCookieOriginGuard(), middleware.UserCriticalRateLimit("registration-risk-alerts"), checkAlerts)
 }

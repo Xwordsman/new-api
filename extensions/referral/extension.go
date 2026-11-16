@@ -34,6 +34,7 @@ func Enabled(db *gorm.DB) (bool, error) {
 // workers receiving signups and payment callbacks.
 func Initialize(db *gorm.DB) {
 	model.ReferralRegistrationHook = ledger.Register
+	model.ReferralSignupCompletedHook = ledger.CompleteSignup
 	model.ReferralPaymentHook = ledger.RecordPayment
 	model.ReferralTransferHook = func(userID, quota int) error {
 		transfer, replayed, err := ledger.TransferBalance(db, userID, common.GetRandomString(32), quota, time.Now().Unix())

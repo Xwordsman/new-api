@@ -96,6 +96,13 @@ export function ReferralSummary(props: {
                 </p>
               </div>
             </div>
+            {rules.signup_bonus_enabled && (
+              <p className='text-primary text-sm font-medium'>
+                {t('Automatically earn {{amount}} per qualifying invitation.', {
+                  amount: money(rules.signup_bonus_quota),
+                })}
+              </p>
+            )}
             <div className='max-w-xl space-y-2'>
               <div className='flex flex-wrap items-center justify-between gap-3 text-xs'>
                 <span className='text-muted-foreground'>

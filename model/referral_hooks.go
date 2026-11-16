@@ -8,6 +8,7 @@ import (
 // Installed at startup by the referral extension. Nil hooks retain upstream
 // behavior for embedders and isolated model tests.
 var ReferralRegistrationHook func(tx *gorm.DB, userID, inviterID int, registeredAt int64) error
+var ReferralSignupCompletedHook func(tx *gorm.DB, userID int) error
 var ReferralPaymentHook func(tx *gorm.DB, userID int, tradeNo, provider string, payment ledger.Payment) error
 var RegistrationPaymentHook func(tx *gorm.DB, userID int, provider, payer string) error
 var ReferralTransferHook func(userID, quota int) error
