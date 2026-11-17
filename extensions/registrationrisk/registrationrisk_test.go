@@ -104,6 +104,8 @@ func TestRegistrationRiskDatabaseMatrix(t *testing.T) {
 			for _, change := range []func(*guard.Settings){
 				func(s *guard.Settings) { s.Mode = "invalid" },
 				func(s *guard.Settings) { s.BonusQuota = -1 },
+				func(s *guard.Settings) { s.IPAgentHourlyLimit = -1 },
+				func(s *guard.Settings) { s.IPAgentHourlyLimit = 10001 },
 				func(s *guard.Settings) { s.BlockedDomains = []string{"*.com"} },
 				func(s *guard.Settings) { s.AllowOnly = true; s.AllowedDomains = nil },
 				func(s *guard.Settings) { s.AlertWebhook = "http://insecure.example" },
@@ -198,6 +200,200 @@ func TestRegistrationRiskDatabaseMatrix(t *testing.T) {
 			assert.Equal(t, "allow", d.Event.Action)
 		})
 	}
+}
+
+func TestDuplicateRegistrationIsBlockedBeforeAccountCreation(t *testing.T) {
+	t.Run("registered browser remains blocked across days and policy revisions", func(t *testing.T) {
+		db := riskDB(t, "sqlite")
+		now := time.Date(2026, 11, 17, 10, 0, 0, 0, time.UTC)
+		s := guard.Defaults()
+		s.Mode, s.Rules, s.BonusEnabled = "enforce", nil, false
+		s, err := guard.SaveSettings(db, s)
+		require.NoError(t, err)
+		input := guard.Input{Stage: "register", Source: "password", Device: "registered-browser", IP: "192.0.2.1", UserAgent: "Browser/1"}
+		first, err := guard.Evaluate(db, input, now)
+		require.NoError(t, err)
+		user := model.User{Username: "first-browser-account", Role: common.RoleCommonUser, Status: common.UserStatusEnabled}
+		require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+			return user.InsertWithTx(SignupContext(tx, first), 0)
+		}))
+		_, err = guard.SaveSettings(db, s)
+		require.NoError(t, err)
+		input.IP, input.Source, input.VerifiedEmail = "198.51.100.1", "oauth", true
+		second, err := guard.Evaluate(db, input, now.Add(48*time.Hour))
+		assert.ErrorIs(t, err, guard.ErrDenied)
+		assert.Equal(t, "deny", second.Event.Action)
+		assert.Contains(t, second.Event.Reasons, "registered-browser")
+
+		// Observation records the same finding without enforcing it.
+		s, err = guard.GetSettings(db)
+		require.NoError(t, err)
+		s.Mode = "observe"
+		_, err = guard.SaveSettings(db, s)
+		require.NoError(t, err)
+		observed, err := guard.Evaluate(db, input, now.Add(48*time.Hour))
+		require.NoError(t, err)
+		assert.Equal(t, "deny", observed.Event.Action)
+		assert.False(t, observed.Event.Enforced)
+	})
+
+	t.Run("parallel preflight decisions cannot create two accounts in one browser", func(t *testing.T) {
+		db := riskDB(t, "sqlite")
+		now := time.Now()
+		s := guard.Defaults()
+		s.Mode, s.Rules = "enforce", nil
+		s.BonusQuota = 100
+		_, err := guard.SaveSettings(db, s)
+		require.NoError(t, err)
+		input := guard.Input{Stage: "register", Source: "password", Device: "parallel-browser"}
+		first, err := guard.Evaluate(db, input, now)
+		require.NoError(t, err)
+		second, err := guard.Evaluate(db, input, now)
+		require.NoError(t, err)
+		secondDB := db
+		if common.MainDatabaseType() != common.DatabaseTypeSQLite {
+			// Hold a real overlapping transaction with an established read snapshot.
+			// MySQL's default REPEATABLE READ must not hide the first signup.
+			conn, err := db.DB()
+			require.NoError(t, err)
+			conn.SetMaxOpenConns(2)
+			secondDB = db.Begin()
+			require.NoError(t, secondDB.Error)
+			t.Cleanup(func() { require.NoError(t, secondDB.Rollback().Error) })
+			var count int64
+			require.NoError(t, secondDB.Model(&model.User{}).Count(&count).Error)
+		}
+		for i, decision := range []*guard.Decision{first, second} {
+			user := model.User{Username: fmt.Sprintf("parallel-account-%d", i), Role: common.RoleCommonUser, Status: common.UserStatusEnabled}
+			signupDB := db
+			if i == 1 {
+				signupDB = secondDB
+			}
+			err := signupDB.Transaction(func(tx *gorm.DB) error { return user.InsertWithTx(SignupContext(tx, decision), 0) })
+			if i == 0 {
+				require.NoError(t, err)
+			} else {
+				assert.ErrorIs(t, err, guard.ErrDenied)
+			}
+		}
+		var count int64
+		require.NoError(t, db.Model(&model.User{}).Count(&count).Error)
+		assert.EqualValues(t, 1, count, "the rejected signup transaction leaves no user")
+		require.NoError(t, db.Model(&guard.Grant{}).Count(&count).Error)
+		assert.EqualValues(t, 1, count, "the rejected signup cannot issue another grant")
+	})
+
+	t.Run("clearing cookies does not reset the IP and UA signup limit", func(t *testing.T) {
+		db := riskDB(t, "sqlite")
+		now := time.Date(2026, 11, 17, 10, 0, 0, 0, time.UTC)
+		s := guard.Defaults()
+		s.Mode, s.Rules, s.BonusEnabled = "enforce", nil, false
+		_, err := guard.SaveSettings(db, s)
+		require.NoError(t, err)
+		// Historical registrations must count immediately after an upgrade.
+		require.NoError(t, db.Create(&guard.MemberProfile{UserID: 90, RegistrationIP: "192.0.2.1", RegistrationAgent: "Browser/1", RegisteredAt: now.Unix()}).Error)
+		input := guard.Input{Stage: "register", Source: "password", Device: "fresh-cookie", IP: "::ffff:192.0.2.1", UserAgent: "Browser/1"}
+		first, err := guard.Evaluate(db, input, now)
+		require.NoError(t, err)
+		user := model.User{Username: "second-network-account", Role: common.RoleCommonUser, Status: common.UserStatusEnabled}
+		require.NoError(t, db.Transaction(func(tx *gorm.DB) error { return user.InsertWithTx(SignupContext(tx, first), 0) }))
+		input.Device = "another-fresh-cookie"
+		denied, err := guard.Evaluate(db, input, now)
+		assert.ErrorIs(t, err, guard.ErrDenied)
+		assert.Contains(t, denied.Event.Reasons, "ip-agent-hour")
+		input.UserAgent = "OtherBrowser/1"
+		_, err = guard.Evaluate(db, input, now)
+		require.NoError(t, err, "a shared IP alone must not trigger this limit")
+		input.UserAgent = "Browser/1"
+		_, err = guard.Evaluate(db, input, now.Add(time.Hour))
+		require.NoError(t, err, "the IP and UA limit expires with its hourly window")
+	})
+
+	t.Run("IP and UA quota is transactional even without member capture", func(t *testing.T) {
+		db := riskDB(t, "sqlite")
+		now := time.Now()
+		s := guard.Defaults()
+		s.Mode, s.Rules, s.BonusEnabled, s.IPAgentHourlyLimit = "enforce", nil, false, 1
+		_, err := guard.SaveSettings(db, s)
+		require.NoError(t, err)
+		policy, err := guard.GetMemberPolicy(db)
+		require.NoError(t, err)
+		policy.CaptureEnabled = false
+		require.NoError(t, guard.SaveMemberPolicy(db, policy, 1, now))
+		// Omitting User-Agent must not bypass the limit either.
+		input := guard.Input{Stage: "register", Source: "password", IP: "192.0.2.1"}
+		first, err := guard.Evaluate(db, input, now)
+		require.NoError(t, err)
+		second, err := guard.Evaluate(db, input, now)
+		require.NoError(t, err)
+		aborted := errors.New("account binding failed")
+		err = db.Transaction(func(tx *gorm.DB) error {
+			user := model.User{Username: "rolled-back-signup", Role: common.RoleCommonUser, Status: common.UserStatusEnabled}
+			if err := user.InsertWithTx(SignupContext(tx, first), 0); err != nil {
+				return err
+			}
+			return aborted
+		})
+		require.ErrorIs(t, err, aborted)
+		for i, decision := range []*guard.Decision{first, second} {
+			user := model.User{Username: fmt.Sprintf("ip-agent-account-%d", i), Role: common.RoleCommonUser, Status: common.UserStatusEnabled}
+			err := db.Transaction(func(tx *gorm.DB) error { return user.InsertWithTx(SignupContext(tx, decision), 0) })
+			if i == 0 {
+				require.NoError(t, err, "failed transactions do not consume the signup allowance")
+			} else {
+				assert.ErrorIs(t, err, guard.ErrDenied, "the final check rejects a stale preflight decision")
+			}
+		}
+		_, err = guard.Evaluate(db, input, now)
+		assert.ErrorIs(t, err, guard.ErrDenied)
+		var count int64
+		require.NoError(t, db.Model(&model.User{}).Count(&count).Error)
+		assert.EqualValues(t, 1, count)
+		require.NoError(t, db.Model(&guard.MemberProfile{}).Count(&count).Error)
+		assert.Zero(t, count, "raw client metadata capture remains disabled")
+	})
+
+	t.Run("legacy settings get protection and explicit opt outs persist", func(t *testing.T) {
+		db := riskDB(t, "sqlite")
+		require.NoError(t, db.Create(&model.Option{Key: "RegistrationRiskExtensionSettings", Value: `{"mode":"enforce","rules":[],"bonus_enabled":false}`}).Error)
+		s, err := guard.GetSettings(db)
+		require.NoError(t, err)
+		assert.True(t, s.DenyRegisteredBrowser)
+		assert.Equal(t, 2, s.IPAgentHourlyLimit)
+		encoded, err := common.Marshal(s)
+		require.NoError(t, err)
+		var legacyPayload map[string]any
+		require.NoError(t, common.Unmarshal(encoded, &legacyPayload))
+		delete(legacyPayload, "deny_registered_browser")
+		delete(legacyPayload, "ip_agent_hourly_limit")
+		encoded, err = common.Marshal(legacyPayload)
+		require.NoError(t, err)
+		response := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(response)
+		c.Set("id", 1)
+		c.Request = httptest.NewRequest(http.MethodPut, "/admin/settings", bytes.NewReader(encoded))
+		putSettings(c)
+		var result struct{ Success bool }
+		require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+		require.True(t, result.Success, response.Body.String())
+		s, err = guard.GetSettings(db)
+		require.NoError(t, err)
+		assert.True(t, s.DenyRegisteredBrowser, "an older dashboard preserves the new protection")
+		assert.Equal(t, 2, s.IPAgentHourlyLimit)
+		s.DenyRegisteredBrowser, s.IPAgentHourlyLimit = false, 0
+		s, err = guard.SaveSettings(db, s)
+		require.NoError(t, err)
+		loaded, err := guard.GetSettings(db)
+		require.NoError(t, err)
+		assert.Equal(t, s, loaded)
+		input := guard.Input{Stage: "register", Source: "password", Device: "allowed-shared-browser", IP: "192.0.2.1", UserAgent: "Browser/1"}
+		for i := range 2 {
+			decision, err := guard.Evaluate(db, input, time.Now())
+			require.NoError(t, err)
+			user := model.User{Username: fmt.Sprintf("allowed-shared-account-%d", i), Role: common.RoleCommonUser, Status: common.UserStatusEnabled}
+			require.NoError(t, db.Transaction(func(tx *gorm.DB) error { return user.InsertWithTx(SignupContext(tx, decision), 0) }))
+		}
+	})
 }
 
 func TestEmailChallengesExpireThrottleAndConsumeOnce(t *testing.T) {

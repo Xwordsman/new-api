@@ -99,6 +99,8 @@ export function RiskRecords() {
     'email-hour': t('Email request frequency'),
     'mail-ip': t('IP email request frequency'),
     'device-day': t('Browser signup frequency'),
+    'registered-browser': t('Browser already has a registered account'),
+    'ip-agent-hour': t('IP and User-Agent signup limit reached'),
     'network-hour': t('Network signup frequency'),
     'inviter-day': t('Inviter signup frequency'),
     'global-mail': t('Site email request frequency'),

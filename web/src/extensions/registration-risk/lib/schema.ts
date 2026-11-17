@@ -83,6 +83,8 @@ export const registrationSettingsSchema = z
     ipv4_prefix: integer(8, 32),
     ipv6_prefix: integer(16, 128),
     device_days: integer(1, 730),
+    deny_registered_browser: z.boolean(),
+    ip_agent_hourly_limit: integer(0, 10000),
     rules: z
       .array(ruleSchema)
       .max(50)

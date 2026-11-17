@@ -57,6 +57,8 @@ type Settings struct {
 	IPv4Prefix             int      `json:"ipv4_prefix"`
 	IPv6Prefix             int      `json:"ipv6_prefix"`
 	DeviceDays             int      `json:"device_days"`
+	DenyRegisteredBrowser  bool     `json:"deny_registered_browser"`
+	IPAgentHourlyLimit     int      `json:"ip_agent_hourly_limit"`
 	Rules                  []Rule   `json:"rules"`
 	BonusEnabled           bool     `json:"bonus_enabled"`
 	BonusQuota             int      `json:"bonus_quota"`
@@ -99,6 +101,7 @@ func Defaults() Settings {
 	return Settings{Mode: "observe", OAuthEmailAction: "review", CodeTTLSeconds: 600, ResendSeconds: 60,
 		CodeMaxFailures: 5, CodeFailureWindow: 3600, DomainAction: "deny", BlockedDomains: []string{"mail.tm", "maildrop.cc", "guerrillamail.com", "tempmail.com", "10minutemail.com"},
 		AllowedDomains: []string{}, DomainExceptions: []string{}, IPv4Prefix: 24, IPv6Prefix: 56, DeviceDays: 180,
+		DenyRegisteredBrowser: true, IPAgentHourlyLimit: 2,
 		Rules: []Rule{
 			{ID: "email-hour", Enabled: true, Stage: "email", Signal: "email", WindowSeconds: 3600, Limit: 5, Action: "deny"},
 			{ID: "mail-ip", Enabled: true, Stage: "email", Signal: "ip", WindowSeconds: 3600, Limit: 20, Action: "deny"},
@@ -156,7 +159,7 @@ func SaveSettings(db *gorm.DB, s Settings) (Settings, error) {
 		!validAction(s.OAuthEmailAction) || !validAction(s.DomainAction) || !validAction(s.SharedPayerAction) ||
 		s.CodeTTLSeconds < 60 || s.CodeTTLSeconds > 1800 || s.ResendSeconds < 10 || s.ResendSeconds > 3600 || s.CodeMaxFailures < 1 || s.CodeMaxFailures > 20 ||
 		s.CodeFailureWindow < 60 || s.CodeFailureWindow > 86400 || s.IPv4Prefix < 8 || s.IPv4Prefix > 32 || s.IPv6Prefix < 16 || s.IPv6Prefix > 128 ||
-		s.DeviceDays < 1 || s.DeviceDays > 730 || len(s.Rules) > 50 || s.BonusQuota < 0 || s.BonusQuota > math.MaxInt32 || s.BonusDays < 1 || s.BonusDays > 365 ||
+		s.DeviceDays < 1 || s.DeviceDays > 730 || s.IPAgentHourlyLimit < 0 || s.IPAgentHourlyLimit > 10000 || len(s.Rules) > 50 || s.BonusQuota < 0 || s.BonusQuota > math.MaxInt32 || s.BonusDays < 1 || s.BonusDays > 365 ||
 		s.BonusDailyQuota < 0 || int64(s.BonusDailyQuota) > common.MaxWalletQuota || s.BonusRPM < 1 || s.BonusRPM > 10000 || s.BonusConcurrency < 1 || s.BonusConcurrency > 100 ||
 		s.LeaseSeconds < 60 || s.LeaseSeconds > 86400 || len(s.BonusModels) > 200 || s.AlertMinutes < 1 || s.AlertMinutes > 1440 ||
 		s.AlertWindowMinutes < 1 || s.AlertWindowMinutes > 1440 || s.AlertRiskCount < 1 || s.AlertEmailCount < 1 || s.AlertCompletionPercent < 0 || s.AlertCompletionPercent > 100 ||

@@ -235,6 +235,24 @@ export function RegistrationSettingsForm(props: {
                 {t('Risk signals and rate rules')}
               </AccordionTrigger>
               <AccordionContent className='space-y-5 border-t p-5'>
+                <div className='grid gap-4 sm:grid-cols-2'>
+                  <SettingField
+                    name='deny_registered_browser'
+                    label={t('Block additional accounts in the same browser')}
+                    kind='toggle'
+                    description={t(
+                      'In enforce mode, a browser marker with an existing account cannot register again, even after a day or a policy change. Clearing cookies changes this marker.'
+                    )}
+                  />
+                  <SettingField
+                    name='ip_agent_hourly_limit'
+                    label={t('Accounts per IP and User-Agent per hour')}
+                    kind='number'
+                    description={t(
+                      'Successful signups sharing both IP and User-Agent are limited in fixed one-hour windows. Set 0 to disable. Shared IP alone does not trigger this limit.'
+                    )}
+                  />
+                </div>
                 <div className='grid gap-4 sm:grid-cols-3'>
                   <SettingField
                     name='ipv4_prefix'

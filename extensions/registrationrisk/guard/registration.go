@@ -43,6 +43,9 @@ type Decision struct {
 	Event             Event
 	RegistrationIP    string
 	RegistrationAgent string
+	clientKey         string
+	clientWindowStart int64
+	clientWindowEnd   int64
 }
 type signupKey struct{}
 
@@ -55,8 +58,8 @@ func OverrideSignupQuota(tx *gorm.DB) bool {
 	return ok && d != nil && d.Settings.BonusEnabled
 }
 
-// Increment serializes a shared fixed-window counter. It must be committed even
-// when an attempt is denied; callers return policy errors after their transaction.
+// Increment serializes a shared counter. Attempt counters commit even on denial;
+// successful-signup counters roll back with the account-creation transaction.
 func Increment(tx *gorm.DB, key string, expires int64, amount int64) (int64, error) {
 	row := Counter{Key: key, ExpiresAt: expires}
 	if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; err != nil {
@@ -97,6 +100,20 @@ func raise(event *Event, action, reason string) {
 	event.Reasons += reason
 }
 
+// clientSignupCount includes registrations made before this protection was
+// enabled. The counter also covers signups when raw member capture is disabled.
+func clientSignupCount(tx *gorm.DB, d *Decision, pending int64) (int64, error) {
+	var counter Counter
+	err := tx.Where(clause.Eq{Column: "key", Value: d.clientKey}).Take(&counter).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return 0, err
+	}
+	var captured int64
+	err = tx.Model(&MemberProfile{}).Where("registration_ip = ? AND registration_agent = ? AND registered_at >= ? AND registered_at < ?",
+		d.RegistrationIP, d.RegistrationAgent, d.clientWindowStart, d.clientWindowEnd).Count(&captured).Error
+	return max(counter.Count, captured+pending), err
+}
+
 func Evaluate(db *gorm.DB, input Input, now time.Time) (*Decision, error) {
 	s, err := GetSettings(db)
 	if err != nil {
@@ -123,6 +140,13 @@ func Evaluate(db *gorm.DB, input Input, now time.Time) (*Decision, error) {
 	if input.Device == "" {
 		e.DeviceHash = ""
 	}
+	ip, agent := memberClientMetadata(input.IP, input.UserAgent)
+	d := &Decision{Settings: s, RegistrationIP: ip, RegistrationAgent: agent}
+	if ip != "" && s.IPAgentHourlyLimit > 0 {
+		d.clientWindowStart = now.Unix() / 3600 * 3600
+		d.clientWindowEnd = d.clientWindowStart + 3600
+		d.clientKey = Digest(salt, fmt.Sprintf("signup-client:%s\x00%s\x00%d", ip, agent, d.clientWindowStart))
+	}
 	if ip, parseErr := netip.ParseAddr(input.IP); parseErr == nil {
 		ip = ip.Unmap()
 		e.IPHash = Digest(salt, "ip:"+ip.String())
@@ -134,6 +158,24 @@ func Evaluate(db *gorm.DB, input Input, now time.Time) (*Decision, error) {
 	}
 	err = db.Transaction(func(tx *gorm.DB) error {
 		if s.Mode != "off" {
+			if input.Stage == "register" && s.DenyRegisteredBrowser && e.DeviceHash != "" {
+				var count int64
+				if err := tx.Model(&Account{}).Where("device_hash = ?", e.DeviceHash).Count(&count).Error; err != nil {
+					return err
+				}
+				if count > 0 {
+					raise(&e, "deny", "registered-browser")
+				}
+			}
+			if input.Stage == "register" && d.clientKey != "" {
+				count, err := clientSignupCount(tx, d, 0)
+				if err != nil {
+					return err
+				}
+				if count >= int64(s.IPAgentHourlyLimit) {
+					raise(&e, "deny", "ip-agent-hour")
+				}
+			}
 			if input.Stage == "register" && e.EmailHash != "" {
 				var recent Event
 				err := tx.Where("email_hash = ? AND stage = ? AND action = ? AND enforced = ? AND created_at > ?", e.EmailHash, "email", "review", true, now.Unix()-int64(s.CodeTTLSeconds)).Order("id DESC").Take(&recent).Error
@@ -177,8 +219,7 @@ func Evaluate(db *gorm.DB, input Input, now time.Time) (*Decision, error) {
 	if err != nil {
 		return nil, err
 	}
-	ip, agent := memberClientMetadata(input.IP, input.UserAgent)
-	d := &Decision{Settings: s, Event: e, RegistrationIP: ip, RegistrationAgent: agent}
+	d.Event = e
 	if e.Enforced && e.Action == "deny" {
 		return d, ErrDenied
 	}
@@ -195,6 +236,38 @@ func AfterSignup(tx *gorm.DB, userID int, now time.Time) error {
 	e, s := d.Event, d.Settings
 	if e.Stage != "register" || e.Enforced && e.Action == "deny" {
 		return ErrDenied
+	}
+	if s.Mode == "enforce" && s.DenyRegisteredBrowser && e.DeviceHash != "" {
+		// Serialize the final check inside the user transaction. Two requests can
+		// both pass Evaluate before either account has committed.
+		count, err := Increment(tx, "signup-browser:"+e.DeviceHash, now.Unix()+int64(s.DeviceDays)*86400, 1)
+		if err != nil {
+			return err
+		}
+		if count > 1 {
+			return ErrDenied
+		}
+		if err := tx.Model(&Account{}).Where("device_hash = ?", e.DeviceHash).Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			return ErrDenied
+		}
+	}
+	if d.clientKey != "" {
+		if _, err := Increment(tx, d.clientKey, d.clientWindowEnd, 1); err != nil {
+			return err
+		}
+		count, err := clientSignupCount(tx, d, 1)
+		if err != nil {
+			return err
+		}
+		if s.Mode == "enforce" && count > int64(s.IPAgentHourlyLimit) {
+			return ErrDenied
+		}
+		if err := tx.Model(&Counter{}).Where(clause.Eq{Column: "key", Value: d.clientKey}).UpdateColumn("count", count).Error; err != nil {
+			return err
+		}
 	}
 	linked := tx.Model(&Event{}).Where("id = ? AND user_id = 0", e.ID).Update("user_id", userID)
 	if linked.Error != nil {

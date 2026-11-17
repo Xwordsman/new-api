@@ -70,13 +70,20 @@ func getSettings(c *gin.Context) {
 	respond(c, s, err)
 }
 func putSettings(c *gin.Context) {
-	var s guard.Settings
+	db := model.DB.WithContext(c.Request.Context())
+	current, err := guard.GetSettings(db)
+	if err != nil {
+		respond(c, nil, err)
+		return
+	}
+	// An older open dashboard must not silently disable newly added controls.
+	s := guard.Settings{DenyRegisteredBrowser: current.DenyRegisteredBrowser, IPAgentHourlyLimit: current.IPAgentHourlyLimit}
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 131072)
 	if common.DecodeJson(c.Request.Body, &s) != nil {
 		respond(c, nil, guard.ErrInvalid)
 		return
 	}
-	err := model.DB.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+	err = db.Transaction(func(tx *gorm.DB) error {
 		var err error
 		s, err = guard.SaveSettings(tx, s)
 		if err != nil {

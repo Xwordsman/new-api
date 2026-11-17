@@ -50,6 +50,8 @@ const fixture: RegistrationSettings = {
   ipv4_prefix: 24,
   ipv6_prefix: 56,
   device_days: 180,
+  deny_registered_browser: true,
+  ip_agent_hourly_limit: 2,
   rules: [],
   bonus_enabled: true,
   bonus_quota: 1000,
@@ -183,6 +185,46 @@ it('reveals invalid hidden fields and preserves edits after a revision conflict'
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
   )
   expect(lifetime).toHaveValue(900)
+})
+
+it('saves browser signup blocking and validates the IP and UA hourly limit', async () => {
+  const user = userEvent.setup()
+  renderSettings()
+  await user.click(
+    await screen.findByRole('button', { name: 'Risk signals and rate rules' })
+  )
+  const block = screen.getByRole('switch', {
+    name: 'Block additional accounts in the same browser',
+  })
+  expect(block).toBeChecked()
+  const limit = screen.getByRole('spinbutton', {
+    name: 'Accounts per IP and User-Agent per hour',
+  })
+  expect(limit).toHaveValue(2)
+  await user.clear(limit)
+  await user.type(limit, '-1')
+  const saved = {
+    ...fixture,
+    revision: 3,
+    deny_registered_browser: false,
+    ip_agent_hourly_limit: 3,
+  }
+  const put = vi
+    .spyOn(api, 'put')
+    .mockResolvedValue({ data: { success: true, data: saved } })
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(limit).toHaveAttribute('aria-invalid', 'true'))
+  expect(put).not.toHaveBeenCalled()
+  await user.clear(limit)
+  await user.type(limit, '3')
+  await user.click(block)
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() =>
+    expect(put).toHaveBeenCalledWith(
+      '/api/extensions/registration-risk/admin/settings',
+      { ...saved, revision: 2 }
+    )
+  )
 })
 
 it('preserves pending edits during refresh and explicitly reloads the newer revision', async () => {
