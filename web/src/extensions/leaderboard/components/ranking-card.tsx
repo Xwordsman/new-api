@@ -83,6 +83,7 @@ export function RankingCard(props: {
   board: BoardId
   title: string
   description: string
+  emptyDescription?: string
   periods: Record<Period, RankEntry[]>
   period: Period
   onPeriodChange: (period: Period) => void
@@ -128,9 +129,10 @@ export function RankingCard(props: {
                   className='min-h-52'
                   icon={Icon}
                   title={t('No rankings yet')}
-                  description={t(
-                    'Qualifying activity will appear after the next update.'
-                  )}
+                  description={
+                    props.emptyDescription ??
+                    t('Qualifying activity will appear after the next update.')
+                  }
                 />
               ) : (
                 <ol id={`${id}-rows`} className='space-y-1'>

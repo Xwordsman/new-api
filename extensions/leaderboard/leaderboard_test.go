@@ -77,6 +77,7 @@ func TestLeaderboardAggregationAndSettlementDatabaseMatrix(t *testing.T) {
 			}
 			require.NoError(t, db.Create(&users).Error)
 			s := defaults()
+			s.InvitationPaidOnly = true
 			s.ExcludedUserIDs = []int{5}
 			saved, err := saveSettings(db, s)
 			require.NoError(t, err)
@@ -180,6 +181,77 @@ func TestLeaderboardAggregationAndSettlementDatabaseMatrix(t *testing.T) {
 			require.NoError(t, err)
 			assert.False(t, view.Enabled)
 			assert.Empty(t, view.Boards)
+		})
+	}
+}
+
+func TestInvitationDefaultsCountEligibleRegistrationsAndIncomeRequiresClaimDatabaseMatrix(t *testing.T) {
+	dialects := []string{"sqlite"}
+	if os.Getenv("LEADERBOARD_TEST_EXTERNAL") == "1" {
+		dialects = append(dialects, "mysql", "postgres")
+	}
+	for _, dialect := range dialects {
+		t.Run(dialect, func(t *testing.T) {
+			db := leaderboardDB(t, dialect)
+			ctx := context.Background()
+			now := time.Date(2026, 11, 17, 10, 0, 0, 0, beijing)
+			today := dayStart(now)
+			users := []model.User{
+				{Id: 1, Username: "inviter", AffCode: "inviter", Role: common.RoleCommonUser, Status: common.UserStatusEnabled},
+				{Id: 2, Username: "unpaid", AffCode: "unpaid", Role: common.RoleCommonUser, Status: common.UserStatusEnabled},
+				{Id: 3, Username: "paid", AffCode: "paid", Role: common.RoleCommonUser, Status: common.UserStatusEnabled},
+				{Id: 4, Username: "review", AffCode: "review", Role: common.RoleCommonUser, Status: common.UserStatusEnabled},
+				{Id: 5, Username: "ineligible", AffCode: "ineligible", Role: common.RoleCommonUser, Status: common.UserStatusEnabled},
+				{Id: 6, Username: "historical", AffCode: "historical", Role: common.RoleCommonUser, Status: common.UserStatusEnabled},
+				{Id: 7, Username: "disabled", AffCode: "disabled", Role: common.RoleCommonUser, Status: common.UserStatusDisabled},
+				{Id: 8, Username: "deleted", AffCode: "deleted", Role: common.RoleCommonUser, Status: common.UserStatusEnabled, DeletedAt: gorm.DeletedAt{Time: now, Valid: true}},
+			}
+			require.NoError(t, db.Create(&users).Error)
+			bindings := []ledger.Binding{
+				{UserID: 2, InviterID: 1, RegisteredAt: today, State: "active", SignupBonusQuota: 500000, SignupBonusPaidAt: today},
+				{UserID: 3, InviterID: 1, RegisteredAt: today, State: "active"},
+				{UserID: 4, InviterID: 1, RegisteredAt: today, State: "review"},
+				{UserID: 5, InviterID: 1, RegisteredAt: today, State: "ineligible"},
+				{UserID: 6, InviterID: 1, RegisteredAt: today, State: "active", Historical: true},
+				{UserID: 7, InviterID: 1, RegisteredAt: today, State: "active"},
+				{UserID: 8, InviterID: 1, RegisteredAt: today, State: "active"},
+			}
+			require.NoError(t, db.Create(&bindings).Error)
+			reward := ledger.Reward{TradeNo: "recharge-commission", UserID: 3, InviterID: 1, PaidQuota: 1000, RefundedQuota: 100,
+				Quota: 100, Reversed: 10, State: "pending", PaidAt: today, AvailableAt: today + 86400}
+			require.NoError(t, db.Create(&reward).Error)
+
+			// An unsaved installation counts eligible registrations without payment.
+			require.NoError(t, aggregate(ctx, db, now))
+			view, err := present(ctx, db, 1, now)
+			require.NoError(t, err)
+			assert.False(t, view.PaidOnly)
+			assert.Equal(t, []publicRank{{Rank: 1, Name: "inviter", Value: 2, IsMe: true}}, view.Boards["invitations"]["today"])
+			assert.Empty(t, view.Boards["income"]["all"], "signup gifts and unclaimed recharge commissions must not enter earnings")
+
+			// An administrator can still explicitly require payment; loading settings preserves it.
+			s := defaults()
+			s.InvitationPaidOnly = true
+			saved, err := saveSettings(db, s)
+			require.NoError(t, err)
+			retained, _, err := getSettings(db)
+			require.NoError(t, err)
+			assert.Equal(t, saved, retained)
+			require.NoError(t, aggregate(ctx, db, now))
+			view, err = present(ctx, db, 1, now)
+			require.NoError(t, err)
+			assert.True(t, view.PaidOnly)
+			assert.Equal(t, []publicRank{{Rank: 1, Name: "inviter", Value: 1, IsMe: true}}, view.Boards["invitations"]["today"])
+
+			// Only a real claim enters earnings, using the net amount after refunds.
+			claimedAt := today + 86400
+			require.NoError(t, db.Model(&ledger.Reward{}).Where("id = ?", reward.ID).
+				Updates(map[string]any{"state": "claimed", "claimed_at": claimedAt}).Error)
+			require.NoError(t, aggregate(ctx, db, now.Add(24*time.Hour)))
+			view, err = present(ctx, db, 1, now.Add(24*time.Hour))
+			require.NoError(t, err)
+			assert.Equal(t, []publicRank{{Rank: 1, Name: "inviter", Value: 90, IsMe: true}}, view.Boards["income"]["today"])
+			assert.Empty(t, view.Boards["income"]["yesterday"], "commissions belong to the claim date, not the payment date")
 		})
 	}
 }

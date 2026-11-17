@@ -46,7 +46,7 @@ type Settings struct {
 func defaults() Settings {
 	return Settings{Enabled: true, IntervalMinutes: 30, TopN: 10, Invitations: true, Income: true, Tokens: true,
 		Savings: true, Cyber: true, MaskNames: true, ExcludeAdmins: true, ExcludedUserIDs: []int{},
-		InvitationPaidOnly: true, WarningRetention: 90, ModelPrefixes: []string{"gpt-", "chatgpt-", "o1", "o3", "o4"},
+		InvitationPaidOnly: false, WarningRetention: 90, ModelPrefixes: []string{"gpt-", "chatgpt-", "o1", "o3", "o4"},
 		SafetyCodes: []string{"content_policy_violation", "content_filter", "safety_violation", "safety_warning"}}
 }
 

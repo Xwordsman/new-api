@@ -143,6 +143,56 @@ it('hides ranking controls when publication is disabled', async () => {
   expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
 })
 
+it.each([false, true])(
+  'explains empty invitation and income boards for paid-only=%s',
+  async (paidOnly) => {
+    const user = userEvent.setup()
+    renderLeaderboard({
+      ...fixture,
+      invitation_paid_only: paidOnly,
+      boards: {
+        invitations: {
+          today: [],
+          yesterday: periods.yesterday,
+          all: periods.all,
+        },
+        income: { today: [], yesterday: [], all: [] },
+        tokens: { today: [], yesterday: [], all: [] },
+      },
+    })
+    const invitations = await screen.findByRole('region', {
+      name: 'Invitation leaders',
+    })
+    const invitationMessage = paidOnly
+      ? 'No invitees registered in this period have a qualifying paid order yet.'
+      : 'No eligible invitations in this period. Invitations under review or marked ineligible are excluded.'
+    expect(within(invitations).getByText(invitationMessage)).toBeVisible()
+    const income = screen.getByRole('region', { name: 'Referral earnings' })
+    expect(
+      within(income).getByText(
+        'No recharge commissions have been claimed in this period. Cooling or unclaimed commissions and signup bonuses are not included.'
+      )
+    ).toBeVisible()
+    expect(
+      within(income).getByText(
+        'Net recharge commissions claimed in this period, after refunds. Invitation signup bonuses are excluded.'
+      )
+    ).toBeVisible()
+    expect(
+      within(
+        screen.getByRole('region', { name: 'Token consumption' })
+      ).getByText('Qualifying activity will appear after the next update.')
+    ).toBeVisible()
+    await user.click(
+      within(invitations).getByRole('tab', { name: 'Yesterday' })
+    )
+    expect(within(invitations).getByText('Yesterday participant')).toBeVisible()
+    expect(
+      within(invitations).queryByText(invitationMessage)
+    ).not.toBeInTheDocument()
+  }
+)
+
 it('recovers through retry after a rejected API result', async () => {
   const user = userEvent.setup()
   vi.spyOn(api, 'get')

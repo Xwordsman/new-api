@@ -156,6 +156,44 @@ it('expands invalid rules and preserves edits after the server rejects a save', 
   expect(prefixes).toHaveValue('gpt-5')
 })
 
+it('preserves a saved paid-only policy and lets the administrator include unpaid eligible registrations', async () => {
+  const user = userEvent.setup()
+  renderSettings()
+  await user.click(
+    await screen.findByRole('button', {
+      name: 'Privacy and counting rules',
+    })
+  )
+  const paidOnly = screen.getByRole('switch', {
+    name: 'Count paid invitations only',
+  })
+  expect(paidOnly).toBeChecked()
+  expect(
+    screen.getByText(
+      'When enabled, invitees need a qualifying, non-refunded paid order. When disabled, eligible registrations count without payment.'
+    )
+  ).toBeVisible()
+  await user.click(paidOnly)
+  const settings = { ...fixture.settings, invitation_paid_only: false }
+  const put = vi.spyOn(api, 'put').mockResolvedValue({
+    data: { success: true, data: { ...settings, revision: 3 } },
+  })
+  vi.mocked(api.get).mockResolvedValue({
+    data: {
+      success: true,
+      data: { ...fixture, settings: { ...settings, revision: 3 } },
+    },
+  })
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() =>
+    expect(put).toHaveBeenCalledWith(
+      '/api/extensions/leaderboard/admin/settings',
+      settings
+    )
+  )
+  expect(paidOnly).not.toBeChecked()
+})
+
 it('preserves unsaved edits across a settings refresh and explicitly reloads a newer revision', async () => {
   const user = userEvent.setup()
   renderSettings()

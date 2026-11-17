@@ -67,7 +67,7 @@ export function LeaderboardPage() {
           'Active invitations, counted by registration date. Historical and ineligible bindings are excluded.'
         ),
     income: t(
-      'Net referral rewards actually claimed in this period. Refunded rewards are deducted.'
+      'Net recharge commissions claimed in this period, after refunds. Invitation signup bonuses are excluded.'
     ),
     tokens: t(
       'Input and output tokens from retained usage statistics. Updates follow usage persistence.'
@@ -78,6 +78,18 @@ export function LeaderboardPage() {
     cyber: t(
       'Upstream GPT safety warnings in the retained {{days}} days. This is a risk reminder, not an honor ranking.',
       { days: data?.warning_retention_days ?? 90 }
+    ),
+  }
+  const emptyDescriptions: Partial<Record<BoardId, string>> = {
+    invitations: data?.invitation_paid_only
+      ? t(
+          'No invitees registered in this period have a qualifying paid order yet.'
+        )
+      : t(
+          'No eligible invitations in this period. Invitations under review or marked ineligible are excluded.'
+        ),
+    income: t(
+      'No recharge commissions have been claimed in this period. Cooling or unclaimed commissions and signup bonuses are not included.'
     ),
   }
   return (
@@ -183,6 +195,9 @@ export function LeaderboardPage() {
                       board={board}
                       title={titles[board]}
                       description={descriptions[board]}
+                      emptyDescription={
+                        data.pending ? undefined : emptyDescriptions[board]
+                      }
                       periods={periods}
                       period={overrides[board] ?? period}
                       onPeriodChange={(value) =>

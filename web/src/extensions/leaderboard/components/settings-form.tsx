@@ -254,7 +254,7 @@ export function LeaderboardSettingsForm(props: {
                       'invitation_paid_only',
                       t('Count paid invitations only'),
                       t(
-                        'An invitee must have a qualifying, non-refunded paid order to count.'
+                        'When enabled, invitees need a qualifying, non-refunded paid order. When disabled, eligible registrations count without payment.'
                       ),
                     ],
                   ] as const
