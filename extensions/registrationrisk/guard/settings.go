@@ -58,7 +58,8 @@ type Settings struct {
 	IPv6Prefix             int      `json:"ipv6_prefix"`
 	DeviceDays             int      `json:"device_days"`
 	DenyRegisteredBrowser  bool     `json:"deny_registered_browser"`
-	IPAgentHourlyLimit     int      `json:"ip_agent_hourly_limit"`
+	IPRegistrationDays     int      `json:"ip_registration_days"`
+	IPRegistrationLimit    int      `json:"ip_registration_limit"`
 	Rules                  []Rule   `json:"rules"`
 	BonusEnabled           bool     `json:"bonus_enabled"`
 	BonusQuota             int      `json:"bonus_quota"`
@@ -101,7 +102,7 @@ func Defaults() Settings {
 	return Settings{Mode: "observe", OAuthEmailAction: "review", CodeTTLSeconds: 600, ResendSeconds: 60,
 		CodeMaxFailures: 5, CodeFailureWindow: 3600, DomainAction: "deny", BlockedDomains: []string{"mail.tm", "maildrop.cc", "guerrillamail.com", "tempmail.com", "10minutemail.com"},
 		AllowedDomains: []string{}, DomainExceptions: []string{}, IPv4Prefix: 24, IPv6Prefix: 56, DeviceDays: 180,
-		DenyRegisteredBrowser: true, IPAgentHourlyLimit: 2,
+		DenyRegisteredBrowser: true, IPRegistrationDays: 7, IPRegistrationLimit: 1,
 		Rules: []Rule{
 			{ID: "email-hour", Enabled: true, Stage: "email", Signal: "email", WindowSeconds: 3600, Limit: 5, Action: "deny"},
 			{ID: "mail-ip", Enabled: true, Stage: "email", Signal: "ip", WindowSeconds: 3600, Limit: 20, Action: "deny"},
@@ -159,7 +160,7 @@ func SaveSettings(db *gorm.DB, s Settings) (Settings, error) {
 		!validAction(s.OAuthEmailAction) || !validAction(s.DomainAction) || !validAction(s.SharedPayerAction) ||
 		s.CodeTTLSeconds < 60 || s.CodeTTLSeconds > 1800 || s.ResendSeconds < 10 || s.ResendSeconds > 3600 || s.CodeMaxFailures < 1 || s.CodeMaxFailures > 20 ||
 		s.CodeFailureWindow < 60 || s.CodeFailureWindow > 86400 || s.IPv4Prefix < 8 || s.IPv4Prefix > 32 || s.IPv6Prefix < 16 || s.IPv6Prefix > 128 ||
-		s.DeviceDays < 1 || s.DeviceDays > 730 || s.IPAgentHourlyLimit < 0 || s.IPAgentHourlyLimit > 10000 || len(s.Rules) > 50 || s.BonusQuota < 0 || s.BonusQuota > math.MaxInt32 || s.BonusDays < 1 || s.BonusDays > 365 ||
+		s.DeviceDays < 1 || s.DeviceDays > 730 || s.IPRegistrationDays < 1 || s.IPRegistrationDays > 3650 || s.IPRegistrationLimit < 0 || s.IPRegistrationLimit > 10000 || len(s.Rules) > 50 || s.BonusQuota < 0 || s.BonusQuota > math.MaxInt32 || s.BonusDays < 1 || s.BonusDays > 365 ||
 		s.BonusDailyQuota < 0 || int64(s.BonusDailyQuota) > common.MaxWalletQuota || s.BonusRPM < 1 || s.BonusRPM > 10000 || s.BonusConcurrency < 1 || s.BonusConcurrency > 100 ||
 		s.LeaseSeconds < 60 || s.LeaseSeconds > 86400 || len(s.BonusModels) > 200 || s.AlertMinutes < 1 || s.AlertMinutes > 1440 ||
 		s.AlertWindowMinutes < 1 || s.AlertWindowMinutes > 1440 || s.AlertRiskCount < 1 || s.AlertEmailCount < 1 || s.AlertCompletionPercent < 0 || s.AlertCompletionPercent > 100 ||
@@ -269,5 +270,58 @@ func Migrate(db *gorm.DB) error {
 	if _, err := rand.Read(salt[:]); err != nil {
 		return err
 	}
-	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&Secret{ID: 1, Salt: hex.EncodeToString(salt[:])}).Error
+	if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&Secret{ID: 1, Salt: hex.EncodeToString(salt[:])}).Error; err != nil {
+		return err
+	}
+	return restoreSignupIPs(db)
+}
+
+// Preserve historical signup IPs in the account ledger before event or raw
+// metadata retention can remove them. Existing salted hashes remain unchanged.
+func restoreSignupIPs(db *gorm.DB) error {
+	salt, err := Salt(db)
+	if err != nil {
+		return err
+	}
+	var accounts []Account
+	return db.Where("ip_hash IS NULL OR ip_hash = ''").FindInBatches(&accounts, 200, func(batch *gorm.DB, _ int) error {
+		userIDs := make([]int, 0, len(accounts))
+		eventIDs := make([]int, 0, len(accounts))
+		for _, account := range accounts {
+			userIDs = append(userIDs, account.UserID)
+			eventIDs = append(eventIDs, account.EventID)
+		}
+		var events []Event
+		if err := batch.Select("id", "ip_hash").Where("id IN ?", eventIDs).Find(&events).Error; err != nil {
+			return err
+		}
+		hashes := make(map[int]string, len(events))
+		for _, event := range events {
+			hashes[event.ID] = event.IPHash
+		}
+		var profiles []MemberProfile
+		if err := batch.Select("user_id", "registration_ip").Where("user_id IN ?", userIDs).Find(&profiles).Error; err != nil {
+			return err
+		}
+		profileHashes := make(map[int]string, len(profiles))
+		for _, profile := range profiles {
+			ip, _ := memberClientMetadata(profile.RegistrationIP, "")
+			if ip != "" {
+				profileHashes[profile.UserID] = Digest(salt, "ip:"+ip)
+			}
+		}
+		for _, account := range accounts {
+			hash := hashes[account.EventID]
+			if hash == "" {
+				hash = profileHashes[account.UserID]
+			}
+			if hash == "" {
+				continue
+			}
+			if err := batch.Model(&Account{}).Where("user_id = ? AND (ip_hash IS NULL OR ip_hash = '')", account.UserID).UpdateColumn("ip_hash", hash).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	}).Error
 }

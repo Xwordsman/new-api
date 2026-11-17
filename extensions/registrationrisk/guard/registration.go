@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"net/netip"
 	"strings"
@@ -43,9 +44,6 @@ type Decision struct {
 	Event             Event
 	RegistrationIP    string
 	RegistrationAgent string
-	clientKey         string
-	clientWindowStart int64
-	clientWindowEnd   int64
 }
 type signupKey struct{}
 
@@ -100,18 +98,30 @@ func raise(event *Event, action, reason string) {
 	event.Reasons += reason
 }
 
-// clientSignupCount includes registrations made before this protection was
-// enabled. The counter also covers signups when raw member capture is disabled.
-func clientSignupCount(tx *gorm.DB, d *Decision, pending int64) (int64, error) {
-	var counter Counter
-	err := tx.Where(clause.Eq{Column: "key", Value: d.clientKey}).Take(&counter).Error
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+// ipSignupCount uses durable successful registrations, independent of raw
+// metadata capture, event retention, browser identity, or policy revision.
+func ipSignupCount(tx *gorm.DB, d *Decision, now time.Time, locked bool) (int64, error) {
+	cutoff := now.Unix() - int64(d.Settings.IPRegistrationDays)*86400
+	query := tx.Select("user_id").Where("ip_hash = ? AND created_at > ?", d.Event.IPHash, cutoff).Limit(d.Settings.IPRegistrationLimit)
+	if locked && tx.Dialector.Name() != "sqlite" {
+		// In MySQL REPEATABLE READ this must be a current read, including
+		// registrations committed after the transaction's initial snapshot.
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	var accounts []Account
+	if err := query.Find(&accounts).Error; err != nil {
 		return 0, err
 	}
+	if len(accounts) >= d.Settings.IPRegistrationLimit {
+		return int64(len(accounts)), nil
+	}
+	// Older captured registrations without a restored account hash still count.
+	// Excluding matching ledger entries prevents counting one signup twice.
+	known := tx.Model(&Account{}).Select("user_id").Where("ip_hash = ?", d.Event.IPHash)
 	var captured int64
-	err = tx.Model(&MemberProfile{}).Where("registration_ip = ? AND registration_agent = ? AND registered_at >= ? AND registered_at < ?",
-		d.RegistrationIP, d.RegistrationAgent, d.clientWindowStart, d.clientWindowEnd).Count(&captured).Error
-	return max(counter.Count, captured+pending), err
+	err := tx.Model(&MemberProfile{}).Where("registration_ip = ? AND registered_at > ?", d.RegistrationIP, cutoff).
+		Where("user_id NOT IN (?)", known).Count(&captured).Error
+	return int64(len(accounts)) + captured, err
 }
 
 func Evaluate(db *gorm.DB, input Input, now time.Time) (*Decision, error) {
@@ -142,11 +152,6 @@ func Evaluate(db *gorm.DB, input Input, now time.Time) (*Decision, error) {
 	}
 	ip, agent := memberClientMetadata(input.IP, input.UserAgent)
 	d := &Decision{Settings: s, RegistrationIP: ip, RegistrationAgent: agent}
-	if ip != "" && s.IPAgentHourlyLimit > 0 {
-		d.clientWindowStart = now.Unix() / 3600 * 3600
-		d.clientWindowEnd = d.clientWindowStart + 3600
-		d.clientKey = Digest(salt, fmt.Sprintf("signup-client:%s\x00%s\x00%d", ip, agent, d.clientWindowStart))
-	}
 	if ip, parseErr := netip.ParseAddr(input.IP); parseErr == nil {
 		ip = ip.Unmap()
 		e.IPHash = Digest(salt, "ip:"+ip.String())
@@ -156,6 +161,7 @@ func Evaluate(db *gorm.DB, input Input, now time.Time) (*Decision, error) {
 		}
 		e.NetworkHash = Digest(salt, "network:"+netip.PrefixFrom(ip, bits).Masked().String())
 	}
+	d.Event = e
 	err = db.Transaction(func(tx *gorm.DB) error {
 		if s.Mode != "off" {
 			if input.Stage == "register" && s.DenyRegisteredBrowser && e.DeviceHash != "" {
@@ -167,13 +173,13 @@ func Evaluate(db *gorm.DB, input Input, now time.Time) (*Decision, error) {
 					raise(&e, "deny", "registered-browser")
 				}
 			}
-			if input.Stage == "register" && d.clientKey != "" {
-				count, err := clientSignupCount(tx, d, 0)
+			if input.Stage == "register" && e.IPHash != "" && s.IPRegistrationLimit > 0 {
+				count, err := ipSignupCount(tx, d, now, false)
 				if err != nil {
 					return err
 				}
-				if count >= int64(s.IPAgentHourlyLimit) {
-					raise(&e, "deny", "ip-agent-hour")
+				if count >= int64(s.IPRegistrationLimit) {
+					raise(&e, "deny", "ip-registration-limit")
 				}
 			}
 			if input.Stage == "register" && e.EmailHash != "" {
@@ -237,6 +243,18 @@ func AfterSignup(tx *gorm.DB, userID int, now time.Time) error {
 	if e.Stage != "register" || e.Enforced && e.Action == "deny" {
 		return ErrDenied
 	}
+	if tx.Dialector.Name() == "mysql" || s.Mode == "enforce" && e.IPHash != "" && s.IPRegistrationLimit > 0 {
+		key := "signup-ip:" + e.IPHash
+		if tx.Dialector.Name() == "mysql" {
+			// MySQL's current range reads acquire gap locks on the IP/time
+			// index. Serialize signup writes across all IPs and modes there
+			// to prevent different first-time IPs from deadlocking on a gap.
+			key = "signup-ip-allowance"
+		}
+		if _, err := Increment(tx, key, math.MaxInt64, 1); err != nil {
+			return err
+		}
+	}
 	if s.Mode == "enforce" && s.DenyRegisteredBrowser && e.DeviceHash != "" {
 		// Serialize the final check inside the user transaction. Two requests can
 		// both pass Evaluate before either account has committed.
@@ -254,19 +272,13 @@ func AfterSignup(tx *gorm.DB, userID int, now time.Time) error {
 			return ErrDenied
 		}
 	}
-	if d.clientKey != "" {
-		if _, err := Increment(tx, d.clientKey, d.clientWindowEnd, 1); err != nil {
-			return err
-		}
-		count, err := clientSignupCount(tx, d, 1)
+	if s.Mode == "enforce" && e.IPHash != "" && s.IPRegistrationLimit > 0 {
+		count, err := ipSignupCount(tx, d, now, true)
 		if err != nil {
 			return err
 		}
-		if s.Mode == "enforce" && count > int64(s.IPAgentHourlyLimit) {
+		if count >= int64(s.IPRegistrationLimit) {
 			return ErrDenied
-		}
-		if err := tx.Model(&Counter{}).Where(clause.Eq{Column: "key", Value: d.clientKey}).UpdateColumn("count", count).Error; err != nil {
-			return err
 		}
 	}
 	linked := tx.Model(&Event{}).Where("id = ? AND user_id = 0", e.ID).Update("user_id", userID)
@@ -280,7 +292,7 @@ func AfterSignup(tx *gorm.DB, userID int, now time.Time) error {
 	if e.Enforced && e.Action == "review" {
 		state = "review"
 	}
-	account := Account{UserID: userID, EventID: e.ID, CreatedAt: now.Unix(), DeviceHash: e.DeviceHash, NetworkHash: e.NetworkHash, EmailHash: e.EmailHash, InviterID: e.InviterID, State: state}
+	account := Account{UserID: userID, EventID: e.ID, CreatedAt: now.Unix(), IPHash: e.IPHash, DeviceHash: e.DeviceHash, NetworkHash: e.NetworkHash, EmailHash: e.EmailHash, InviterID: e.InviterID, State: state}
 	if err := tx.Create(&account).Error; err != nil {
 		return err
 	}

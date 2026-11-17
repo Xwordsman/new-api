@@ -45,7 +45,8 @@ func (Event) TableName() string { return "extension_registration_events" }
 type Account struct {
 	UserID      int    `gorm:"primaryKey;autoIncrement:false" json:"user_id"`
 	EventID     int    `json:"event_id"`
-	CreatedAt   int64  `json:"created_at"`
+	CreatedAt   int64  `gorm:"index:idx_registration_ip_time,priority:2" json:"created_at"`
+	IPHash      string `gorm:"size:64;index:idx_registration_ip_time,priority:1" json:"ip_hash"`
 	DeviceHash  string `gorm:"size:64;index" json:"device_hash"`
 	NetworkHash string `gorm:"size:64;index" json:"network_hash"`
 	EmailHash   string `gorm:"size:64" json:"email_hash"`

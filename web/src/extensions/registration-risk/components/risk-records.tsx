@@ -101,6 +101,7 @@ export function RiskRecords() {
     'device-day': t('Browser signup frequency'),
     'registered-browser': t('Browser already has a registered account'),
     'ip-agent-hour': t('IP and User-Agent signup limit reached'),
+    'ip-registration-limit': t('IP registration limit reached'),
     'network-hour': t('Network signup frequency'),
     'inviter-day': t('Inviter signup frequency'),
     'global-mail': t('Site email request frequency'),

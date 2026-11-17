@@ -245,11 +245,19 @@ export function RegistrationSettingsForm(props: {
                     )}
                   />
                   <SettingField
-                    name='ip_agent_hourly_limit'
-                    label={t('Accounts per IP and User-Agent per hour')}
+                    name='ip_registration_days'
+                    label={t('IP registration lookback (days)')}
                     kind='number'
                     description={t(
-                      'Successful signups sharing both IP and User-Agent are limited in fixed one-hour windows. Set 0 to disable. Shared IP alone does not trigger this limit.'
+                      'In enforce mode, count successful registrations from the same IP over the preceding days, including different browsers and User-Agents. The window does not reset at midnight.'
+                    )}
+                  />
+                  <SettingField
+                    name='ip_registration_limit'
+                    label={t('Maximum accounts per IP')}
+                    kind='number'
+                    description={t(
+                      'For one account per IP in 7 or 30 days, set the lookback to 7 or 30 and the maximum to 1. Set the maximum to 0 to disable this limit.'
                     )}
                   />
                 </div>

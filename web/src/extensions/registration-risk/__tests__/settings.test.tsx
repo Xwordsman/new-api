@@ -51,7 +51,8 @@ const fixture: RegistrationSettings = {
   ipv6_prefix: 56,
   device_days: 180,
   deny_registered_browser: true,
-  ip_agent_hourly_limit: 2,
+  ip_registration_days: 7,
+  ip_registration_limit: 1,
   rules: [],
   bonus_enabled: true,
   bonus_quota: 1000,
@@ -187,7 +188,7 @@ it('reveals invalid hidden fields and preserves edits after a revision conflict'
   expect(lifetime).toHaveValue(900)
 })
 
-it('saves browser signup blocking and validates the IP and UA hourly limit', async () => {
+it('saves a rolling IP registration period and validates the period and account limit', async () => {
   const user = userEvent.setup()
   renderSettings()
   await user.click(
@@ -198,25 +199,35 @@ it('saves browser signup blocking and validates the IP and UA hourly limit', asy
   })
   expect(block).toBeChecked()
   const limit = screen.getByRole('spinbutton', {
-    name: 'Accounts per IP and User-Agent per hour',
+    name: 'Maximum accounts per IP',
   })
-  expect(limit).toHaveValue(2)
+  const days = screen.getByRole('spinbutton', {
+    name: 'IP registration lookback (days)',
+  })
+  expect(days).toHaveValue(7)
+  expect(limit).toHaveValue(1)
+  await user.clear(days)
+  await user.type(days, '0')
   await user.clear(limit)
   await user.type(limit, '-1')
   const saved = {
     ...fixture,
     revision: 3,
     deny_registered_browser: false,
-    ip_agent_hourly_limit: 3,
+    ip_registration_days: 30,
+    ip_registration_limit: 1,
   }
   const put = vi
     .spyOn(api, 'put')
     .mockResolvedValue({ data: { success: true, data: saved } })
   await user.click(screen.getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(limit).toHaveAttribute('aria-invalid', 'true'))
+  expect(days).toHaveAttribute('aria-invalid', 'true')
   expect(put).not.toHaveBeenCalled()
+  await user.clear(days)
+  await user.type(days, '30')
   await user.clear(limit)
-  await user.type(limit, '3')
+  await user.type(limit, '1')
   await user.click(block)
   await user.click(screen.getByRole('button', { name: 'Save' }))
   await waitFor(() =>
@@ -304,6 +315,10 @@ it('rejects unsafe policies, wildcard models, insecure webhooks and an empty req
     { alert_webhook: 'http://insecure.example' },
     { allow_only: true, allowed_domains: '' },
     { ipv6_prefix: 129 },
+    { ip_registration_days: 0 },
+    { ip_registration_days: 3651 },
+    { ip_registration_limit: -1 },
+    { ip_registration_limit: 10001 },
   ]) {
     expect(
       registrationSettingsSchema.safeParse({ ...values, ...invalid }).success

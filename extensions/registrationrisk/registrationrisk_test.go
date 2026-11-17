@@ -81,6 +81,83 @@ func riskDB(t *testing.T, dialect string) *gorm.DB {
 	return db
 }
 
+// The account table shipped before the rolling IP allowance was introduced.
+type registrationAccountBeforeIPLimit struct {
+	UserID      int `gorm:"primaryKey;autoIncrement:false"`
+	EventID     int
+	CreatedAt   int64
+	DeviceHash  string `gorm:"size:64;index"`
+	NetworkHash string `gorm:"size:64;index"`
+	EmailHash   string `gorm:"size:64"`
+	InviterID   int    `gorm:"index"`
+	State       string `gorm:"size:16"`
+}
+
+func (registrationAccountBeforeIPLimit) TableName() string {
+	return "extension_registration_accounts"
+}
+
+func TestRollingIPAllowanceRestoresReleasedAccountsAndSurvivesMetadataRetention(t *testing.T) {
+	db := riskDB(t, "sqlite")
+	now := time.Date(2026, 11, 17, 23, 45, 0, 0, time.UTC)
+	registered := now.Add(-20 * 24 * time.Hour).Unix()
+	salt, err := guard.Salt(db)
+	require.NoError(t, err)
+	require.NoError(t, db.Migrator().DropTable(&guard.Account{}))
+	require.NoError(t, db.Migrator().CreateTable(&registrationAccountBeforeIPLimit{}))
+	event := guard.Event{UserID: 70, Stage: "register", IPHash: guard.Digest(salt, "ip:192.0.2.70"), CreatedAt: registered}
+	require.NoError(t, db.Create(&event).Error)
+	old := []registrationAccountBeforeIPLimit{
+		{UserID: 70, EventID: event.ID, CreatedAt: registered, State: "review", DeviceHash: "retained-browser", InviterID: 1},
+		{UserID: 71, CreatedAt: registered, State: "active"},
+		{UserID: 72, CreatedAt: registered, State: "active"},
+	}
+	require.NoError(t, db.Create(&old).Error)
+	// The second event has already expired; its captured IP is still available.
+	require.NoError(t, db.Create(&guard.MemberProfile{UserID: 71, RegistrationIP: "::ffff:192.0.2.71", RegisteredAt: registered}).Error)
+	require.NoError(t, db.Create(&model.Option{Key: "RegistrationRiskExtensionSettings", Value: `{"mode":"enforce","rules":[],"bonus_enabled":false,"ip_agent_hourly_limit":2}`}).Error)
+	for range 2 {
+		require.NoError(t, guard.Migrate(db))
+	}
+	retainedSalt, err := guard.Salt(db)
+	require.NoError(t, err)
+	assert.Equal(t, salt, retainedSalt)
+	var accounts []guard.Account
+	require.NoError(t, db.Order("user_id").Find(&accounts).Error)
+	require.Len(t, accounts, 3)
+	assert.Equal(t, event.IPHash, accounts[0].IPHash)
+	assert.Equal(t, guard.Digest(salt, "ip:192.0.2.71"), accounts[1].IPHash)
+	assert.Empty(t, accounts[2].IPHash, "an unknown historical IP must never be invented")
+	assert.Equal(t, "review", accounts[0].State)
+	assert.Equal(t, "retained-browser", accounts[0].DeviceHash)
+	assert.Equal(t, 1, accounts[0].InviterID)
+	assert.Equal(t, registered, accounts[0].CreatedAt)
+	for _, index := range []string{"idx_registration_ip_time", "idx_extension_registration_accounts_device_hash", "idx_extension_registration_accounts_network_hash", "idx_extension_registration_accounts_inviter_id"} {
+		assert.True(t, db.Migrator().HasIndex(&guard.Account{}, index), index)
+	}
+	require.Error(t, db.Create(&guard.Account{UserID: 70}).Error, "the existing user uniqueness guarantee survives migration")
+
+	// Risk-event and raw-profile retention cannot reset the durable allowance.
+	require.NoError(t, db.Where("id > 0").Delete(&guard.Event{}).Error)
+	require.NoError(t, db.Where("user_id > 0").Delete(&guard.MemberProfile{}).Error)
+	s, err := guard.GetSettings(db)
+	require.NoError(t, err)
+	assert.Equal(t, 7, s.IPRegistrationDays)
+	assert.Equal(t, 1, s.IPRegistrationLimit)
+	input := guard.Input{Stage: "register", Source: "password", IP: "192.0.2.70"}
+	_, err = guard.Evaluate(db, input, now)
+	require.NoError(t, err, "a 20-day-old signup is outside the initial 7-day lookback")
+	s.IPRegistrationDays = 30
+	_, err = guard.SaveSettings(db, s)
+	require.NoError(t, err)
+	for _, ip := range []string{"192.0.2.70", "192.0.2.71"} {
+		input.IP = ip
+		decision, err := guard.Evaluate(db, input, now)
+		assert.ErrorIs(t, err, guard.ErrDenied, "extending the period applies to existing successful registrations")
+		assert.Contains(t, decision.Event.Reasons, "ip-registration-limit")
+	}
+}
+
 func TestRegistrationRiskDatabaseMatrix(t *testing.T) {
 	dialects := []string{"sqlite"}
 	if selected := os.Getenv("REGISTRATIONRISK_TEST_DIALECT"); selected != "" {
@@ -104,8 +181,10 @@ func TestRegistrationRiskDatabaseMatrix(t *testing.T) {
 			for _, change := range []func(*guard.Settings){
 				func(s *guard.Settings) { s.Mode = "invalid" },
 				func(s *guard.Settings) { s.BonusQuota = -1 },
-				func(s *guard.Settings) { s.IPAgentHourlyLimit = -1 },
-				func(s *guard.Settings) { s.IPAgentHourlyLimit = 10001 },
+				func(s *guard.Settings) { s.IPRegistrationDays = 0 },
+				func(s *guard.Settings) { s.IPRegistrationDays = 3651 },
+				func(s *guard.Settings) { s.IPRegistrationLimit = -1 },
+				func(s *guard.Settings) { s.IPRegistrationLimit = 10001 },
 				func(s *guard.Settings) { s.BlockedDomains = []string{"*.com"} },
 				func(s *guard.Settings) { s.AllowOnly = true; s.AllowedDomains = nil },
 				func(s *guard.Settings) { s.AlertWebhook = "http://insecure.example" },
@@ -283,37 +362,52 @@ func TestDuplicateRegistrationIsBlockedBeforeAccountCreation(t *testing.T) {
 		assert.EqualValues(t, 1, count, "the rejected signup cannot issue another grant")
 	})
 
-	t.Run("clearing cookies does not reset the IP and UA signup limit", func(t *testing.T) {
-		db := riskDB(t, "sqlite")
-		now := time.Date(2026, 11, 17, 10, 0, 0, 0, time.UTC)
-		s := guard.Defaults()
-		s.Mode, s.Rules, s.BonusEnabled = "enforce", nil, false
-		_, err := guard.SaveSettings(db, s)
-		require.NoError(t, err)
-		// Historical registrations must count immediately after an upgrade.
-		require.NoError(t, db.Create(&guard.MemberProfile{UserID: 90, RegistrationIP: "192.0.2.1", RegistrationAgent: "Browser/1", RegisteredAt: now.Unix()}).Error)
-		input := guard.Input{Stage: "register", Source: "password", Device: "fresh-cookie", IP: "::ffff:192.0.2.1", UserAgent: "Browser/1"}
-		first, err := guard.Evaluate(db, input, now)
-		require.NoError(t, err)
-		user := model.User{Username: "second-network-account", Role: common.RoleCommonUser, Status: common.UserStatusEnabled}
-		require.NoError(t, db.Transaction(func(tx *gorm.DB) error { return user.InsertWithTx(SignupContext(tx, first), 0) }))
-		input.Device = "another-fresh-cookie"
-		denied, err := guard.Evaluate(db, input, now)
-		assert.ErrorIs(t, err, guard.ErrDenied)
-		assert.Contains(t, denied.Event.Reasons, "ip-agent-hour")
-		input.UserAgent = "OtherBrowser/1"
-		_, err = guard.Evaluate(db, input, now)
-		require.NoError(t, err, "a shared IP alone must not trigger this limit")
-		input.UserAgent = "Browser/1"
-		_, err = guard.Evaluate(db, input, now.Add(time.Hour))
-		require.NoError(t, err, "the IP and UA limit expires with its hourly window")
-	})
+	for _, days := range []int{7, 30} {
+		t.Run(fmt.Sprintf("IP quota rolls over individual registrations after %d days", days), func(t *testing.T) {
+			db := riskDB(t, "sqlite")
+			now := time.Date(2026, 11, 17, 23, 45, 0, 0, time.UTC)
+			s := guard.Defaults()
+			s.Mode, s.Rules, s.BonusEnabled = "enforce", nil, false
+			s.IPRegistrationDays, s.IPRegistrationLimit = days, 2
+			s, err := guard.SaveSettings(db, s)
+			require.NoError(t, err)
+			salt, err := guard.Salt(db)
+			require.NoError(t, err)
+			registered := now.Add(-24 * time.Hour)
+			hash := guard.Digest(salt, "ip:192.0.2.1")
+			require.NoError(t, db.Create(&guard.Account{UserID: 90, IPHash: hash, CreatedAt: registered.Unix(), State: "active"}).Error)
+			require.NoError(t, db.Create(&guard.MemberProfile{UserID: 90, RegistrationIP: "192.0.2.1", RegistrationAgent: "Browser/1", RegisteredAt: registered.Unix()}).Error)
+			input := guard.Input{Stage: "register", Source: "password", Device: "fresh-cookie", IP: "::ffff:192.0.2.1", UserAgent: "OtherBrowser/2"}
+			first, err := guard.Evaluate(db, input, now)
+			require.NoError(t, err, "one historical signup is counted only once across the ledger and profile")
+			require.NoError(t, db.Transaction(func(tx *gorm.DB) error { return guard.AfterSignup(guard.WithDecision(tx, first), 91, now) }))
+			input.Device, input.UserAgent = "another-cookie", "ThirdBrowser/3"
+			boundary := registered.Add(time.Duration(days) * 24 * time.Hour)
+			for _, at := range []time.Time{now.Add(time.Hour), now.Add(24 * time.Hour), boundary.Add(-time.Second)} {
+				denied, err := guard.Evaluate(db, input, at)
+				assert.ErrorIs(t, err, guard.ErrDenied)
+				assert.Contains(t, denied.Event.Reasons, "ip-registration-limit")
+			}
+			// A revision change cannot reset successful registrations.
+			_, err = guard.SaveSettings(db, s)
+			require.NoError(t, err)
+			next, err := guard.Evaluate(db, input, boundary)
+			require.NoError(t, err, "only the older registration expires at this exact rolling boundary")
+			require.NoError(t, db.Transaction(func(tx *gorm.DB) error { return guard.AfterSignup(guard.WithDecision(tx, next), 92, boundary) }))
+			input.Device, input.UserAgent = "fourth-cookie", ""
+			_, err = guard.Evaluate(db, input, boundary.Add(time.Second))
+			assert.ErrorIs(t, err, guard.ErrDenied, "the more recent registrations still consume the allowance")
+			input.IP = "192.0.2.2"
+			_, err = guard.Evaluate(db, input, boundary.Add(time.Second))
+			require.NoError(t, err, "a different IP has its own allowance")
+		})
+	}
 
-	t.Run("IP and UA quota is transactional even without member capture", func(t *testing.T) {
+	t.Run("IP quota is transactional even without member capture or a fresh read snapshot", func(t *testing.T) {
 		db := riskDB(t, "sqlite")
 		now := time.Now()
 		s := guard.Defaults()
-		s.Mode, s.Rules, s.BonusEnabled, s.IPAgentHourlyLimit = "enforce", nil, false, 1
+		s.Mode, s.Rules, s.BonusEnabled, s.IPRegistrationLimit = "enforce", nil, false, 1
 		_, err := guard.SaveSettings(db, s)
 		require.NoError(t, err)
 		policy, err := guard.GetMemberPolicy(db)
@@ -335,9 +429,24 @@ func TestDuplicateRegistrationIsBlockedBeforeAccountCreation(t *testing.T) {
 			return aborted
 		})
 		require.ErrorIs(t, err, aborted)
+		secondDB := db
+		if common.MainDatabaseType() != common.DatabaseTypeSQLite {
+			conn, err := db.DB()
+			require.NoError(t, err)
+			conn.SetMaxOpenConns(2)
+			secondDB = db.Begin()
+			require.NoError(t, secondDB.Error)
+			t.Cleanup(func() { require.NoError(t, secondDB.Rollback().Error) })
+			var count int64
+			require.NoError(t, secondDB.Model(&guard.Account{}).Count(&count).Error)
+		}
 		for i, decision := range []*guard.Decision{first, second} {
-			user := model.User{Username: fmt.Sprintf("ip-agent-account-%d", i), Role: common.RoleCommonUser, Status: common.UserStatusEnabled}
-			err := db.Transaction(func(tx *gorm.DB) error { return user.InsertWithTx(SignupContext(tx, decision), 0) })
+			user := model.User{Username: fmt.Sprintf("ip-account-%d", i), Role: common.RoleCommonUser, Status: common.UserStatusEnabled}
+			signupDB := db
+			if i == 1 {
+				signupDB = secondDB
+			}
+			err := signupDB.Transaction(func(tx *gorm.DB) error { return user.InsertWithTx(SignupContext(tx, decision), 0) })
 			if i == 0 {
 				require.NoError(t, err, "failed transactions do not consume the signup allowance")
 			} else {
@@ -359,13 +468,16 @@ func TestDuplicateRegistrationIsBlockedBeforeAccountCreation(t *testing.T) {
 		s, err := guard.GetSettings(db)
 		require.NoError(t, err)
 		assert.True(t, s.DenyRegisteredBrowser)
-		assert.Equal(t, 2, s.IPAgentHourlyLimit)
+		assert.Equal(t, 7, s.IPRegistrationDays)
+		assert.Equal(t, 1, s.IPRegistrationLimit)
 		encoded, err := common.Marshal(s)
 		require.NoError(t, err)
 		var legacyPayload map[string]any
 		require.NoError(t, common.Unmarshal(encoded, &legacyPayload))
 		delete(legacyPayload, "deny_registered_browser")
-		delete(legacyPayload, "ip_agent_hourly_limit")
+		delete(legacyPayload, "ip_registration_days")
+		delete(legacyPayload, "ip_registration_limit")
+		legacyPayload["ip_agent_hourly_limit"] = 2
 		encoded, err = common.Marshal(legacyPayload)
 		require.NoError(t, err)
 		response := httptest.NewRecorder()
@@ -379,8 +491,9 @@ func TestDuplicateRegistrationIsBlockedBeforeAccountCreation(t *testing.T) {
 		s, err = guard.GetSettings(db)
 		require.NoError(t, err)
 		assert.True(t, s.DenyRegisteredBrowser, "an older dashboard preserves the new protection")
-		assert.Equal(t, 2, s.IPAgentHourlyLimit)
-		s.DenyRegisteredBrowser, s.IPAgentHourlyLimit = false, 0
+		assert.Equal(t, 7, s.IPRegistrationDays)
+		assert.Equal(t, 1, s.IPRegistrationLimit)
+		s.DenyRegisteredBrowser, s.IPRegistrationLimit = false, 0
 		s, err = guard.SaveSettings(db, s)
 		require.NoError(t, err)
 		loaded, err := guard.GetSettings(db)
@@ -393,6 +506,29 @@ func TestDuplicateRegistrationIsBlockedBeforeAccountCreation(t *testing.T) {
 			user := model.User{Username: fmt.Sprintf("allowed-shared-account-%d", i), Role: common.RoleCommonUser, Status: common.UserStatusEnabled}
 			require.NoError(t, db.Transaction(func(tx *gorm.DB) error { return user.InsertWithTx(SignupContext(tx, decision), 0) }))
 		}
+	})
+
+	t.Run("enabling the IP limit includes registrations made with protection disabled", func(t *testing.T) {
+		db := riskDB(t, "sqlite")
+		now := time.Now()
+		policy, err := guard.GetMemberPolicy(db)
+		require.NoError(t, err)
+		policy.CaptureEnabled = false
+		require.NoError(t, guard.SaveMemberPolicy(db, policy, 1, now))
+		s := guard.Defaults()
+		s.Mode, s.Rules, s.BonusEnabled, s.IPRegistrationLimit = "off", nil, false, 0
+		s, err = guard.SaveSettings(db, s)
+		require.NoError(t, err)
+		input := guard.Input{Stage: "register", Source: "password", IP: "192.0.2.80"}
+		first, err := guard.Evaluate(db, input, now)
+		require.NoError(t, err)
+		require.NoError(t, db.Transaction(func(tx *gorm.DB) error { return guard.AfterSignup(guard.WithDecision(tx, first), 80, now) }))
+		s.Mode, s.IPRegistrationDays, s.IPRegistrationLimit = "enforce", 30, 1
+		_, err = guard.SaveSettings(db, s)
+		require.NoError(t, err)
+		input.UserAgent = "NewBrowser/1"
+		_, err = guard.Evaluate(db, input, now.Add(7*24*time.Hour))
+		assert.ErrorIs(t, err, guard.ErrDenied)
 	})
 }
 

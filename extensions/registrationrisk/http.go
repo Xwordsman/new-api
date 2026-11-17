@@ -77,7 +77,7 @@ func putSettings(c *gin.Context) {
 		return
 	}
 	// An older open dashboard must not silently disable newly added controls.
-	s := guard.Settings{DenyRegisteredBrowser: current.DenyRegisteredBrowser, IPAgentHourlyLimit: current.IPAgentHourlyLimit}
+	s := guard.Settings{DenyRegisteredBrowser: current.DenyRegisteredBrowser, IPRegistrationDays: current.IPRegistrationDays, IPRegistrationLimit: current.IPRegistrationLimit}
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 131072)
 	if common.DecodeJson(c.Request.Body, &s) != nil {
 		respond(c, nil, guard.ErrInvalid)
