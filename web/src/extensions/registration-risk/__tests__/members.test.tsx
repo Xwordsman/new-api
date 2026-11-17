@@ -90,21 +90,13 @@ const analysis: AnalysisResult = {
     completed_at: 1700002000,
     policy,
   },
-  items: [
+  groups: [
     {
-      user_id: 42,
-      username: member.username,
-      coverage: 'partial',
-      signal_count: 1,
+      id: 42,
       priority: 1,
-      reward_paid: 0,
-      reward_pending: 0,
-      recommendation: 'network-clue',
-      signals: [
-        { code: 'login-ip', count: 5, threshold: 5, related_ids: [43] },
-      ],
-      note: '',
-      review_state: '',
+      signals: ['login-ip'],
+      members: [member],
+      bindings: [],
     },
   ],
   total: 1,
@@ -136,13 +128,16 @@ function mockReads(result: AnalysisResult = analysis) {
     }
     if (url === `${base}/member-analysis`) {
       const params = config?.params as { kind: string }
-      const items = result.items.filter(
-        (item) => params.kind !== 'review' || item.priority >= 2
+      const groups = result.groups.filter(
+        (group) =>
+          params.kind !== 'review' ||
+          group.priority >= 2 ||
+          group.bindings.some((b) => b.state === 'review')
       )
       return {
         data: {
           success: true,
-          data: { ...result, items, total: items.length },
+          data: { ...result, groups, total: groups.length },
         },
       }
     }
@@ -364,15 +359,15 @@ it('retains the last completed evidence after failure and opens the related memb
     screen.getByRole('combobox', { name: 'Analysis results' }),
     'flagged'
   )
-  expect(
-    await screen.findByText('Matched 5 accounts; threshold 5')
-  ).toBeInTheDocument()
-  await user.click(screen.getByRole('button', { name: '#43' }))
+  expect(await screen.findByText('Same last login IP')).toBeInTheDocument()
+  await user.click(
+    screen.getByRole('button', { name: /#42 historical-member/ })
+  )
   expect(await screen.findByRole('dialog')).toBeInTheDocument()
   expect(get).toHaveBeenCalledWith(
     `${base}/members`,
     expect.objectContaining({
-      params: expect.objectContaining({ user_id: 43 }),
+      params: expect.objectContaining({ user_id: 42 }),
     })
   )
 })
@@ -397,36 +392,85 @@ it('prevents duplicate analyses while a task is pending and retains the previous
   expect(post).not.toHaveBeenCalled()
 })
 
-it('defaults to reward review evidence and shows network-only associations on request', async () => {
+it('groups associated members with named invitations and requires explicit referral approval', async () => {
   const user = userEvent.setup()
+  const binding = {
+    id: 9,
+    user_id: 45,
+    inviter_id: 44,
+    username: 'related-member',
+    inviter_name: 'shared-browser-member',
+    state: 'review',
+    reason: 'Associated accounts require referral review',
+    signup_bonus_quota: 500000,
+    signup_bonus_paid_at: 0,
+    pending: 1000000,
+  }
   const get = mockReads({
     ...analysis,
-    items: [
-      ...analysis.items,
+    groups: [
+      ...analysis.groups,
       {
-        ...analysis.items[0],
-        user_id: 44,
-        username: 'shared-browser-member',
+        id: 44,
         priority: 3,
-        reward_paid: 500000,
-        reward_pending: 1000000,
-        signals: [
-          { code: 'device', count: 2, threshold: 2, related_ids: [45] },
+        signals: ['device'],
+        members: [
+          { ...member, id: 44, username: 'shared-browser-member' },
+          { ...member, id: 45, username: 'related-member' },
         ],
+        bindings: [binding],
       },
     ],
   })
+  const post = vi
+    .spyOn(api, 'post')
+    .mockResolvedValue({ data: { success: true } })
   mount(<MemberAnalysis />)
   const row = await screen.findByRole('row', { name: /shared-browser-member/ })
-  expect(within(row).getByText('Reward review priority')).toBeInTheDocument()
   expect(
-    within(row).getByText(/Automatically issued.*\$1$/)
-  ).toBeInTheDocument()
-  expect(within(row).getByText(/Pending.*\$2$/)).toBeInTheDocument()
-  expect(screen.queryByText(member.username)).not.toBeInTheDocument()
+    within(row).getByRole('button', { name: /#45 related-member/ })
+  ).toBeVisible()
+  expect(within(row).getByText('Shared browser marker')).toBeVisible()
+  expect(within(row).getAllByText(/192\.0\.2\.10/)).toHaveLength(1)
+  expect(within(row).getAllByText(/Example Browser/)).toHaveLength(1)
+  expect(within(row).getByText('#44, #45')).toBeVisible()
+  expect(
+    within(row).getByText('Held until administrator approval')
+  ).toBeVisible()
+  expect(within(row).getByText(/Signup bonus.*\$1/)).toBeVisible()
+  expect(within(row).getByText(/Pending payment rewards.*\$2/)).toBeVisible()
+  expect(
+    screen.queryByRole('button', { name: /#42 historical-member/ })
+  ).not.toBeInTheDocument()
   expect(get).toHaveBeenCalledWith(
     `${base}/member-analysis`,
-    expect.objectContaining({ params: { page: 1, kind: 'review' } })
+    expect.objectContaining({
+      params: { page: 1, kind: 'review', view: 'groups' },
+    })
+  )
+  await user.click(
+    within(row).getByRole('button', { name: 'Approve referral qualification' })
+  )
+  const dialog = await screen.findByRole('alertdialog')
+  await user.click(within(dialog).getByRole('button', { name: 'Confirm' }))
+  expect(post).not.toHaveBeenCalled()
+  await user.type(
+    within(dialog).getByRole('textbox', { name: 'Review reason' }),
+    'Verified independent accounts'
+  )
+  await user.click(within(dialog).getByRole('button', { name: 'Confirm' }))
+  await waitFor(() =>
+    expect(post).toHaveBeenCalledWith(
+      '/api/extensions/referral/admin/reviews/9',
+      {
+        id: 9,
+        approve: true,
+        reason: 'Verified independent accounts',
+      }
+    )
+  )
+  await waitFor(() =>
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
   )
   await user.selectOptions(
     screen.getByRole('combobox', { name: 'Analysis results' }),
@@ -435,10 +479,49 @@ it('defaults to reward review evidence and shows network-only associations on re
   const networkRow = await screen.findByRole('row', {
     name: /historical-member/,
   })
-  expect(within(networkRow).getByText('Network clue only')).toBeInTheDocument()
+  expect(within(networkRow).getByText('Network clue only')).toBeVisible()
   expect(
-    within(networkRow).getByText(
-      'Shared networks alone do not prove duplicate accounts.'
-    )
-  ).toBeInTheDocument()
+    within(networkRow).queryByRole('button', {
+      name: 'Approve referral qualification',
+    })
+  ).not.toBeInTheDocument()
+})
+
+it('keeps previously held rewards actionable when current association evidence is unavailable', async () => {
+  mockReads({
+    ...analysis,
+    groups: [
+      {
+        id: member.id,
+        priority: 0,
+        signals: [],
+        members: [member],
+        bindings: [
+          {
+            id: 9,
+            user_id: 45,
+            inviter_id: member.id,
+            username: 'related-member',
+            inviter_name: member.username,
+            state: 'review',
+            reason: 'Associated accounts require referral review',
+            signup_bonus_quota: 500000,
+            signup_bonus_paid_at: 0,
+            pending: 0,
+          },
+        ],
+      },
+    ],
+  })
+  mount(<MemberAnalysis />)
+  expect(
+    await screen.findByText('Held until administrator approval')
+  ).toBeVisible()
+  expect(
+    screen.getByText('Associated accounts require referral review')
+  ).toBeVisible()
+  expect(
+    screen.getByRole('button', { name: 'Approve referral qualification' })
+  ).toBeEnabled()
+  expect(screen.queryByText('Network clue only')).not.toBeInTheDocument()
 })

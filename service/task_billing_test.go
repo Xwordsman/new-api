@@ -894,7 +894,10 @@ func TestRefundTaskQuota_Wallet(t *testing.T) {
 	seedChargedAccounting(t, userID, channelID, tokenID, preConsumed, 1)
 
 	task := makeTask(userID, channelID, preConsumed, tokenID, BillingSourceWallet, 0)
+	task.PrivateData.ClientIP = "203.0.113.44"
 	require.NoError(t, model.DB.Create(task).Error)
+	require.NoError(t, model.DB.First(task, task.ID).Error)
+	assert.Equal(t, "203.0.113.44", task.PrivateData.ClientIP)
 
 	assert.True(t, RefundTaskQuota(ctx, task, "task failed: upstream error"))
 
@@ -913,6 +916,7 @@ func TestRefundTaskQuota_Wallet(t *testing.T) {
 	log := getLastLog(t)
 	require.NotNil(t, log)
 	assert.Equal(t, model.LogTypeRefund, log.Type)
+	assert.Equal(t, "203.0.113.44", log.Ip)
 	assert.Equal(t, preConsumed, log.Quota)
 	assert.Equal(t, "test-model", log.ModelName)
 	assert.Zero(t, task.Quota)
@@ -1046,6 +1050,7 @@ func TestRecalculate_PositiveDelta(t *testing.T) {
 	seedChargedAccounting(t, userID, channelID, tokenID, preConsumed, 1)
 
 	task := makeTask(userID, channelID, preConsumed, tokenID, BillingSourceWallet, 0)
+	task.PrivateData.ClientIP = "203.0.113.45"
 
 	RecalculateTaskQuota(ctx, task, actualQuota, common.NewMessage("adaptor adjustment"))
 
@@ -1067,6 +1072,7 @@ func TestRecalculate_PositiveDelta(t *testing.T) {
 	log := getLastLog(t)
 	require.NotNil(t, log)
 	assert.Equal(t, model.LogTypeConsume, log.Type)
+	assert.Equal(t, "203.0.113.45", log.Ip)
 	assert.Equal(t, actualQuota-preConsumed, log.Quota)
 }
 

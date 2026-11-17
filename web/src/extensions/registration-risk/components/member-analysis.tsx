@@ -32,13 +32,15 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
+import { ReviewDialog } from '@/extensions/referral/components/admin-actions'
+import { ReferralState } from '@/extensions/referral/components/referral-state'
 import { toIntlLocale } from '@/i18n/languages'
 import { formatQuotaWithCurrency } from '@/lib/currency'
 import { formatNumber } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { registrationQueryKey } from '../api'
-import type { MemberFinding } from '../member-types'
+import type { MemberGroup, MemberGroupBinding } from '../member-types'
 import { getMemberAnalysis, startMemberAnalysis } from '../members-api'
 import { MemberDialog } from './member-dialog'
 import { MemberPolicySection } from './member-policy-form'
@@ -50,6 +52,10 @@ export function MemberAnalysis() {
   const client = useQueryClient()
   const [filter, setFilter] = useState({ page: 1, kind: 'review' })
   const [selected, setSelected] = useState<number | null>(null)
+  const [review, setReview] = useState<{
+    invitee: MemberGroupBinding
+    approve: boolean
+  } | null>(null)
   const query = useQuery({
     queryKey: [...registrationQueryKey, actor, 'member-analysis', filter],
     queryFn: ({ signal }) => getMemberAnalysis(filter, signal),
@@ -69,7 +75,7 @@ export function MemberAnalysis() {
   const running =
     start.isPending || ['pending', 'running'].includes(query.data?.status ?? '')
   const table = useReactTable({
-    data: query.data?.items ?? [],
+    data: query.data?.groups ?? [],
     columns: [],
     getCoreRowModel: getCoreRowModel(),
     manualPagination: true,
@@ -91,99 +97,40 @@ export function MemberAnalysis() {
     inviter: t('Same inviter'),
     payer: t('Shared verified payment account'),
     domain: t('Restricted email domain'),
-    qualification: t('Signup qualification pending review'),
     'invite-burst': t('Concentrated invitation registrations'),
   }
-  const priorities: Record<number, string> = {
-    0: t('No signals in available data'),
-    1: t('Network clue only'),
-    2: t('Evidence requires review'),
-    3: t('Reward review priority'),
-  }
-  const columns: StaticDataTableColumn<MemberFinding>[] = [
+  const columns: StaticDataTableColumn<MemberGroup>[] = [
     {
-      id: 'member',
-      header: t('Member'),
-      cell: (r) => (
-        <div>
-          {r.username}
-          <p className='text-muted-foreground text-xs'>ID: {r.user_id}</p>
-        </div>
-      ),
-    },
-    {
-      id: 'priority',
-      header: t('Review priority'),
-      cell: (r) => (
-        <div className='max-w-64 space-y-2 whitespace-normal'>
-          <Badge variant={r.priority >= 3 ? 'destructive' : 'secondary'}>
-            {priorities[r.priority] ?? priorities[0]}
-          </Badge>
-          <p className='text-muted-foreground text-xs'>
-            {r.priority >= 2
-              ? t(
-                  'Verify the related accounts and invitation rewards before approval.'
-                )
-              : t('Shared networks alone do not prove duplicate accounts.')}
-          </p>
-        </div>
-      ),
-    },
-    {
-      id: 'rewards',
-      header: t('Related invitation bonuses'),
-      cell: (r) => (
-        <div className='space-y-1 text-xs'>
-          <p>
-            {t('Automatically issued')}:{' '}
-            {formatQuotaWithCurrency(r.reward_paid, {
-              locale,
-              abbreviate: false,
-            })}
-          </p>
-          <p>
-            {t('Pending')}:{' '}
-            {formatQuotaWithCurrency(r.reward_pending, {
-              locale,
-              abbreviate: false,
-            })}
-          </p>
-        </div>
-      ),
-    },
-    {
-      id: 'signals',
-      header: t('Association signals'),
-      cell: (r) => (
-        <div className='max-w-xl space-y-3 whitespace-normal'>
-          {r.signals.length === 0 && t('No signals in available data')}
-          {r.signals.map((s) => (
-            <div key={s.code}>
-              <p className='font-medium'>{signals[s.code] ?? s.code}</p>
-              {s.threshold > 0 && (
-                <p className='text-muted-foreground text-xs'>
-                  {t('Matched {{count}} accounts; threshold {{threshold}}', {
-                    count: formatNumber(s.count, locale),
-                    threshold: formatNumber(s.threshold, locale),
-                  })}
+      id: 'members',
+      header: t('Associated accounts'),
+      cellClassName: 'align-top',
+      cell: (group) => (
+        <div className='min-w-48 space-y-3 whitespace-normal'>
+          {group.members.map((member) => (
+            <div key={member.id}>
+              <Button
+                variant='link'
+                size='sm'
+                className='h-auto max-w-72 justify-start p-0 text-left break-words whitespace-normal'
+                onClick={() => setSelected(member.id)}
+              >
+                #{member.id} {member.username}
+              </Button>
+              {member.display_name && (
+                <p className='text-sm break-words'>{member.display_name}</p>
+              )}
+              {member.email && (
+                <p className='text-muted-foreground max-w-72 text-xs break-all'>
+                  {member.email}
                 </p>
               )}
-              {s.related_ids.length > 0 && (
-                <div className='mt-1 flex flex-wrap gap-1'>
-                  <span className='text-xs'>
-                    {t('Related members (up to 10)')}:
-                  </span>
-                  {s.related_ids.map((id) => (
-                    <Button
-                      key={id}
-                      size='sm'
-                      variant='outline'
-                      onClick={() => setSelected(id)}
-                    >
-                      #{id}
-                    </Button>
-                  ))}
-                </div>
+              {member.status !== 1 && (
+                <Badge variant='secondary'>{t('Disabled')}</Badge>
+              )}
+              {member.note && (
+                <p className='text-muted-foreground max-w-72 text-xs break-words'>
+                  {member.note}
+                </p>
               )}
             </div>
           ))}
@@ -191,49 +138,165 @@ export function MemberAnalysis() {
       ),
     },
     {
-      id: 'coverage',
-      header: t('Data coverage'),
-      cell: (r) => (
-        <Badge variant='secondary'>
-          {r.coverage === 'unavailable'
-            ? t('Insufficient historical data')
-            : t('Partial data')}
-        </Badge>
-      ),
+      id: 'evidence',
+      header: t('Association signals'),
+      cellClassName: 'align-top',
+      cell: (group) => {
+        const evidence = new Map<
+          string,
+          { ids: number[]; signup: string; login: string; agent: string }
+        >()
+        for (const member of group.members) {
+          const signup = member.registration_ip || t('Not recorded')
+          const login = member.last_login_ip || t('Not recorded')
+          const agent =
+            member.registration_agent ||
+            member.last_login_agent ||
+            t('Not recorded')
+          const key = JSON.stringify([signup, login, agent])
+          const existing = evidence.get(key)
+          if (existing) {
+            existing.ids.push(member.id)
+          } else {
+            evidence.set(key, { ids: [member.id], signup, login, agent })
+          }
+        }
+        return (
+          <div className='max-w-96 min-w-56 space-y-3 whitespace-normal'>
+            <div className='flex flex-wrap gap-1'>
+              {group.signals.map((code) => (
+                <Badge
+                  key={code}
+                  variant={
+                    ['device', 'payer', 'invite-burst'].includes(code)
+                      ? 'warning'
+                      : 'secondary'
+                  }
+                >
+                  {signals[code] ?? code}
+                </Badge>
+              ))}
+              {group.signals.length === 0 && (
+                <span className='text-muted-foreground text-xs'>
+                  {t('No signals in available data')}
+                </span>
+              )}
+            </div>
+            {group.priority === 1 && (
+              <p className='text-muted-foreground text-xs'>
+                {t('Network clue only')}
+              </p>
+            )}
+            {[...evidence.entries()].map(([key, item]) => (
+              <div key={key} className='space-y-1 text-xs'>
+                <p className='font-medium'>
+                  {item.ids.map((id) => `#${id}`).join(', ')}
+                </p>
+                <p>
+                  {t('Registration IP')}: {item.signup}
+                </p>
+                <p>
+                  {t('Last login IP')}: {item.login}
+                </p>
+                <p className='text-muted-foreground break-all'>
+                  UA: {item.agent}
+                </p>
+              </div>
+            ))}
+          </div>
+        )
+      },
     },
     {
-      id: 'review',
-      header: t('Member review note'),
-      cell: (r) => (
-        <div className='max-w-64 break-words whitespace-normal'>
-          {r.review_state === 'watch' && (
-            <Badge variant='destructive'>{t('Needs attention')}</Badge>
+      id: 'rewards',
+      header: t('Invitation rewards and review'),
+      cellClassName: 'align-top',
+      cell: (group) => (
+        <div className='min-w-64 space-y-4 whitespace-normal'>
+          {group.bindings.some((binding) => binding.state === 'review') && (
+            <p className='text-warning text-xs font-medium'>
+              {t('Held until administrator approval')}
+            </p>
           )}
-          {r.review_state === 'cleared' && (
-            <Badge variant='secondary'>{t('Reviewed')}</Badge>
+          {[
+            ...new Set(
+              group.bindings.map((binding) => binding.reason).filter(Boolean)
+            ),
+          ].map((reason) => (
+            <p key={reason} className='text-muted-foreground max-w-96 text-xs'>
+              {t(reason)}
+            </p>
+          ))}
+          {group.bindings.length === 0 && (
+            <span className='text-muted-foreground text-sm'>
+              {t('No reward')}
+            </span>
           )}
-          <p>{r.note || '—'}</p>
+          {group.bindings.map((binding) => (
+            <div
+              key={binding.id}
+              className='space-y-2 border-b pb-3 last:border-0 last:pb-0'
+            >
+              <p className='max-w-96 text-xs break-words'>
+                #{binding.inviter_id} {binding.inviter_name} → #
+                {binding.user_id} {binding.username}
+              </p>
+              <div className='flex flex-wrap items-center gap-2 text-xs'>
+                <span title={binding.reason ? t(binding.reason) : undefined}>
+                  <ReferralState state={binding.state} />
+                </span>
+                <span>
+                  {t('Signup bonus')}:{' '}
+                  {formatQuotaWithCurrency(binding.signup_bonus_quota, {
+                    locale,
+                    abbreviate: false,
+                  })}{' '}
+                  ·{' '}
+                  {binding.signup_bonus_paid_at > 0 ? t('Paid') : t('Pending')}
+                </span>
+              </div>
+              {binding.pending > 0 && (
+                <p className='text-xs'>
+                  {t('Pending payment rewards')}:{' '}
+                  {formatQuotaWithCurrency(binding.pending, {
+                    locale,
+                    abbreviate: false,
+                  })}
+                </p>
+              )}
+              {['review', 'historical'].includes(binding.state) && (
+                <div className='flex flex-wrap gap-2'>
+                  <Button
+                    size='sm'
+                    variant='outline'
+                    aria-label={t('Approve referral qualification')}
+                    onClick={() =>
+                      setReview({ invitee: binding, approve: true })
+                    }
+                  >
+                    {t('Approve')}
+                  </Button>
+                  <Button
+                    size='sm'
+                    variant='destructive'
+                    aria-label={t('Reject referral qualification')}
+                    onClick={() =>
+                      setReview({ invitee: binding, approve: false })
+                    }
+                  >
+                    {t('Reject')}
+                  </Button>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
-      ),
-    },
-    {
-      id: 'actions',
-      header: t('Actions'),
-      cell: (r) => (
-        <Button
-          size='sm'
-          variant='outline'
-          onClick={() => setSelected(r.user_id)}
-        >
-          {t('Details and review')}
-        </Button>
       ),
     },
   ]
   const summary = query.data?.summary
   return (
     <div className='space-y-4'>
-      <MemberPolicySection />
       <div className='console-surface bg-card space-y-4 rounded-xl border p-5'>
         <div className='flex flex-wrap items-center justify-between gap-3'>
           <h2 className='font-semibold'>{t('Existing-member analysis')}</h2>
@@ -246,12 +309,7 @@ export function MemberAnalysis() {
         </div>
         <p className='text-muted-foreground text-sm'>
           {t(
-            'Association signals are investigation clues, not proof of abuse. Shared networks can belong to families or workplaces. No accounts are automatically banned and rewards are not changed.'
-          )}
-        </p>
-        <p className='text-muted-foreground text-sm'>
-          {t(
-            'Related bonuses include invitations sent or received by this member. Amounts overlap across members and exclude manual gifts. Multiple IP clues do not increase priority.'
+            'Associated accounts are grouped for review. Suspicious invitation rewards stay held until administrator approval. Shared IP or UA alone does not prove the same person.'
           )}
         </p>
         {running && (
@@ -272,51 +330,35 @@ export function MemberAnalysis() {
         {query.isError && <ErrorState onRetry={() => void query.refetch()} />}
         {summary && (
           <>
-            <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4'>
-              {[
-                [t('Members analyzed'), summary.total],
-                [t('Evidence requires review'), summary.review],
-                [t('Reward review priority'), summary.priority],
-                [t('Insufficient historical data'), summary.insufficient],
-              ].map(([label, value]) => (
-                <div key={label} className='bg-muted/40 rounded-lg p-4'>
-                  <p className='text-muted-foreground text-sm'>{label}</p>
-                  <p className='mt-1 text-2xl font-semibold'>
-                    {formatNumber(Number(value), locale)}
-                  </p>
-                </div>
-              ))}
+            <div className='flex flex-wrap items-center justify-between gap-3'>
+              <p className='text-muted-foreground text-xs'>
+                {t('Members analyzed')}: {formatNumber(summary.total, locale)} ·{' '}
+                {t('Last analysis')}:{' '}
+                {new Date(summary.completed_at * 1000).toLocaleString(locale)}
+              </p>
+              <NativeSelect
+                aria-label={t('Analysis results')}
+                value={filter.kind}
+                onChange={(e) => setFilter({ page: 1, kind: e.target.value })}
+              >
+                <NativeSelectOption value='review'>
+                  {t('Evidence requires review')}
+                </NativeSelectOption>
+                <NativeSelectOption value='flagged'>
+                  {t('Members with signals')}
+                </NativeSelectOption>
+                <NativeSelectOption value='insufficient'>
+                  {t('Insufficient historical data')}
+                </NativeSelectOption>
+                <NativeSelectOption value='all'>
+                  {t('All members')}
+                </NativeSelectOption>
+              </NativeSelect>
             </div>
-            <p className='text-muted-foreground text-xs'>
-              {t('Last analysis')}:{' '}
-              {new Date(summary.completed_at * 1000).toLocaleString(locale)} ·{' '}
-              {t('Policy revision')}:{' '}
-              {formatNumber(summary.policy.revision, locale)} ·{' '}
-              {t('Association lookback (days)')}:{' '}
-              {formatNumber(summary.policy.lookback_days, locale)}
-            </p>
-            <NativeSelect
-              aria-label={t('Analysis results')}
-              value={filter.kind}
-              onChange={(e) => setFilter({ page: 1, kind: e.target.value })}
-            >
-              <NativeSelectOption value='review'>
-                {t('Evidence requires review')}
-              </NativeSelectOption>
-              <NativeSelectOption value='flagged'>
-                {t('Members with signals')}
-              </NativeSelectOption>
-              <NativeSelectOption value='insufficient'>
-                {t('Insufficient historical data')}
-              </NativeSelectOption>
-              <NativeSelectOption value='all'>
-                {t('All members')}
-              </NativeSelectOption>
-            </NativeSelect>
             <StaticDataTable
-              data={query.data?.items ?? []}
+              data={query.data?.groups ?? []}
               columns={columns}
-              getRowKey={(r) => r.user_id}
+              getRowKey={(group) => group.id}
               emptyContent={t('No records found')}
             />
             <DataTablePagination table={table} compact />
@@ -330,8 +372,20 @@ export function MemberAnalysis() {
           </p>
         )}
       </div>
+      <MemberPolicySection />
       {selected !== null && (
         <MemberDialog userId={selected} onClose={() => setSelected(null)} />
+      )}
+      {review && (
+        <ReviewDialog
+          value={review}
+          onClose={() => setReview(null)}
+          onReviewed={async () => {
+            await client.invalidateQueries({
+              queryKey: [...registrationQueryKey, actor, 'member-analysis'],
+            })
+          }}
+        />
       )}
     </div>
   )

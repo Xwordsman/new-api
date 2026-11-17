@@ -72,7 +72,7 @@ func riskDB(t *testing.T, dialect string) *gorm.DB {
 		common.SetMainDatabaseType(oldType)
 		common.RedisEnabled, common.BatchUpdateEnabled = oldRedis, oldBatch
 	})
-	for _, table := range []any{&guard.MemberProfile{}, &guard.MemberFinding{}, &guard.Secret{}, &guard.Counter{}, &guard.Challenge{}, &guard.Event{}, &guard.Account{}, &guard.Grant{}, &guard.Reservation{}, &guard.Alert{}, &guard.Audit{}, &guard.Payer{}, &ledger.RefundNotice{}, &ledger.Audit{}, &ledger.Transfer{}, &ledger.Reward{}, &ledger.PaymentIdentity{}, &ledger.Signal{}, &ledger.Binding{}, &ledger.Account{}, &ledger.Settings{}, &model.UserSession{}, &model.UserAccessToken{}, &model.AuditLog{}, &model.SystemTask{}, &model.SystemTaskLock{}, &model.User{}, &model.Token{}, &model.Option{}} {
+	for _, table := range []any{&guard.MemberProfile{}, &guard.MemberFinding{}, &guard.Secret{}, &guard.Counter{}, &guard.Challenge{}, &guard.Event{}, &guard.Account{}, &guard.Grant{}, &guard.Reservation{}, &guard.Alert{}, &guard.Audit{}, &guard.Payer{}, &ledger.RefundNotice{}, &ledger.Audit{}, &ledger.Transfer{}, &ledger.Reward{}, &ledger.PaymentIdentity{}, &ledger.Signal{}, &ledger.Binding{}, &ledger.Account{}, &ledger.Settings{}, &model.UserSession{}, &model.UserAccessToken{}, &model.AuditLog{}, &model.SystemTask{}, &model.SystemTaskLock{}, &model.Task{}, &model.Log{}, &model.User{}, &model.Token{}, &model.Option{}} {
 		require.NoError(t, db.Migrator().DropTable(table))
 	}
 	require.NoError(t, db.AutoMigrate(&model.User{}, &model.Token{}, &model.Option{}, &ledger.Binding{}))
@@ -766,7 +766,7 @@ func TestMemberProfilesAndAnalysisDatabaseMatrix(t *testing.T) {
 			require.NoError(t, db.Order("user_id").Find(&findings).Error)
 			require.Len(t, findings, 3)
 			assert.Equal(t, []guard.MemberSignal{{Code: "login-ip", Count: 2, Threshold: 2, RelatedIDs: []int{newUser.Id}}, {Code: "payer", Count: 2, Threshold: 2, RelatedIDs: []int{newUser.Id}}}, findings[0].Signals)
-			assert.Equal(t, []guard.MemberSignal{{Code: "login-ip", Count: 2, Threshold: 2, RelatedIDs: []int{legacy.Id}}, {Code: "payer", Count: 2, Threshold: 2, RelatedIDs: []int{legacy.Id}}, {Code: "domain", Count: 1, RelatedIDs: []int{}}, {Code: "qualification", Count: 1, RelatedIDs: []int{}}}, findings[1].Signals)
+			assert.Equal(t, []guard.MemberSignal{{Code: "login-ip", Count: 2, Threshold: 2, RelatedIDs: []int{legacy.Id}}, {Code: "payer", Count: 2, Threshold: 2, RelatedIDs: []int{legacy.Id}}, {Code: "domain", Count: 1, RelatedIDs: []int{}}}, findings[1].Signals)
 			assert.Empty(t, findings[2].Signals, "blank metadata and allowed domain exceptions never form signals")
 			assert.Equal(t, "unavailable", findings[2].Coverage)
 			_, err = analyzeMembers(db, "first-snapshot", memberAnalysisPayload{ActorID: legacy.Id, Policy: policy}, now)
@@ -911,6 +911,141 @@ func TestMemberRewardReviewDatabaseMatrix(t *testing.T) {
 			assert.Equal(t, 90*time.Minute, memberAnalysisHandler{}.Interval())
 		})
 	}
+}
+
+func TestAssociatedInviterRewardsRequireExplicitApproval(t *testing.T) {
+	db := riskDB(t, "sqlite")
+	now := time.Now().Truncate(time.Second)
+	for id := 1; id <= 3; id++ {
+		user := model.User{Username: fmt.Sprintf("association-%d", id), AffCode: fmt.Sprintf("association-%d", id), Status: common.UserStatusEnabled, CreatedAt: now.Unix()}
+		require.NoError(t, db.Create(&user).Error)
+		browser := "shared-browser"
+		if id == 2 {
+			browser = "unique-invitee-browser"
+		}
+		require.NoError(t, ledger.Observe(ledger.WithSignupBrowser(db, browser), id, fmt.Sprintf("192.0.2.%d", id), "Browser"))
+		require.NoError(t, db.Create(&guard.Account{UserID: id, DeviceHash: browser, CreatedAt: now.Unix(), State: "active"}).Error)
+	}
+	settings, err := ledger.GetSettings(db)
+	require.NoError(t, err)
+	settings.Enabled = true
+	require.NoError(t, ledger.UpdateSettings(db, settings, 1))
+	binding := ledger.Binding{UserID: 2, InviterID: 1, State: "active", RegisteredAt: now.Unix() - 172800, ExpiresAt: now.Unix() + 86400, SignupBonusQuota: 500, SignupBonusAvailableAt: now.Unix() - 86400}
+	require.NoError(t, db.Create(&binding).Error)
+	reward := ledger.Reward{UserID: 2, InviterID: 1, TradeNo: "associated-payment", Quota: 100, State: "pending", AvailableAt: now.Unix() - 86400}
+	require.NoError(t, db.Create(&reward).Error)
+	// A unique invitee browser cannot bypass an associated reward recipient.
+	require.NoError(t, ledger.ReleaseSignupBonuses(db, now.Unix()))
+	require.NoError(t, db.First(&binding, binding.ID).Error)
+	assert.Equal(t, "review", binding.State)
+	assert.Zero(t, binding.SignupBonusPaidAt)
+	_, err = ledger.Claim(db, 1, reward.ID, now.Unix())
+	assert.ErrorIs(t, err, ledger.ErrUnavailable)
+	// Direct member claiming must perform the same fresh recipient check.
+	require.NoError(t, db.Model(&binding).Update("state", "active").Error)
+	_, err = ledger.Claim(db, 1, reward.ID, now.Unix())
+	assert.ErrorIs(t, err, ledger.ErrUnavailable)
+	// Analysis freezes existing bindings before cooling ends, in both directions.
+	require.NoError(t, db.Model(&binding).Update("state", "active").Error)
+	_, err = analyzeMembers(db, "hold-existing", memberAnalysisPayload{Policy: guard.DefaultMemberPolicy()}, now)
+	require.NoError(t, err)
+	require.NoError(t, db.First(&binding, binding.ID).Error)
+	assert.Equal(t, "review", binding.State)
+	groups, total, err := loadMemberGroups(db, "hold-existing", "review", 1)
+	require.NoError(t, err)
+	require.Equal(t, 1, total, "one associated group, not duplicate invitation cases")
+	require.Len(t, groups[0].Members, 2)
+	assert.Equal(t, []int{1, 3}, []int{groups[0].Members[0].ID, groups[0].Members[1].ID})
+	require.Len(t, groups[0].Bindings, 1)
+	assert.Equal(t, "association-2", groups[0].Bindings[0].Username)
+	assert.Equal(t, "association-1", groups[0].Bindings[0].InviterName)
+	assert.EqualValues(t, 100, groups[0].Bindings[0].Pending)
+	encoded, err := common.Marshal(groups)
+	require.NoError(t, err)
+	assert.NotContains(t, string(encoded), "shared-browser")
+	assert.NotContains(t, string(encoded), "device_hash")
+	// Evidence expiry and member notes are not financial approval.
+	require.NoError(t, db.Model(&ledger.Signal{}).Where("user_id > 0").Update("browser", "").Error)
+	require.NoError(t, guard.ReviewMember(db, 1, 1, 0, "cleared", "Checked member profile", now))
+	require.NoError(t, ledger.ReleaseSignupBonuses(db, now.Add(365*24*time.Hour).Unix()))
+	require.NoError(t, db.First(&binding, binding.ID).Error)
+	assert.Equal(t, "review", binding.State)
+	assert.Zero(t, binding.SignupBonusPaidAt)
+	require.NoError(t, ledger.Review(db, binding.ID, 1, true, "Confirmed legitimate invitation"))
+	require.NoError(t, ledger.ReleaseSignupBonuses(db, now.Unix()))
+	count, err := ledger.Claim(db, 1, reward.ID, now.Unix())
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+	var account ledger.Account
+	require.NoError(t, db.First(&account, "user_id = ?", 1).Error)
+	assert.Equal(t, 600, account.Balance)
+	_, err = analyzeMembers(db, "approved-rerun", memberAnalysisPayload{Policy: guard.DefaultMemberPolicy()}, now)
+	require.NoError(t, err)
+	groups, _, err = loadMemberGroups(db, "approved-rerun", "review", 1)
+	require.NoError(t, err)
+	require.Len(t, groups[0].Bindings, 1)
+	assert.Equal(t, "active", groups[0].Bindings[0].State, "analysis cannot overwrite an explicit approval")
+	assert.Positive(t, groups[0].Bindings[0].SignupBonusPaidAt)
+	assert.Zero(t, groups[0].Bindings[0].Pending, "financial state is live")
+	_, err = ledger.Claim(db, 1, reward.ID, now.Unix())
+	assert.ErrorIs(t, err, ledger.ErrUnavailable)
+	require.NoError(t, db.First(&account, "user_id = ?", 1).Error)
+	assert.Equal(t, 600, account.Balance, "retries cannot pay twice")
+}
+
+func TestAPIRequestIPsRecordedWithoutMemberOptIn(t *testing.T) {
+	db := riskDB(t, "sqlite")
+	require.NoError(t, db.AutoMigrate(&model.Log{}))
+	user := model.User{Username: "ip-log-member", Status: common.UserStatusEnabled}
+	require.NoError(t, db.Create(&user).Error)
+	oldConsume := common.LogConsumeEnabled
+	common.LogConsumeEnabled = true
+	t.Cleanup(func() { common.LogConsumeEnabled = oldConsume })
+	c, engine := gin.CreateTestContext(httptest.NewRecorder())
+	require.NoError(t, engine.SetTrustedProxies([]string{"10.0.0.0/8"}))
+	c.Request = httptest.NewRequest("POST", "/v1/chat/completions", nil)
+	c.Request.RemoteAddr = "203.0.113.20:1234"
+	c.Request.Header.Set("X-Forwarded-For", "192.0.2.99")
+	c.Set("username", user.Username)
+	model.RecordConsumeLog(c, user.Id, model.RecordConsumeLogParams{Other: model.NewLogOther()})
+	model.RecordErrorLog(c, user.Id, 0, "model", "", "upstream failed", 0, 0, false, "", model.NewLogOther())
+	var logs []model.Log
+	require.NoError(t, db.Order("id").Find(&logs).Error)
+	require.Len(t, logs, 2)
+	for _, entry := range logs {
+		assert.Equal(t, "203.0.113.20", entry.Ip)
+	}
+	c.Request.RemoteAddr = "10.0.0.2:1234"
+	model.RecordConsumeLog(c, user.Id, model.RecordConsumeLogParams{Other: model.NewLogOther()})
+	var proxied model.Log
+	require.NoError(t, db.Order("id DESC").First(&proxied).Error)
+	assert.Equal(t, "192.0.2.99", proxied.Ip, "only a trusted proxy can supply the forwarded client IP")
+	visible, err := model.GetLogByTokenId(0)
+	require.NoError(t, err)
+	for _, entry := range visible {
+		assert.Empty(t, entry.Ip, "member display preference must still be respected")
+	}
+	require.NoError(t, db.Model(&user).Update("setting", `{"record_ip_log":true}`).Error)
+	visible, err = model.GetLogByTokenId(0)
+	require.NoError(t, err)
+	for _, entry := range visible {
+		assert.NotEmpty(t, entry.Ip)
+	}
+	// Persist the original IP privately so background settlement has the same
+	// evidence after a process restart, without leaking it through task DTOs.
+	require.NoError(t, db.AutoMigrate(&model.Task{}))
+	task := model.Task{TaskID: "ip-provenance", UserId: user.Id, PrivateData: model.TaskPrivateData{ClientIP: "203.0.113.44"}}
+	require.NoError(t, db.Create(&task).Error)
+	var loaded model.Task
+	require.NoError(t, db.First(&loaded, task.ID).Error)
+	assert.Equal(t, "203.0.113.44", loaded.PrivateData.ClientIP)
+	public, err := common.Marshal(loaded)
+	require.NoError(t, err)
+	assert.NotContains(t, string(public), "203.0.113.44")
+	model.RecordTaskBillingLog(model.RecordTaskBillingLogParams{UserId: user.Id, ClientIP: loaded.PrivateData.ClientIP})
+	var settled model.Log
+	require.NoError(t, db.Order("id DESC").First(&settled).Error)
+	assert.Equal(t, "203.0.113.44", settled.Ip)
 }
 
 func TestMemberAnalysisTasksRetainCompletedResultsAndHidePrivateFields(t *testing.T) {

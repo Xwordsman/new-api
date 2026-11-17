@@ -82,6 +82,25 @@ export type MemberFinding = {
   note: string
   review_state: MemberReviewState | ''
 }
+export type MemberGroupBinding = {
+  id: number
+  user_id: number
+  inviter_id: number
+  username: string
+  inviter_name: string
+  state: string
+  reason: string
+  signup_bonus_quota: number
+  signup_bonus_paid_at: number
+  pending: number
+}
+export type MemberGroup = {
+  id: number
+  priority: number
+  signals: string[]
+  members: MemberProfile[]
+  bindings: MemberGroupBinding[]
+}
 export type AnalysisResult = {
   status: 'idle' | 'pending' | 'running' | 'succeeded' | 'failed'
   summary: null | {
@@ -93,7 +112,7 @@ export type AnalysisResult = {
     completed_at: number
     policy: MemberPolicy
   }
-  items: MemberFinding[]
+  groups: MemberGroup[]
   total: number
   page?: number
 }

@@ -237,9 +237,14 @@ func checkQualification(tx *gorm.DB, binding *Binding) error {
 	if binding.ReviewedAt > 0 {
 		return nil
 	}
+	// A hold is durable: evidence retention, policy changes and time cannot
+	// approve it. Only the audited administrator Review operation can do so.
+	if binding.State == "review" {
+		return nil
+	}
 	var sharedPayment int64
-	identities := tx.Model(&PaymentIdentity{}).Select("digest").Where("user_id = ?", binding.UserID)
-	if err := tx.Model(&PaymentIdentity{}).Where("user_id <> ? AND digest IN (?)", binding.UserID, identities).Count(&sharedPayment).Error; err != nil {
+	identities := tx.Model(&PaymentIdentity{}).Select("digest").Where("user_id IN ?", []int{binding.UserID, binding.InviterID})
+	if err := tx.Model(&PaymentIdentity{}).Where("digest IN (?)", identities).Where("EXISTS (SELECT 1 FROM extension_referral_payment_identities peer WHERE peer.digest = extension_referral_payment_identities.digest AND peer.user_id <> extension_referral_payment_identities.user_id)").Count(&sharedPayment).Error; err != nil {
 		return err
 	}
 	if sharedPayment > 0 {
@@ -258,13 +263,21 @@ func checkQualification(tx *gorm.DB, binding *Binding) error {
 			return err
 		}
 		var related int64
-		if settings.ReviewSharedBrowser && own.Browser != "" {
-			if err := tx.Model(&Signal{}).Where("user_id <> ? AND browser = ?", binding.UserID, own.Browser).Count(&related).Error; err != nil {
+		if settings.ReviewSharedBrowser {
+			browsers := tx.Model(&Signal{}).Select("browser").Where("user_id IN ? AND browser <> ''", []int{binding.UserID, binding.InviterID})
+			if err := tx.Model(&Signal{}).Where("browser IN (?)", browsers).Where("EXISTS (SELECT 1 FROM extension_referral_signals peer WHERE peer.browser = extension_referral_signals.browser AND peer.user_id <> extension_referral_signals.user_id)").Count(&related).Error; err != nil {
 				return err
 			}
 		}
 		if related > 0 {
 			binding.State, binding.Reason = "review", "Shared registration browser requires review"
+		}
+		burst, err := inviterHasRegistrationBurst(tx, binding.InviterID, settings)
+		if err != nil {
+			return err
+		}
+		if burst {
+			binding.State, binding.Reason = "review", "Concentrated invitation registrations require review"
 		}
 		// An office address alone is not a risk decision. A configurable burst
 		// under one inviter and exact registration IP holds unpaid rewards only.
@@ -298,4 +311,33 @@ func checkQualification(tx *gorm.DB, binding *Binding) error {
 		}
 	}
 	return tx.Model(&Binding{}).Where("user_id = ?", binding.UserID).Updates(map[string]any{"state": binding.State, "reason": strings.TrimSpace(binding.Reason)}).Error
+}
+
+// The recipient's other invitations matter too, even when this invitee changes
+// browser or network. A shared IP alone never satisfies this time-bounded rule.
+func inviterHasRegistrationBurst(tx *gorm.DB, inviterID int, settings Settings) (bool, error) {
+	if settings.InviteBurstLimit < 2 {
+		return false, nil
+	}
+	var rows []struct {
+		Network      string
+		RegisteredAt int64
+	}
+	err := tx.Model(&Binding{}).Select("s.network, extension_referral_bindings.registered_at").Joins("JOIN extension_referral_signals s ON s.user_id = extension_referral_bindings.user_id").Where("inviter_id = ? AND s.network <> ''", inviterID).Order("s.network, extension_referral_bindings.registered_at").Limit(100001).Scan(&rows).Error
+	if err != nil {
+		return false, err
+	}
+	if len(rows) > 100000 {
+		return true, nil
+	}
+	start := 0
+	for end := range rows {
+		for rows[start].Network != rows[end].Network || rows[end].RegisteredAt-rows[start].RegisteredAt > int64(settings.InviteBurstMinutes)*60 {
+			start++
+		}
+		if end-start+1 >= settings.InviteBurstLimit {
+			return true, nil
+		}
+	}
+	return false, nil
 }

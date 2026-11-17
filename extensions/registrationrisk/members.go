@@ -219,7 +219,7 @@ func memberAnalysis(c *gin.Context) {
 	var completed model.SystemTask
 	err = db.Where("type = ? AND status = ?", memberTaskType, model.SystemTaskStatusSucceeded).Order("id DESC").Take(&completed).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		respond(c, gin.H{"status": status, "summary": nil, "items": []any{}, "total": 0}, nil)
+		respond(c, gin.H{"status": status, "summary": nil, "items": []any{}, "groups": []any{}, "total": 0}, nil)
 		return
 	}
 	if err != nil {
@@ -233,6 +233,11 @@ func memberAnalysis(c *gin.Context) {
 	}
 	page, _ := strconv.Atoi(c.Query("page"))
 	page = max(1, min(page, 100000))
+	if c.Query("view") == "groups" {
+		groups, total, err := loadMemberGroups(db, completed.TaskID, c.DefaultQuery("kind", "review"), page)
+		respond(c, gin.H{"status": status, "summary": summary, "groups": groups, "total": total, "page": page}, err)
+		return
+	}
 	q := db.Table("extension_registration_member_findings AS f").Joins("JOIN users AS u ON u.id = f.user_id AND u.deleted_at IS NULL").Joins("LEFT JOIN extension_registration_members AS p ON p.user_id = f.user_id").Where("f.task_id = ?", completed.TaskID)
 	switch c.DefaultQuery("kind", "review") {
 	case "flagged":
@@ -263,8 +268,8 @@ func memberAnalysis(c *gin.Context) {
 	respond(c, gin.H{"status": status, "summary": summary, "items": items, "total": total, "page": page}, err)
 }
 
-// Analysis is an explainable association scan, never an account ban or a
-// qualification decision. Missing historical metadata cannot establish safety.
+// Association evidence can hold referral rewards, but cannot approve rewards
+// or ban an account. Missing historical metadata cannot establish safety.
 func analyzeMembers(db *gorm.DB, taskID string, payload memberAnalysisPayload, now time.Time) (memberAnalysisSummary, error) {
 	p := payload.Policy
 	summary := memberAnalysisSummary{Policy: p, CompletedAt: now.Unix()}
@@ -394,9 +399,6 @@ func analyzeMembers(db *gorm.DB, taskID string, payload memberAnalysisPayload, n
 		if guard.RestrictedDomain(strings.TrimSuffix(domain, "."), s) {
 			finding.Signals = append(finding.Signals, guard.MemberSignal{Code: "domain", Count: 1, RelatedIDs: []int{}})
 		}
-		if row.Qualification == "review" {
-			finding.Signals = append(finding.Signals, guard.MemberSignal{Code: "qualification", Count: 1, RelatedIDs: []int{}})
-		}
 		if burst, ok := bursts[row.ID]; ok {
 			finding.Signals = append(finding.Signals, burst)
 		}
@@ -406,7 +408,7 @@ func analyzeMembers(db *gorm.DB, taskID string, payload memberAnalysisPayload, n
 			finding.Priority = max(finding.Priority, 1)
 			// IPs, subnets and a common inviter remain a single weak evidence
 			// class even when all three appear. User-agent strings are not IDs.
-			if signal.Code == "device" || signal.Code == "payer" || signal.Code == "domain" || signal.Code == "qualification" || signal.Code == "invite-burst" {
+			if signal.Code == "device" || signal.Code == "payer" || signal.Code == "domain" || signal.Code == "invite-burst" {
 				finding.Priority = max(finding.Priority, 2)
 			}
 		}
@@ -428,6 +430,20 @@ func analyzeMembers(db *gorm.DB, taskID string, payload memberAnalysisPayload, n
 			summary.Insufficient++
 		}
 		findings = append(findings, finding)
+	}
+	// Only concrete associations hold rewards. A shared network, a common
+	// inviter or an old qualification decision must not amplify itself.
+	associated := []int{}
+	for _, finding := range findings {
+		for _, signal := range finding.Signals {
+			if signal.Code == "device" || signal.Code == "payer" || signal.Code == "invite-burst" {
+				associated = append(associated, finding.UserID)
+				break
+			}
+		}
+	}
+	if err := ledger.HoldMemberRewards(db, associated, payload.ActorID, now.Unix()); err != nil {
+		return summary, err
 	}
 	err = db.Transaction(func(tx *gorm.DB) error {
 		// A worker may resume the same task after a lease expires.

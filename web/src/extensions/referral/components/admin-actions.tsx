@@ -165,8 +165,12 @@ export function OrderActionDialog(props: {
 }
 
 export function ReviewDialog(props: {
-  value: { invitee: Invitee; approve: boolean }
+  value: {
+    invitee: Pick<Invitee, 'id' | 'user_id' | 'inviter_id'>
+    approve: boolean
+  }
   onClose: () => void
+  onReviewed?: () => Promise<void>
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -183,7 +187,10 @@ export function ReviewDialog(props: {
       }),
     onSuccess: async () => {
       props.onClose()
-      await queryClient.invalidateQueries({ queryKey: ['referral-extension'] })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['referral-extension'] }),
+        props.onReviewed?.(),
+      ])
       toast.success(t('Referral operation completed'))
     },
   })

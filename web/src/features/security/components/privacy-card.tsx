@@ -65,12 +65,16 @@ export function PrivacyCard(props: PrivacyCardProps) {
 
   return (
     <TitledCard
-      title={t('Record IP Address')}
-      description={t('Log IP address for usage and error logs')}
+      title={t('Show IP addresses in my logs')}
+      description={t(
+        'API IP addresses are retained for security. This setting controls their visibility in your logs.'
+      )}
       disableHoverEffect
     >
       <div className='flex items-center justify-between gap-4'>
-        <Label htmlFor='security-record-ip'>{t('Record IP Address')}</Label>
+        <Label htmlFor='security-record-ip'>
+          {t('Show IP addresses in my logs')}
+        </Label>
         <Switch
           id='security-record-ip'
           checked={recordIpLog}

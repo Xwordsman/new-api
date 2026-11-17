@@ -10,6 +10,45 @@ import (
 	"gorm.io/gorm"
 )
 
+// HoldMemberRewards covers both incoming invitations and rewards earned from
+// other invitees. Already awarded funds are preserved; future rewards stay held.
+// Account -> binding locking matches award/claim/review and protects an explicit
+// approval from being overwritten by an analysis that started earlier.
+func HoldMemberRewards(db *gorm.DB, ids []int, actor int, now int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	// Bound bind parameters for every supported database, including large scans.
+	for start := 0; start < len(ids); start += 200 {
+		batch := ids[start:min(start+200, len(ids))]
+		var bindings []Binding
+		if err := db.Where("(user_id IN ? OR inviter_id IN ?) AND state = ? AND reviewed_at = 0", batch, batch, "active").Order("inviter_id, id").Find(&bindings).Error; err != nil {
+			return err
+		}
+		for _, candidate := range bindings {
+			if err := db.Transaction(func(tx *gorm.DB) error {
+				if _, err := lockAccount(tx, candidate.InviterID); err != nil {
+					return err
+				}
+				var binding Binding
+				if err := Lock(tx).First(&binding, candidate.ID).Error; err != nil {
+					return err
+				}
+				if binding.State != "active" || binding.ReviewedAt > 0 {
+					return nil
+				}
+				if err := tx.Model(&binding).Updates(map[string]any{"state": "review", "reason": "Associated accounts require referral review"}).Error; err != nil {
+					return err
+				}
+				return tx.Create(&Audit{ActorID: actor, UserID: binding.UserID, Action: "association_hold", Detail: "Associated accounts require referral review", CreatedAt: now}).Error
+			}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // ImportLegacyBalances preserves previously awarded referral credits. Clearing
 // the legacy column and importing its balance commit together, exactly once.
 func ImportLegacyBalances(db *gorm.DB) error {

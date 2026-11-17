@@ -67,7 +67,7 @@ export async function getMemberAnalysis(
   return requireServerSuccess(
     (
       await api.get<Envelope<AnalysisResult>>(`${base}/member-analysis`, {
-        params,
+        params: { ...params, view: 'groups' },
         signal,
       })
     ).data
