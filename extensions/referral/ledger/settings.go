@@ -43,7 +43,7 @@ func Migrate(db *gorm.DB) error {
 	if err != nil {
 		return err
 	}
-	settings := Settings{ID: 1, Enabled: true, SignupCoolingHours: 24, ReviewSharedBrowser: true, InviteBurstLimit: 5, InviteBurstMinutes: 60, RateBPS: 500, WindowDays: 30, CoolingHours: 24, CapQuota: capQuota, CNYPerUSD: "7.2", Version: 1, StartedAt: time.Now().Unix(), RiskSalt: common.GetRandomString(64)}
+	settings := Settings{ID: 1, Enabled: true, SignupCoolingHours: 24, ReviewSharedBrowser: true, InviteBurstLimit: 5, InviteBurstMinutes: 60, RateBPS: 500, WindowDays: 30, CoolingHours: 24, CapQuota: capQuota, CNYPerUSD: "1", Version: 1, StartedAt: time.Now().Unix(), RiskSalt: common.GetRandomString(64)}
 	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&settings).Error
 }
 

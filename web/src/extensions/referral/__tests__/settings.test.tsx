@@ -79,6 +79,11 @@ it('saves the fixed invitation bonus with payment rules and preserves edits afte
   expect(bonus).toBeEnabled()
   await user.clear(bonus)
   await user.type(bonus, '1')
+  const conversion = screen.getByRole('textbox', {
+    name: 'CNY per site credit',
+  })
+  await user.clear(conversion)
+  await user.type(conversion, '1')
   for (const [label, value] of [
     ['Reward rate (%)', '7.25'],
     ['Invitation bonus cooling (hours)', '48'],
@@ -115,6 +120,7 @@ it('saves the fixed invitation bonus with payment rules and preserves edits afte
       window_days: 45,
       cooling_hours: 12,
       cap_quota: 75_000_000,
+      cny_per_usd: '1',
       version: 3,
     })
   )

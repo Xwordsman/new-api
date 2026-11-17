@@ -275,10 +275,10 @@ export function CheckinSettingsForm(props: { settings: CheckinSettings }) {
     },
     {
       name: 'cny_per_usd',
-      label: t('CNY per USD for check-in payments'),
+      label: t('CNY per site credit'),
       inputMode: 'decimal',
       description: t(
-        'Payment conversion rates are saved with each payment. Changing this rate does not rewrite previous payment records.'
+        'Set to 1 for 1 CNY = 1 site credit. Check-in and lucky draw share this conversion. Each payment saves its rate; changes apply to new payments.'
       ),
     },
     {

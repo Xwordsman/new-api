@@ -116,6 +116,71 @@ func TestReferralAccountingMatrix(t *testing.T) {
 	}
 	for _, dialect := range dialects {
 		t.Run(dialect, func(t *testing.T) {
+			t.Run("CNY sale credits default to one to one and retain conversion snapshots", func(t *testing.T) {
+				db := referralTestDB(t, dialect)
+				for _, table := range []any{&policy.PaymentRefund{}, &policy.PaymentRecord{}, &policy.Audit{}, &policy.Account{}, &policy.Settings{}} {
+					require.NoError(t, db.Migrator().DropTable(table))
+				}
+				require.NoError(t, policy.Migrate(db))
+				require.NoError(t, policy.Migrate(db))
+				referredUser(t, db, 2, "192.0.2.2")
+				payment := ledger.Payment{Amount: "1", Currency: "CNY", Reference: "redemption:1", PaidAt: referralEpoch + 1}
+				for range 2 {
+					require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+						if err := policy.RecordRedemptionPayment(tx, 2, payment.Reference, "redemption", payment); err != nil {
+							return err
+						}
+						return ledger.RecordPayment(tx, 2, payment.Reference, "redemption", payment)
+					}))
+				}
+				var reward ledger.Reward
+				require.NoError(t, db.First(&reward, "trade_no = ?", payment.Reference).Error)
+				assert.Equal(t, 500000, reward.PaidQuota)
+				assert.Equal(t, 25000, reward.Quota)
+				assert.Equal(t, "1", reward.ExchangeRate)
+				var eligibilityPayment policy.PaymentRecord
+				require.NoError(t, db.First(&eligibilityPayment, "trade_no = ?", payment.Reference).Error)
+				assert.Equal(t, "1", eligibilityPayment.CNYPerUSD)
+				assert.Equal(t, "1", eligibilityPayment.USDPerUnit)
+				settings, err := policy.GetSettings(db)
+				require.NoError(t, err)
+				for _, currency := range []string{"CNY", "USD"} {
+					settings.Currency, settings.ThresholdAmount = currency, "1"
+					summary, err := policy.PaymentSummary(db, 2, settings, time.Unix(referralEpoch+2, 0))
+					require.NoError(t, err)
+					assert.Equal(t, "1", summary.QualifiedAmount.String())
+					assert.True(t, summary.Eligible)
+				}
+				// Administrators can choose a different business conversion. Startup
+				// preserves that setting, and old orders keep their original snapshot.
+				referralSettings, err := ledger.GetSettings(db)
+				require.NoError(t, err)
+				referralSettings.CNYPerUSD = "2"
+				require.NoError(t, ledger.UpdateSettings(db, referralSettings, 6))
+				settings.CNYPerUSD = "2"
+				_, err = policy.UpdateSettings(db, settings, 6)
+				require.NoError(t, err)
+				require.NoError(t, ledger.Migrate(db))
+				require.NoError(t, policy.Migrate(db))
+				referralSettings, err = ledger.GetSettings(db)
+				require.NoError(t, err)
+				assert.Equal(t, "2", referralSettings.CNYPerUSD)
+				settings, err = policy.GetSettings(db)
+				require.NoError(t, err)
+				assert.Equal(t, "2", settings.CNYPerUSD)
+				require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+					if err := policy.RecordRedemptionPayment(tx, 2, payment.Reference, "redemption", payment); err != nil {
+						return err
+					}
+					return ledger.RecordPayment(tx, 2, payment.Reference, "redemption", payment)
+				}))
+				require.NoError(t, db.First(&reward, reward.ID).Error)
+				assert.Equal(t, 500000, reward.PaidQuota)
+				assert.Equal(t, 25000, reward.Quota)
+				require.NoError(t, db.First(&eligibilityPayment, eligibilityPayment.ID).Error)
+				assert.Equal(t, "1", eligibilityPayment.USDPerUnit)
+				assert.Zero(t, referralAccount(t, db).Balance, "unclaimed rewards never credit the wallet")
+			})
 			t.Run("snapshots cap deduplication cooling and window boundaries", func(t *testing.T) {
 				db := referralTestDB(t, dialect)
 				binding := referredUser(t, db, 2, "192.0.2.2")

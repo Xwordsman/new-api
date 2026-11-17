@@ -64,7 +64,7 @@ export function SettingsForm(props: { settings: ReferralSettings }) {
       window_days: 30,
       cooling_hours: 24,
       cap_usd: 100,
-      cny_per_usd: '7.2',
+      cny_per_usd: '1',
     },
   })
   useEffect(() => {
@@ -317,7 +317,7 @@ export function SettingsForm(props: { settings: ReferralSettings }) {
           name='cny_per_usd'
           render={({ field }) => (
             <FormItem className='max-w-sm'>
-              <FormLabel>{t('CNY per USD for referral payments')}</FormLabel>
+              <FormLabel>{t('CNY per site credit')}</FormLabel>
               <FormControl>
                 <Input
                   {...field}
@@ -327,7 +327,7 @@ export function SettingsForm(props: { settings: ReferralSettings }) {
               </FormControl>
               <FormDescription>
                 {t(
-                  'Used only to normalize actual CNY payments. Promotional wallet credits never affect the reward base. Other currencies require reconciliation.'
+                  'Set to 1 to count each CNY paid as 1 site credit for referral rewards. Gifts are excluded. Other currencies require reconciliation.'
                 )}
               </FormDescription>
               <FormMessage />

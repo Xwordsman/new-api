@@ -53,7 +53,7 @@ func DefaultSettings() (Settings, error) {
 		return Settings{}, ErrInvalid
 	}
 	return Settings{
-		ID: 1, Version: 1, ThresholdAmount: "50", Currency: "CNY", CNYPerUSD: "7.2",
+		ID: 1, Version: 1, ThresholdAmount: "50", Currency: "CNY", CNYPerUSD: "1",
 		RechargeMode: "lifetime", LookbackDays: 30, RenewOnRecharge: true,
 		RewardMode: "fixed", RewardMinQuota: reward, RewardMaxQuota: reward,
 		Timezone: "Asia/Shanghai", FollowRegistrationRisk: true,

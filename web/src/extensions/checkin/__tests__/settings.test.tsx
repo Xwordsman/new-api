@@ -92,6 +92,11 @@ test('fixed rewards save the displayed USD amount as quota and refresh the featu
   ).toBeDisabled()
   await user.clear(reward)
   await user.type(reward, '0.025')
+  const conversion = screen.getByRole('textbox', {
+    name: 'CNY per site credit',
+  })
+  await user.clear(conversion)
+  await user.type(conversion, '1')
   await user.click(
     screen.getByRole('switch', { name: 'Enable check-in plugin' })
   )
@@ -100,6 +105,7 @@ test('fixed rewards save the displayed USD amount as quota and refresh the featu
     expect(api.put).toHaveBeenCalledWith('/api/extensions/checkin/settings', {
       ...checkinSettings,
       enabled: false,
+      cny_per_usd: '1',
       reward_min_quota: 12_500,
       reward_max_quota: 12_500,
     })
