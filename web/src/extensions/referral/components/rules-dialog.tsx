@@ -58,7 +58,7 @@ export function RulesDialog(props: {
         {settings?.signup_bonus_enabled && (
           <li>
             {t(
-              'Fixed invitation bonuses are credited automatically after qualification checks and are separate from recharge commissions. Existing users receive no retroactive bonus.'
+              'Fixed bonuses are rechecked after cooling and issued automatically. Gifts never count as paid top-ups or generate recharge commissions.'
             )}
           </li>
         )}
@@ -79,7 +79,7 @@ export function RulesDialog(props: {
         </li>
         <li>
           {t(
-            'Self-referrals are not eligible. Shared registration networks, clients or payment accounts require review. Qualification is checked again when claiming.'
+            'Self-referrals are not eligible. Repeated browser markers, verified payment accounts or concentrated invitations may require review. Shared office networks alone do not establish abuse.'
           )}
         </li>
         <li>

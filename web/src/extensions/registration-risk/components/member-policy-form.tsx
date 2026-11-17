@@ -38,8 +38,10 @@ import {
   FormLabel,
   FormControl,
   FormMessage,
+  FormDescription,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Switch } from '@/components/ui/switch'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -92,7 +94,7 @@ function MemberPolicyForm(props: { policy: MemberPolicy }) {
   const fields = [
     ['retention_days', t('IP and browser retention (days)')],
     ['lookback_days', t('Association lookback (days)')],
-    ['device_limit', t('Same device account threshold')],
+    ['device_limit', t('Shared browser marker threshold')],
     ['signup_ip_limit', t('Same registration IP threshold')],
     ['login_ip_limit', t('Same last login IP threshold')],
     ['network_limit', t('Same network account threshold')],
@@ -123,6 +125,81 @@ function MemberPolicyForm(props: { policy: MemberPolicy }) {
               </FormItem>
             )}
           />
+          <FormField
+            control={form.control}
+            name='auto_analysis'
+            render={({ field }) => (
+              <FormItem className='flex items-center justify-between gap-3'>
+                <FormLabel>{t('Automatically analyze members')}</FormLabel>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    ref={field.ref}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+          <div className='grid gap-4 sm:grid-cols-2'>
+            <FormField
+              control={form.control}
+              name='analysis_minutes'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    {t('Automatic analysis interval (minutes)')}
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      type='number'
+                      min={5}
+                      max={10080}
+                      step={1}
+                      onChange={(e) => field.onChange(e.target.valueAsNumber)}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name='alert_priority'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Member analysis alert level')}</FormLabel>
+                  <FormControl>
+                    <NativeSelect
+                      {...field}
+                      value={field.value}
+                      onChange={(e) => field.onChange(Number(e.target.value))}
+                    >
+                      <NativeSelectOption value={0}>
+                        {t('Disabled')}
+                      </NativeSelectOption>
+                      <NativeSelectOption value={3}>
+                        {t('Reward review priority')}
+                      </NativeSelectOption>
+                      <NativeSelectOption value={2}>
+                        {t('Evidence requires review')}
+                      </NativeSelectOption>
+                      <NativeSelectOption value={1}>
+                        {t('All association clues')}
+                      </NativeSelectOption>
+                    </NativeSelect>
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'Uses the registration alert email, webhook and deduplication settings.'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
           <p className='text-muted-foreground text-sm'>
             {t(
               'Retention and lookback accept 1–3650 days. Association thresholds accept 0 to disable or 2–100000 accounts. Verified payer associations use lifetime records; other associations use the lookback window. Email-domain checks follow the registration policy.'

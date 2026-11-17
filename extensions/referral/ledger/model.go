@@ -4,18 +4,22 @@ package ledger
 import "gorm.io/gorm"
 
 type Settings struct {
-	ID                 int    `json:"-" gorm:"primaryKey;autoIncrement:false"`
-	Enabled            bool   `json:"enabled"`
-	SignupBonusEnabled bool   `json:"signup_bonus_enabled"`
-	SignupBonusQuota   int    `json:"signup_bonus_quota"`
-	RateBPS            int    `json:"rate_bps"`
-	WindowDays         int    `json:"window_days"`
-	CoolingHours       int    `json:"cooling_hours"`
-	CapQuota           int    `json:"cap_quota"`
-	CNYPerUSD          string `json:"cny_per_usd" gorm:"type:varchar(32)"`
-	Version            int    `json:"version"`
-	StartedAt          int64  `json:"started_at"`
-	RiskSalt           string `json:"-" gorm:"type:varchar(64)"`
+	ID                  int    `json:"-" gorm:"primaryKey;autoIncrement:false"`
+	Enabled             bool   `json:"enabled"`
+	SignupBonusEnabled  bool   `json:"signup_bonus_enabled"`
+	SignupBonusQuota    int    `json:"signup_bonus_quota"`
+	SignupCoolingHours  int    `json:"signup_cooling_hours"`
+	ReviewSharedBrowser bool   `json:"review_shared_browser"`
+	InviteBurstLimit    int    `json:"invite_burst_limit"`
+	InviteBurstMinutes  int    `json:"invite_burst_minutes"`
+	RateBPS             int    `json:"rate_bps"`
+	WindowDays          int    `json:"window_days"`
+	CoolingHours        int    `json:"cooling_hours"`
+	CapQuota            int    `json:"cap_quota"`
+	CNYPerUSD           string `json:"cny_per_usd" gorm:"type:varchar(32)"`
+	Version             int    `json:"version"`
+	StartedAt           int64  `json:"started_at"`
+	RiskSalt            string `json:"-" gorm:"type:varchar(64)"`
 }
 
 func (Settings) TableName() string { return "extension_referral_settings" }
@@ -31,22 +35,23 @@ type Account struct {
 func (Account) TableName() string { return "extension_referral_accounts" }
 
 type Binding struct {
-	ID                int    `json:"id" gorm:"primaryKey"`
-	UserID            int    `json:"user_id" gorm:"uniqueIndex"`
-	InviterID         int    `json:"inviter_id" gorm:"index"`
-	RegisteredAt      int64  `json:"registered_at"`
-	ExpiresAt         int64  `json:"expires_at"`
-	RateBPS           int    `json:"rate_bps"`
-	CapQuota          int    `json:"cap_quota"`
-	CoolingHours      int    `json:"cooling_hours"`
-	SettingsVersion   int    `json:"settings_version"`
-	State             string `json:"state" gorm:"type:varchar(24);index"`
-	Reason            string `json:"reason" gorm:"type:varchar(100)"`
-	Reserved          int    `json:"reserved"`
-	Historical        bool   `json:"historical"`
-	ReviewedAt        int64  `json:"reviewed_at"`
-	SignupBonusQuota  int    `json:"signup_bonus_quota"`
-	SignupBonusPaidAt int64  `json:"signup_bonus_paid_at"`
+	ID                     int    `json:"id" gorm:"primaryKey"`
+	UserID                 int    `json:"user_id" gorm:"uniqueIndex"`
+	InviterID              int    `json:"inviter_id" gorm:"index"`
+	RegisteredAt           int64  `json:"registered_at"`
+	ExpiresAt              int64  `json:"expires_at"`
+	RateBPS                int    `json:"rate_bps"`
+	CapQuota               int    `json:"cap_quota"`
+	CoolingHours           int    `json:"cooling_hours"`
+	SettingsVersion        int    `json:"settings_version"`
+	State                  string `json:"state" gorm:"type:varchar(24);index"`
+	Reason                 string `json:"reason" gorm:"type:varchar(100)"`
+	Reserved               int    `json:"reserved"`
+	Historical             bool   `json:"historical"`
+	ReviewedAt             int64  `json:"reviewed_at"`
+	SignupBonusQuota       int    `json:"signup_bonus_quota"`
+	SignupBonusPaidAt      int64  `json:"signup_bonus_paid_at"`
+	SignupBonusAvailableAt int64  `json:"signup_bonus_available_at" gorm:"index"`
 }
 
 func (Binding) TableName() string { return "extension_referral_bindings" }
@@ -56,6 +61,7 @@ type Signal struct {
 	UserID  int    `gorm:"primaryKey;autoIncrement:false"`
 	Network string `gorm:"type:varchar(64);index"`
 	Client  string `gorm:"type:varchar(64);index"`
+	Browser string `gorm:"type:varchar(64);index"`
 }
 
 func (Signal) TableName() string { return "extension_referral_signals" }

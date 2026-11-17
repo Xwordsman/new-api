@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/extensions/referral/ledger"
 	"github.com/QuantumNous/new-api/extensions/registrationrisk/guard"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/gin-gonic/gin"
@@ -64,7 +65,12 @@ func Evaluate(c *gin.Context, stage, source, email string, inviterID int, verifi
 
 // SignupContext preserves the host's referral context and adds a decision that
 // is consumed atomically by model.User.InsertWithTx.
-func SignupContext(tx *gorm.DB, d *guard.Decision) *gorm.DB { return guard.WithDecision(tx, d) }
+func SignupContext(tx *gorm.DB, d *guard.Decision) *gorm.DB {
+	if d != nil {
+		tx = ledger.WithSignupBrowser(tx, d.Event.DeviceHash)
+	}
+	return guard.WithDecision(tx, d)
+}
 
 // Captcha replaces only the public signup/mail check. Login and recovery retain
 // upstream protections. A token is never consumed by two middleware handlers.

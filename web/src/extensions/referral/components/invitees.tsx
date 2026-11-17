@@ -134,7 +134,15 @@ export function Invitees(props: {
           )
         } else if (row.state === 'active') {
           status = (
-            <p className='text-muted-foreground text-xs'>{t('Pending')}</p>
+            <p className='text-muted-foreground text-xs'>
+              {row.signup_bonus_available_at > props.now
+                ? t('Cooling until {{time}}', {
+                    time: new Date(
+                      row.signup_bonus_available_at * 1000
+                    ).toLocaleString(locale),
+                  })
+                : t('Pending')}
+            </p>
           )
         }
         return (

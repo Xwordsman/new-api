@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/extensions/checkin/policy"
@@ -53,7 +54,7 @@ func referralTestDB(t *testing.T, dialect string) *gorm.DB {
 		connection.SetMaxOpenConns(1)
 	}
 	t.Cleanup(func() { require.NoError(t, connection.Close()) })
-	for _, table := range []any{&guard.Payer{}, &guard.Audit{}, &guard.Alert{}, &guard.Reservation{}, &guard.Grant{}, &guard.Account{}, &guard.Event{}, &guard.Challenge{}, &guard.Counter{}, &guard.Secret{}, &ledger.RefundNotice{}, &ledger.Audit{}, &ledger.Transfer{}, &ledger.Reward{}, &ledger.PaymentIdentity{}, &ledger.Signal{}, &ledger.Binding{}, &ledger.Account{}, &ledger.Settings{}, &model.Log{}, &model.UserSession{}, &model.UserAccessToken{}, &model.AuditLog{}, &model.Option{}, &model.TopUp{}, &model.User{}} {
+	for _, table := range []any{&guard.MemberFinding{}, &guard.MemberProfile{}, &guard.Payer{}, &guard.Audit{}, &guard.Alert{}, &guard.Reservation{}, &guard.Grant{}, &guard.Account{}, &guard.Event{}, &guard.Challenge{}, &guard.Counter{}, &guard.Secret{}, &ledger.RefundNotice{}, &ledger.Audit{}, &ledger.Transfer{}, &ledger.Reward{}, &ledger.PaymentIdentity{}, &ledger.Signal{}, &ledger.Binding{}, &ledger.Account{}, &ledger.Settings{}, &model.Log{}, &model.UserSession{}, &model.UserAccessToken{}, &model.AuditLog{}, &model.Option{}, &model.TopUp{}, &model.User{}} {
 		require.NoError(t, db.Migrator().DropTable(table))
 	}
 	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.UserAccessToken{}, &model.AuditLog{}, &model.Option{}, &model.TopUp{}))
@@ -71,10 +72,15 @@ func referralTestDB(t *testing.T, dialect string) *gorm.DB {
 	return db
 }
 
-func referredUser(t *testing.T, db *gorm.DB, id int, network string) ledger.Binding {
+func referredUser(t *testing.T, db *gorm.DB, id int, network string, browser ...string) ledger.Binding {
 	t.Helper()
 	require.NoError(t, db.Model(&model.User{}).Where("id = ?", id).Update("inviter_id", 1).Error)
 	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+		marker := fmt.Sprintf("browser-%d", id)
+		if len(browser) > 0 {
+			marker = browser[0]
+		}
+		tx = ledger.WithSignupBrowser(tx, marker)
 		return ledger.Register(ledger.WithSignupContext(tx, network, "referral-test-browser"), id, 1, referralEpoch)
 	}))
 	var binding ledger.Binding
@@ -298,8 +304,8 @@ func TestReferralAccountingMatrix(t *testing.T) {
 			})
 			t.Run("shared registration and verified payer require review including nonreferred payers", func(t *testing.T) {
 				db := referralTestDB(t, dialect)
-				referredUser(t, db, 2, "192.0.2.2")
-				binding := referredUser(t, db, 3, "192.0.2.2")
+				referredUser(t, db, 2, "192.0.2.2", "shared-browser")
+				binding := referredUser(t, db, 3, "192.0.2.3", "shared-browser")
 				assert.Equal(t, "review", binding.State)
 				reward := paidReferral(t, db, 3, "network", "100", referralEpoch+1)
 				_, err := ledger.Claim(db, 1, reward.ID, reward.AvailableAt)
@@ -514,8 +520,8 @@ func TestReferralAccountingMatrix(t *testing.T) {
 				assert.Zero(t, count, "gifts never become paid top-ups")
 				require.NoError(t, db.Model(&ledger.Reward{}).Count(&count).Error)
 				assert.Zero(t, count, "gifts never generate percentage commissions")
-				// A shared network waits for review and retains its original amount.
-				held := referredUser(t, db, 3, "192.0.2.2")
+				// A repeated browser marker waits for review and retains its original amount.
+				held := referredUser(t, db, 3, "192.0.2.3", "browser-2")
 				assert.Equal(t, "review", held.State)
 				require.NoError(t, db.Transaction(func(tx *gorm.DB) error { return ledger.CompleteSignup(tx, 3) }))
 				settings, err = ledger.GetSettings(db)
@@ -605,6 +611,150 @@ func TestReferralAccountingMatrix(t *testing.T) {
 					require.NoError(t, err)
 				}
 				assert.Equal(t, 500000, referralAccount(t, db).Balance)
+			})
+			t.Run("signup cooling snapshots and retries preserve one gift without recharge", func(t *testing.T) {
+				db := referralTestDB(t, dialect)
+				settings, err := ledger.GetSettings(db)
+				require.NoError(t, err)
+				settings.SignupBonusEnabled, settings.SignupBonusQuota = true, 500000
+				require.NoError(t, ledger.UpdateSettings(db, settings, 6))
+				binding := referredUser(t, db, 2, "192.0.2.2")
+				assert.Equal(t, referralEpoch+86400, binding.SignupBonusAvailableAt)
+				require.NoError(t, ledger.ReleaseSignupBonuses(db, binding.SignupBonusAvailableAt-1))
+				assert.Zero(t, referralAccount(t, db).Balance)
+				settings, err = ledger.GetSettings(db)
+				require.NoError(t, err)
+				settings.Enabled, settings.SignupCoolingHours, settings.SignupBonusQuota = false, 48, 1000000
+				require.NoError(t, ledger.UpdateSettings(db, settings, 6))
+				require.NoError(t, ledger.ReleaseSignupBonuses(db, binding.SignupBonusAvailableAt))
+				assert.Zero(t, referralAccount(t, db).Balance, "paused programs do not issue gifts")
+				settings, err = ledger.GetSettings(db)
+				require.NoError(t, err)
+				settings.Enabled, settings.SignupBonusEnabled = true, false
+				require.NoError(t, ledger.UpdateSettings(db, settings, 6))
+				for range 2 {
+					require.NoError(t, ledger.ReleaseSignupBonuses(db, binding.SignupBonusAvailableAt))
+				}
+				assert.Equal(t, 500000, referralAccount(t, db).Balance, "existing promises retain their amount and deadline")
+				var count int64
+				require.NoError(t, db.Model(&ledger.Audit{}).Where("action = ?", "signup_bonus").Count(&count).Error)
+				assert.EqualValues(t, 1, count)
+				require.NoError(t, db.Model(&model.TopUp{}).Count(&count).Error)
+				assert.Zero(t, count)
+				require.NoError(t, db.Model(&ledger.Reward{}).Count(&count).Error)
+				assert.Zero(t, count)
+			})
+			t.Run("shared offices stay active but repeated browser markers hold both unpaid gifts", func(t *testing.T) {
+				for _, sharedBrowser := range []bool{false, true} {
+					t.Run(fmt.Sprint(sharedBrowser), func(t *testing.T) {
+						db := referralTestDB(t, dialect)
+						settings, err := ledger.GetSettings(db)
+						require.NoError(t, err)
+						settings.SignupBonusEnabled, settings.SignupBonusQuota = true, 500000
+						require.NoError(t, ledger.UpdateSettings(db, settings, 6))
+						first := referredUser(t, db, 2, "192.0.2.2", "first-browser")
+						network, browser := "192.0.2.2", "second-browser"
+						if sharedBrowser {
+							network, browser = "198.51.100.3", "first-browser"
+						}
+						referredUser(t, db, 3, network, browser)
+						require.NoError(t, ledger.ReleaseSignupBonuses(db, first.SignupBonusAvailableAt))
+						var bindings []ledger.Binding
+						require.NoError(t, db.Order("user_id").Find(&bindings).Error)
+						require.Len(t, bindings, 2)
+						for _, binding := range bindings {
+							if sharedBrowser {
+								assert.Equal(t, "review", binding.State)
+								assert.Zero(t, binding.SignupBonusPaidAt)
+							} else {
+								assert.Equal(t, "active", binding.State)
+								assert.Positive(t, binding.SignupBonusPaidAt)
+							}
+						}
+						if sharedBrowser {
+							assert.Zero(t, referralAccount(t, db).Balance)
+						} else {
+							assert.Equal(t, 1000000, referralAccount(t, db).Balance)
+						}
+					})
+				}
+			})
+			t.Run("invitation bursts use one exact window and hold the complete unpaid cluster", func(t *testing.T) {
+				db := referralTestDB(t, dialect)
+				settings, err := ledger.GetSettings(db)
+				require.NoError(t, err)
+				settings.SignupBonusEnabled, settings.SignupBonusQuota, settings.InviteBurstLimit = true, 500000, 3
+				require.NoError(t, ledger.UpdateSettings(db, settings, 6))
+				for index, minute := range []int64{0, 61, 120, 61} {
+					id := index + 2
+					require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+						tx = ledger.WithSignupBrowser(tx, fmt.Sprintf("burst-browser-%d", id))
+						return ledger.Register(ledger.WithSignupContext(tx, "192.0.2.2", "same-office-browser"), id, 1, referralEpoch+minute*60)
+					}))
+					if id == 4 {
+						var count int64
+						require.NoError(t, db.Model(&ledger.Binding{}).Where("state = ?", "review").Count(&count).Error)
+						assert.Zero(t, count, "three registrations across two hours are not one hourly burst")
+					}
+				}
+				var bindings []ledger.Binding
+				require.NoError(t, db.Order("user_id").Find(&bindings).Error)
+				require.Len(t, bindings, 4)
+				assert.Equal(t, "active", bindings[0].State)
+				for _, binding := range bindings[1:] {
+					assert.Equal(t, "review", binding.State)
+					assert.Equal(t, "Concentrated invitation registrations require review", binding.Reason)
+					assert.Zero(t, binding.SignupBonusPaidAt)
+				}
+			})
+			t.Run("approval cannot skip cooling and disabled accounts cannot receive a due gift", func(t *testing.T) {
+				db := referralTestDB(t, dialect)
+				settings, err := ledger.GetSettings(db)
+				require.NoError(t, err)
+				settings.SignupBonusEnabled, settings.SignupBonusQuota = true, 500000
+				require.NoError(t, ledger.UpdateSettings(db, settings, 6))
+				registered := time.Now().Unix() + 3600
+				require.NoError(t, ledger.Register(db, 2, 1, registered))
+				var binding ledger.Binding
+				require.NoError(t, db.First(&binding, "user_id = ?", 2).Error)
+				require.NoError(t, ledger.Review(db, binding.ID, 6, true, "Confirmed independent user"))
+				assert.Zero(t, referralAccount(t, db).Balance)
+				require.NoError(t, db.Model(&model.User{}).Where("id = ?", 2).Update("status", common.UserStatusDisabled).Error)
+				require.NoError(t, ledger.ReleaseSignupBonuses(db, binding.SignupBonusAvailableAt))
+				require.NoError(t, db.First(&binding, binding.ID).Error)
+				assert.Equal(t, "review", binding.State)
+				assert.Zero(t, binding.SignupBonusPaidAt)
+				assert.Zero(t, referralAccount(t, db).Balance)
+			})
+			t.Run("cooling upgrade preserves paid bonuses and backfills only unpaid deadlines", func(t *testing.T) {
+				db := referralTestDB(t, dialect)
+				settings, err := ledger.GetSettings(db)
+				require.NoError(t, err)
+				settings.SignupBonusEnabled, settings.SignupBonusQuota = true, 500000
+				require.NoError(t, ledger.UpdateSettings(db, settings, 6))
+				paid := referredUser(t, db, 2, "192.0.2.2")
+				require.NoError(t, ledger.CompleteSignup(db, 2))
+				pending := referredUser(t, db, 3, "192.0.2.3")
+				before := referralAccount(t, db)
+				for _, column := range []string{"SignupCoolingHours", "ReviewSharedBrowser", "InviteBurstLimit", "InviteBurstMinutes"} {
+					require.NoError(t, db.Migrator().DropColumn(&ledger.Settings{}, column))
+				}
+				require.NoError(t, db.Migrator().DropIndex(&ledger.Binding{}, "idx_extension_referral_bindings_signup_bonus_available_at"))
+				require.NoError(t, db.Migrator().DropColumn(&ledger.Binding{}, "SignupBonusAvailableAt"))
+				for range 2 {
+					require.NoError(t, ledger.Migrate(db))
+				}
+				settings, err = ledger.GetSettings(db)
+				require.NoError(t, err)
+				assert.Equal(t, 24, settings.SignupCoolingHours)
+				assert.True(t, settings.ReviewSharedBrowser)
+				assert.Equal(t, 5, settings.InviteBurstLimit)
+				assert.Equal(t, 60, settings.InviteBurstMinutes)
+				require.NoError(t, db.First(&paid, paid.ID).Error)
+				require.NoError(t, db.First(&pending, pending.ID).Error)
+				assert.Positive(t, paid.SignupBonusPaidAt)
+				assert.Equal(t, referralEpoch+86400, pending.SignupBonusAvailableAt)
+				assert.Equal(t, before, referralAccount(t, db))
 			})
 			t.Run("existing schema upgrades twice without backfilling or losing balances", func(t *testing.T) {
 				db := referralTestDB(t, dialect)

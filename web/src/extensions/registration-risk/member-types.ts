@@ -54,6 +54,9 @@ export type MemberPolicy = {
   network_limit: number
   inviter_limit: number
   payer_limit: number
+  auto_analysis: boolean
+  analysis_minutes: number
+  alert_priority: number
 }
 export type MemberFilter = {
   page: number
@@ -66,6 +69,10 @@ export type MemberFinding = {
   username: string
   coverage: 'unavailable' | 'partial'
   signal_count: number
+  priority: number
+  reward_paid: number
+  reward_pending: number
+  recommendation: string
   signals: {
     code: string
     count: number
@@ -81,6 +88,8 @@ export type AnalysisResult = {
     total: number
     flagged: number
     insufficient: number
+    review: number
+    priority: number
     completed_at: number
     policy: MemberPolicy
   }

@@ -14,10 +14,20 @@ import (
 )
 
 type signupContextKey struct{}
-type signupSignals struct{ Network, Client string }
+type signupSignals struct{ Network, Client, Browser string }
+
+// WithSignupBrowser receives the registration guard's signed-cookie digest.
+// A resettable browser marker is evidence for reward review, never identity proof.
+func WithSignupBrowser(tx *gorm.DB, browser string) *gorm.DB {
+	signals, _ := tx.Statement.Context.Value(signupContextKey{}).(signupSignals)
+	signals.Browser = browser
+	return tx.WithContext(context.WithValue(tx.Statement.Context, signupContextKey{}, signals))
+}
 
 func WithSignupContext(tx *gorm.DB, ip, agent string) *gorm.DB {
-	return tx.WithContext(context.WithValue(tx.Statement.Context, signupContextKey{}, signupSignals{Network: ip, Client: agent}))
+	signals, _ := tx.Statement.Context.Value(signupContextKey{}).(signupSignals)
+	signals.Network, signals.Client = ip, agent
+	return tx.WithContext(context.WithValue(tx.Statement.Context, signupContextKey{}, signals))
 }
 
 func digest(salt, value string) string {
@@ -38,8 +48,29 @@ func Observe(tx *gorm.DB, userID int, ip, agent string) error {
 		return nil
 	}
 	signal := Signal{UserID: userID, Network: digest(settings.RiskSalt, ip), Client: digest(settings.RiskSalt, ip+"|"+agent)}
+	if signals, ok := tx.Statement.Context.Value(signupContextKey{}).(signupSignals); ok {
+		signal.Browser = digest(settings.RiskSalt, signals.Browser)
+	}
 	// Keep the original registration signal; changing a browser cannot erase it.
 	return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&signal).Error
+}
+
+// RestoreSignupBrowsers imports original registration markers during an upgrade.
+// It never replaces existing evidence or invents a missing registration signal.
+func RestoreSignupBrowsers(db *gorm.DB, markers map[int]string) error {
+	settings, err := GetSettings(db)
+	if err != nil {
+		return err
+	}
+	for id, marker := range markers {
+		if marker == "" {
+			continue
+		}
+		if err := db.Model(&Signal{}).Where("user_id = ? AND (browser = '' OR browser IS NULL)", id).Update("browser", digest(settings.RiskSalt, marker)).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func Register(tx *gorm.DB, userID, inviterID int, registeredAt int64) error {
@@ -52,6 +83,13 @@ func registerInvitation(tx *gorm.DB, userID, inviterID int, registeredAt int64, 
 	// Production migrations run before accepting registrations.
 	if err != nil {
 		return err
+	}
+	// Use the same account -> binding lock order as award, payment and review.
+	// Cooling-end checks also cover records committed after a MySQL snapshot.
+	if inviterID > 0 && inviterID != userID {
+		if _, err := lockAccount(tx, inviterID); err != nil {
+			return err
+		}
 	}
 	if signals, ok := tx.Statement.Context.Value(signupContextKey{}).(signupSignals); ok {
 		if err := Observe(tx, userID, signals.Network, signals.Client); err != nil {
@@ -75,6 +113,7 @@ func registerInvitation(tx *gorm.DB, userID, inviterID int, registeredAt int64, 
 	binding := Binding{UserID: userID, InviterID: inviterID, RegisteredAt: registeredAt, ExpiresAt: registeredAt + int64(settings.WindowDays)*86400, RateBPS: settings.RateBPS, CapQuota: settings.CapQuota, CoolingHours: settings.CoolingHours, SettingsVersion: settings.Version, State: state, Reason: reason, Historical: historical}
 	if signup && settings.Enabled && settings.SignupBonusEnabled && !historical {
 		binding.SignupBonusQuota = settings.SignupBonusQuota
+		binding.SignupBonusAvailableAt = registeredAt + int64(settings.SignupCoolingHours)*3600
 	}
 	result := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&binding)
 	if result.Error != nil || result.RowsAffected == 0 {
@@ -114,6 +153,25 @@ func ImportHistory(tx *gorm.DB, inviterID int) error {
 // review transaction. The binding is the one-time gift ledger; payment rewards
 // and their cap/window/cooling rules are deliberately independent.
 func CompleteSignup(tx *gorm.DB, userID int) error {
+	return completeSignupAt(tx, userID, time.Now().Unix())
+}
+
+// ReleaseSignupBonuses is retried by the shared task runner. Each award rechecks
+// eligibility and commits its account, binding and audit record atomically.
+func ReleaseSignupBonuses(db *gorm.DB, now int64) error {
+	var bindings []Binding
+	if err := db.Where("signup_bonus_quota > 0 AND signup_bonus_paid_at = 0 AND signup_bonus_available_at <= ? AND state = ? AND historical = ?", now, "active", false).Order("id").Limit(200).Find(&bindings).Error; err != nil {
+		return err
+	}
+	for _, binding := range bindings {
+		if err := db.Transaction(func(tx *gorm.DB) error { return completeSignupAt(tx, binding.UserID, now) }); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func completeSignupAt(tx *gorm.DB, userID int, now int64) error {
 	var binding Binding
 	if err := tx.First(&binding, "user_id = ?", userID).Error; err != nil {
 		if isMissing(err) {
@@ -141,11 +199,11 @@ func CompleteSignup(tx *gorm.DB, userID int) error {
 	if binding.SignupBonusPaidAt > 0 || binding.State != "active" || binding.Historical {
 		return nil
 	}
-	if err := activeUsers(tx, binding.InviterID, binding.UserID); err != nil {
-		if err != ErrUnavailable {
-			return err
-		}
-		return tx.Model(&binding).Updates(map[string]any{"state": "review", "reason": "Account eligibility requires review", "reviewed_at": 0}).Error
+	if err := checkQualification(tx, &binding); err != nil {
+		return err
+	}
+	if binding.State != "active" || binding.SignupBonusAvailableAt > now {
+		return nil
 	}
 	offset := min(binding.SignupBonusQuota, account.Debt)
 	balance, balanceErr := checkedAdd(account.Balance, binding.SignupBonusQuota-offset)
@@ -158,7 +216,7 @@ func CompleteSignup(tx *gorm.DB, userID int) error {
 	if err := tx.Save(&account).Error; err != nil {
 		return err
 	}
-	binding.SignupBonusPaidAt = time.Now().Unix()
+	binding.SignupBonusPaidAt = now
 	if err := tx.Model(&binding).Update("signup_bonus_paid_at", binding.SignupBonusPaidAt).Error; err != nil {
 		return err
 	}
@@ -195,12 +253,48 @@ func checkQualification(tx *gorm.DB, binding *Binding) error {
 		}
 		binding.State, binding.Reason = "review", "Registration evidence requires review"
 	} else {
-		var related int64
-		if err := tx.Model(&Signal{}).Where("user_id <> ? AND network = ? AND network <> ?", binding.UserID, own.Network, "").Count(&related).Error; err != nil {
+		settings, err := GetSettings(tx)
+		if err != nil {
 			return err
 		}
+		var related int64
+		if settings.ReviewSharedBrowser && own.Browser != "" {
+			if err := tx.Model(&Signal{}).Where("user_id <> ? AND browser = ?", binding.UserID, own.Browser).Count(&related).Error; err != nil {
+				return err
+			}
+		}
 		if related > 0 {
-			binding.State, binding.Reason = "review", "Shared network or client requires review"
+			binding.State, binding.Reason = "review", "Shared registration browser requires review"
+		}
+		// An office address alone is not a risk decision. A configurable burst
+		// under one inviter and exact registration IP holds unpaid rewards only.
+		if settings.InviteBurstLimit > 0 && own.Network != "" {
+			var candidates []Binding
+			window := int64(settings.InviteBurstMinutes) * 60
+			if err := tx.Model(&Binding{}).Select("extension_referral_bindings.user_id, extension_referral_bindings.registered_at").Joins("JOIN extension_referral_signals s ON s.user_id = extension_referral_bindings.user_id").Where("inviter_id = ? AND registered_at >= ? AND registered_at <= ? AND s.network = ?", binding.InviterID, binding.RegisteredAt-window, binding.RegisteredAt+window, own.Network).Order("registered_at, extension_referral_bindings.user_id").Find(&candidates).Error; err != nil {
+				return err
+			}
+			// A burst must fit inside one configured window, not a doubled
+			// window around the member being checked.
+			start, bestStart, bestEnd := 0, 0, 0
+			for end := range candidates {
+				for candidates[end].RegisteredAt-candidates[start].RegisteredAt > window {
+					start++
+				}
+				if candidates[start].RegisteredAt <= binding.RegisteredAt && candidates[end].RegisteredAt >= binding.RegisteredAt && end-start+1 > bestEnd-bestStart {
+					bestStart, bestEnd = start, end+1
+				}
+			}
+			ids := make([]int, 0, bestEnd-bestStart)
+			for _, candidate := range candidates[bestStart:bestEnd] {
+				ids = append(ids, candidate.UserID)
+			}
+			if len(ids) >= settings.InviteBurstLimit {
+				binding.State, binding.Reason = "review", "Concentrated invitation registrations require review"
+				if err := tx.Model(&Binding{}).Where("user_id IN ? AND state = ? AND signup_bonus_paid_at = 0 AND reviewed_at = 0", ids, "active").Updates(map[string]any{"state": "review", "reason": binding.Reason}).Error; err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return tx.Model(&Binding{}).Where("user_id = ?", binding.UserID).Updates(map[string]any{"state": binding.State, "reason": strings.TrimSpace(binding.Reason)}).Error

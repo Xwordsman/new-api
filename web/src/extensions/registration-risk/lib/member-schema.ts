@@ -37,6 +37,9 @@ export const memberPolicySchema = z.object({
   network_limit: threshold,
   inviter_limit: threshold,
   payer_limit: threshold,
+  auto_analysis: z.boolean(),
+  analysis_minutes: z.number().int().min(5).max(10080),
+  alert_priority: z.number().int().min(0).max(3),
 })
 export const memberReviewSchema = z
   .object({

@@ -24,14 +24,26 @@ func Lock(tx *gorm.DB) *gorm.DB {
 }
 
 func Migrate(db *gorm.DB) error {
+	upgradePolicy := db.Migrator().HasTable(&Settings{}) && !db.Migrator().HasColumn(&Settings{}, "SignupCoolingHours")
+	upgradeDue := db.Migrator().HasTable(&Binding{}) && !db.Migrator().HasColumn(&Binding{}, "SignupBonusAvailableAt")
 	if err := db.AutoMigrate(&Settings{}, &Account{}, &Binding{}, &Signal{}, &PaymentIdentity{}, &Reward{}, &Transfer{}, &Audit{}, &RefundNotice{}); err != nil {
 		return err
+	}
+	if upgradePolicy {
+		if err := db.Model(&Settings{}).Where("id = ?", 1).Updates(map[string]any{"signup_cooling_hours": 24, "review_shared_browser": true, "invite_burst_limit": 5, "invite_burst_minutes": 60}).Error; err != nil {
+			return err
+		}
+	}
+	if upgradeDue {
+		if err := db.Model(&Binding{}).Where("signup_bonus_quota > 0 AND signup_bonus_paid_at = 0 AND (signup_bonus_available_at = 0 OR signup_bonus_available_at IS NULL)").Update("signup_bonus_available_at", gorm.Expr("registered_at + ?", 86400)).Error; err != nil {
+			return err
+		}
 	}
 	capQuota, err := common.WalletQuotaFromDecimalStrict(decimal.NewFromInt(100).Mul(decimal.NewFromFloat(common.QuotaPerUnit)))
 	if err != nil {
 		return err
 	}
-	settings := Settings{ID: 1, Enabled: true, RateBPS: 500, WindowDays: 30, CoolingHours: 24, CapQuota: capQuota, CNYPerUSD: "7.2", Version: 1, StartedAt: time.Now().Unix(), RiskSalt: common.GetRandomString(64)}
+	settings := Settings{ID: 1, Enabled: true, SignupCoolingHours: 24, ReviewSharedBrowser: true, InviteBurstLimit: 5, InviteBurstMinutes: 60, RateBPS: 500, WindowDays: 30, CoolingHours: 24, CapQuota: capQuota, CNYPerUSD: "7.2", Version: 1, StartedAt: time.Now().Unix(), RiskSalt: common.GetRandomString(64)}
 	return db.Clauses(clause.OnConflict{DoNothing: true}).Create(&settings).Error
 }
 
@@ -47,6 +59,9 @@ func UpdateSettings(db *gorm.DB, value Settings, actor int) error {
 		return ErrInvalid
 	}
 	if value.SignupBonusQuota < 0 || value.SignupBonusQuota > common.MaxWalletQuota/100 || value.SignupBonusEnabled && value.SignupBonusQuota == 0 {
+		return ErrInvalid
+	}
+	if value.SignupCoolingHours < 0 || value.SignupCoolingHours > 8760 || value.InviteBurstLimit != 0 && (value.InviteBurstLimit < 2 || value.InviteBurstLimit > 100000) || value.InviteBurstMinutes < 1 || value.InviteBurstMinutes > 10080 {
 		return ErrInvalid
 	}
 	return db.Transaction(func(tx *gorm.DB) error {

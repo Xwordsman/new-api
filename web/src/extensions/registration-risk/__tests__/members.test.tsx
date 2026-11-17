@@ -49,6 +49,9 @@ const policy: MemberPolicy = {
   network_limit: 10,
   inviter_limit: 20,
   payer_limit: 2,
+  auto_analysis: true,
+  analysis_minutes: 60,
+  alert_priority: 3,
 }
 const member: MemberProfile = {
   id: 42,
@@ -81,6 +84,8 @@ const analysis: AnalysisResult = {
   summary: {
     total: 2,
     flagged: 1,
+    review: 0,
+    priority: 0,
     insufficient: 1,
     completed_at: 1700002000,
     policy,
@@ -91,6 +96,10 @@ const analysis: AnalysisResult = {
       username: member.username,
       coverage: 'partial',
       signal_count: 1,
+      priority: 1,
+      reward_paid: 0,
+      reward_pending: 0,
+      recommendation: 'network-clue',
       signals: [
         { code: 'login-ip', count: 5, threshold: 5, related_ids: [43] },
       ],
@@ -126,7 +135,16 @@ function mockReads(result: AnalysisResult = analysis) {
       return { data: { success: true, data: policy } }
     }
     if (url === `${base}/member-analysis`) {
-      return { data: { success: true, data: result } }
+      const params = config?.params as { kind: string }
+      const items = result.items.filter(
+        (item) => params.kind !== 'review' || item.priority >= 2
+      )
+      return {
+        data: {
+          success: true,
+          data: { ...result, items, total: items.length },
+        },
+      }
     }
     if (url === `${base}/members`) {
       const params = config?.params as { user_id?: number } | undefined
@@ -155,6 +173,10 @@ it('opens the new member tabs without waiting for the separate registration sett
   expect(
     await screen.findByRole('button', { name: 'Analyze all members' })
   ).toBeEnabled()
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Analysis results' }),
+    'flagged'
+  )
   expect(await screen.findByText('Same last login IP')).toBeInTheDocument()
 })
 
@@ -303,6 +325,18 @@ it('validates association thresholds and preserves policy edits until an explici
   await user.clear(threshold)
   await user.type(threshold, '0')
   await user.click(
+    screen.getByRole('switch', { name: 'Automatically analyze members' })
+  )
+  const interval = screen.getByRole('spinbutton', {
+    name: 'Automatic analysis interval (minutes)',
+  })
+  await user.clear(interval)
+  await user.type(interval, '90')
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Member analysis alert level' }),
+    '2'
+  )
+  await user.click(
     screen.getByRole('button', { name: 'Save analysis settings' })
   )
   await waitFor(() =>
@@ -310,6 +344,9 @@ it('validates association thresholds and preserves policy edits until an explici
       ...policy,
       revision: 3,
       login_ip_limit: 0,
+      auto_analysis: false,
+      analysis_minutes: 90,
+      alert_priority: 2,
     })
   )
 })
@@ -323,8 +360,12 @@ it('retains the last completed evidence after failure and opens the related memb
       'Member analysis failed. Previous results are retained.'
     )
   ).toBeInTheDocument()
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Analysis results' }),
+    'flagged'
+  )
   expect(
-    screen.getByText('Matched 5 accounts; threshold 5')
+    await screen.findByText('Matched 5 accounts; threshold 5')
   ).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: '#43' }))
   expect(await screen.findByRole('dialog')).toBeInTheDocument()
@@ -347,7 +388,57 @@ it('prevents duplicate analyses while a task is pending and retains the previous
   expect(screen.getByRole('status')).toHaveTextContent(
     'Previous completed results remain visible.'
   )
-  expect(screen.getByText('Same last login IP')).toBeInTheDocument()
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Analysis results' }),
+    'flagged'
+  )
+  expect(await screen.findByText('Same last login IP')).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Analysis in progress' }))
   expect(post).not.toHaveBeenCalled()
+})
+
+it('defaults to reward review evidence and shows network-only associations on request', async () => {
+  const user = userEvent.setup()
+  const get = mockReads({
+    ...analysis,
+    items: [
+      ...analysis.items,
+      {
+        ...analysis.items[0],
+        user_id: 44,
+        username: 'shared-browser-member',
+        priority: 3,
+        reward_paid: 500000,
+        reward_pending: 1000000,
+        signals: [
+          { code: 'device', count: 2, threshold: 2, related_ids: [45] },
+        ],
+      },
+    ],
+  })
+  mount(<MemberAnalysis />)
+  const row = await screen.findByRole('row', { name: /shared-browser-member/ })
+  expect(within(row).getByText('Reward review priority')).toBeInTheDocument()
+  expect(
+    within(row).getByText(/Automatically issued.*\$1$/)
+  ).toBeInTheDocument()
+  expect(within(row).getByText(/Pending.*\$2$/)).toBeInTheDocument()
+  expect(screen.queryByText(member.username)).not.toBeInTheDocument()
+  expect(get).toHaveBeenCalledWith(
+    `${base}/member-analysis`,
+    expect.objectContaining({ params: { page: 1, kind: 'review' } })
+  )
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Analysis results' }),
+    'flagged'
+  )
+  const networkRow = await screen.findByRole('row', {
+    name: /historical-member/,
+  })
+  expect(within(networkRow).getByText('Network clue only')).toBeInTheDocument()
+  expect(
+    within(networkRow).getByText(
+      'Shared networks alone do not prove duplicate accounts.'
+    )
+  ).toBeInTheDocument()
 })

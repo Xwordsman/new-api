@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/extensions/referral/ledger"
 	"github.com/QuantumNous/new-api/extensions/registrationrisk/guard"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
@@ -14,6 +15,20 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+func Migrate(db *gorm.DB) error {
+	if err := guard.Migrate(db); err != nil {
+		return err
+	}
+	var accounts []guard.Account
+	return db.Where("device_hash <> ''").FindInBatches(&accounts, 200, func(batch *gorm.DB, _ int) error {
+		markers := make(map[int]string, len(accounts))
+		for _, account := range accounts {
+			markers[account.UserID] = account.DeviceHash
+		}
+		return ledger.RestoreSignupBrowsers(batch, markers)
+	}).Error
+}
 
 func Initialize(db *gorm.DB) {
 	service.EnablePromotionalFunding()

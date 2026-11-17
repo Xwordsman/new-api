@@ -113,6 +113,7 @@ channel.upstream_update_failed_channels: "Failed channel IDs (showing {{.Shown}}
 channel.upstream_update_more_omitted: " ({{.Count}} more omitted)"
 
 registration_risk.alert_subject: "Registration risk alert"
+"Member analysis found {{count}} accounts requiring review": "Member analysis found {{.count}} accounts requiring review"
 request_protection.blocked: "This request was blocked by the site's request protection policy. Contact the administrator if you believe this is a mistake."
 request_protection.restricted: "API access for this Key or account is temporarily restricted by request protection. Contact the administrator for review."
 request_protection.unavailable: "Request protection is temporarily unavailable. Please try again later."

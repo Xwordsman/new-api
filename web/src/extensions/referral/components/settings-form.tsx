@@ -56,6 +56,10 @@ export function SettingsForm(props: { settings: ReferralSettings }) {
       enabled: true,
       signup_bonus_enabled: false,
       signup_bonus_usd: 1,
+      signup_cooling_hours: 24,
+      review_shared_browser: true,
+      invite_burst_limit: 5,
+      invite_burst_minutes: 60,
       rate: 5,
       window_days: 30,
       cooling_hours: 24,
@@ -81,6 +85,10 @@ export function SettingsForm(props: { settings: ReferralSettings }) {
         ...props.settings,
         enabled: values.enabled,
         signup_bonus_enabled: values.signup_bonus_enabled,
+        signup_cooling_hours: values.signup_cooling_hours,
+        review_shared_browser: values.review_shared_browser,
+        invite_burst_limit: values.invite_burst_limit,
+        invite_burst_minutes: values.invite_burst_minutes,
         signup_bonus_quota: Math.round(
           values.signup_bonus_usd * currency.quotaPerUnit
         ),
@@ -100,6 +108,36 @@ export function SettingsForm(props: { settings: ReferralSettings }) {
   })
   const signupBonusEnabled = form.watch('signup_bonus_enabled')
   const fields = [
+    {
+      name: 'signup_cooling_hours',
+      label: t('Invitation bonus cooling (hours)'),
+      description: t(
+        'Fixed bonuses are rechecked after cooling and issued automatically. Zero disables the wait.'
+      ),
+      min: 0,
+      max: 8760,
+      step: 1,
+    },
+    {
+      name: 'invite_burst_limit',
+      label: t('Invitation burst review threshold'),
+      description: t(
+        'Review unpaid rewards when one inviter receives this many registrations from the same IP. Zero disables this rule.'
+      ),
+      min: 0,
+      max: 100000,
+      step: 1,
+    },
+    {
+      name: 'invite_burst_minutes',
+      label: t('Invitation burst window (minutes)'),
+      description: t(
+        'Shared office networks alone do not require reward review.'
+      ),
+      min: 1,
+      max: 10080,
+      step: 1,
+    },
     {
       name: 'rate',
       label: t('Reward rate (%)'),
@@ -212,7 +250,7 @@ export function SettingsForm(props: { settings: ReferralSettings }) {
                 </FormControl>
                 <FormDescription>
                   {t(
-                    'Automatically credits available referral rewards after a qualifying registration. Risky invitations require review. Applies only to new invitations; gifts never count as paid top-ups or generate recharge commissions.'
+                    'Fixed bonuses are rechecked after cooling and issued automatically. Gifts never count as paid top-ups or generate recharge commissions.'
                   )}
                 </FormDescription>
                 <FormMessage />
@@ -220,6 +258,31 @@ export function SettingsForm(props: { settings: ReferralSettings }) {
             )}
           />
         </div>
+        <FormField
+          control={form.control}
+          name='review_shared_browser'
+          render={({ field }) => (
+            <FormItem className='flex items-center justify-between gap-4 rounded-lg border p-4'>
+              <div>
+                <FormLabel>
+                  {t('Review rewards for shared browser markers')}
+                </FormLabel>
+                <FormDescription>
+                  {t(
+                    'Browser cookies can be reset or shared. They trigger reward review, not account bans.'
+                  )}
+                </FormDescription>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  disabled={save.isPending}
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
         <div className='grid gap-5 sm:grid-cols-2'>
           {fields.map((item) => (
             <FormField

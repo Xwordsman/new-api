@@ -44,33 +44,40 @@ type MemberSignal struct {
 }
 
 type MemberFinding struct {
-	TaskID      string         `gorm:"primaryKey;size:64" json:"-"`
-	UserID      int            `gorm:"primaryKey;autoIncrement:false" json:"user_id"`
-	Signals     []MemberSignal `gorm:"serializer:json;type:text" json:"signals"`
-	SignalCount int            `json:"signal_count"`
-	Coverage    string         `gorm:"size:16" json:"coverage"`
+	TaskID         string         `gorm:"primaryKey;size:64" json:"-"`
+	UserID         int            `gorm:"primaryKey;autoIncrement:false" json:"user_id"`
+	Signals        []MemberSignal `gorm:"serializer:json;type:text" json:"signals"`
+	SignalCount    int            `json:"signal_count"`
+	Coverage       string         `gorm:"size:16" json:"coverage"`
+	Priority       int            `json:"priority" gorm:"index"`
+	RewardPaid     int64          `json:"reward_paid"`
+	RewardPending  int64          `json:"reward_pending"`
+	Recommendation string         `gorm:"size:32" json:"recommendation"`
 }
 
 func (MemberFinding) TableName() string { return "extension_registration_member_findings" }
 
 type MemberPolicy struct {
-	Revision       int64 `json:"revision"`
-	CaptureEnabled bool  `json:"capture_enabled"`
-	RetentionDays  int   `json:"retention_days"`
-	LookbackDays   int   `json:"lookback_days"`
-	DeviceLimit    int   `json:"device_limit"`
-	SignupIPLimit  int   `json:"signup_ip_limit"`
-	LoginIPLimit   int   `json:"login_ip_limit"`
-	NetworkLimit   int   `json:"network_limit"`
-	InviterLimit   int   `json:"inviter_limit"`
-	PayerLimit     int   `json:"payer_limit"`
+	Revision        int64 `json:"revision"`
+	CaptureEnabled  bool  `json:"capture_enabled"`
+	RetentionDays   int   `json:"retention_days"`
+	LookbackDays    int   `json:"lookback_days"`
+	DeviceLimit     int   `json:"device_limit"`
+	SignupIPLimit   int   `json:"signup_ip_limit"`
+	LoginIPLimit    int   `json:"login_ip_limit"`
+	NetworkLimit    int   `json:"network_limit"`
+	InviterLimit    int   `json:"inviter_limit"`
+	PayerLimit      int   `json:"payer_limit"`
+	AutoAnalysis    bool  `json:"auto_analysis"`
+	AnalysisMinutes int   `json:"analysis_minutes"`
+	AlertPriority   int   `json:"alert_priority"`
 }
 
 const memberPolicyKey = "RegistrationRiskMemberPolicy"
 
 func DefaultMemberPolicy() MemberPolicy {
 	return MemberPolicy{CaptureEnabled: true, RetentionDays: 180, LookbackDays: 30,
-		DeviceLimit: 2, SignupIPLimit: 3, LoginIPLimit: 5, NetworkLimit: 10, InviterLimit: 20, PayerLimit: 2}
+		DeviceLimit: 2, SignupIPLimit: 3, LoginIPLimit: 5, NetworkLimit: 10, InviterLimit: 20, PayerLimit: 2, AutoAnalysis: true, AnalysisMinutes: 60, AlertPriority: 3}
 }
 
 func GetMemberPolicy(db *gorm.DB) (MemberPolicy, error) {
@@ -87,7 +94,7 @@ func GetMemberPolicy(db *gorm.DB) (MemberPolicy, error) {
 }
 
 func SaveMemberPolicy(db *gorm.DB, p MemberPolicy, actorID int, now time.Time) error {
-	if p.Revision < 0 || p.Revision == math.MaxInt64 || p.RetentionDays < 1 || p.RetentionDays > 3650 || p.LookbackDays < 1 || p.LookbackDays > 3650 {
+	if p.Revision < 0 || p.Revision == math.MaxInt64 || p.RetentionDays < 1 || p.RetentionDays > 3650 || p.LookbackDays < 1 || p.LookbackDays > 3650 || p.AnalysisMinutes < 5 || p.AnalysisMinutes > 10080 || p.AlertPriority < 0 || p.AlertPriority > 3 {
 		return ErrInvalid
 	}
 	for _, limit := range []int{p.DeviceLimit, p.SignupIPLimit, p.LoginIPLimit, p.NetworkLimit, p.InviterLimit, p.PayerLimit} {

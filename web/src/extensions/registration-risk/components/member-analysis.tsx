@@ -33,6 +33,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { toIntlLocale } from '@/i18n/languages'
+import { formatQuotaWithCurrency } from '@/lib/currency'
 import { formatNumber } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -47,7 +48,7 @@ export function MemberAnalysis() {
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const actor = useAuthStore((s) => s.auth.user?.id)
   const client = useQueryClient()
-  const [filter, setFilter] = useState({ page: 1, kind: 'flagged' })
+  const [filter, setFilter] = useState({ page: 1, kind: 'review' })
   const [selected, setSelected] = useState<number | null>(null)
   const query = useQuery({
     queryKey: [...registrationQueryKey, actor, 'member-analysis', filter],
@@ -83,7 +84,7 @@ export function MemberAnalysis() {
     },
   })
   const signals: Record<string, string> = {
-    device: t('Same device'),
+    device: t('Shared browser marker'),
     'signup-ip': t('Same registration IP'),
     'login-ip': t('Same last login IP'),
     network: t('Same network'),
@@ -91,6 +92,13 @@ export function MemberAnalysis() {
     payer: t('Shared verified payment account'),
     domain: t('Restricted email domain'),
     qualification: t('Signup qualification pending review'),
+    'invite-burst': t('Concentrated invitation registrations'),
+  }
+  const priorities: Record<number, string> = {
+    0: t('No signals in available data'),
+    1: t('Network clue only'),
+    2: t('Evidence requires review'),
+    3: t('Reward review priority'),
   }
   const columns: StaticDataTableColumn<MemberFinding>[] = [
     {
@@ -100,6 +108,46 @@ export function MemberAnalysis() {
         <div>
           {r.username}
           <p className='text-muted-foreground text-xs'>ID: {r.user_id}</p>
+        </div>
+      ),
+    },
+    {
+      id: 'priority',
+      header: t('Review priority'),
+      cell: (r) => (
+        <div className='max-w-64 space-y-2 whitespace-normal'>
+          <Badge variant={r.priority >= 3 ? 'destructive' : 'secondary'}>
+            {priorities[r.priority] ?? priorities[0]}
+          </Badge>
+          <p className='text-muted-foreground text-xs'>
+            {r.priority >= 2
+              ? t(
+                  'Verify the related accounts and invitation rewards before approval.'
+                )
+              : t('Shared networks alone do not prove duplicate accounts.')}
+          </p>
+        </div>
+      ),
+    },
+    {
+      id: 'rewards',
+      header: t('Related invitation bonuses'),
+      cell: (r) => (
+        <div className='space-y-1 text-xs'>
+          <p>
+            {t('Automatically issued')}:{' '}
+            {formatQuotaWithCurrency(r.reward_paid, {
+              locale,
+              abbreviate: false,
+            })}
+          </p>
+          <p>
+            {t('Pending')}:{' '}
+            {formatQuotaWithCurrency(r.reward_pending, {
+              locale,
+              abbreviate: false,
+            })}
+          </p>
         </div>
       ),
     },
@@ -201,6 +249,11 @@ export function MemberAnalysis() {
             'Association signals are investigation clues, not proof of abuse. Shared networks can belong to families or workplaces. No accounts are automatically banned and rewards are not changed.'
           )}
         </p>
+        <p className='text-muted-foreground text-sm'>
+          {t(
+            'Related bonuses include invitations sent or received by this member. Amounts overlap across members and exclude manual gifts. Multiple IP clues do not increase priority.'
+          )}
+        </p>
         {running && (
           <p role='status'>
             {t(
@@ -219,10 +272,11 @@ export function MemberAnalysis() {
         {query.isError && <ErrorState onRetry={() => void query.refetch()} />}
         {summary && (
           <>
-            <div className='grid gap-3 sm:grid-cols-3'>
+            <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4'>
               {[
                 [t('Members analyzed'), summary.total],
-                [t('Members with signals'), summary.flagged],
+                [t('Evidence requires review'), summary.review],
+                [t('Reward review priority'), summary.priority],
                 [t('Insufficient historical data'), summary.insufficient],
               ].map(([label, value]) => (
                 <div key={label} className='bg-muted/40 rounded-lg p-4'>
@@ -246,6 +300,9 @@ export function MemberAnalysis() {
               value={filter.kind}
               onChange={(e) => setFilter({ page: 1, kind: e.target.value })}
             >
+              <NativeSelectOption value='review'>
+                {t('Evidence requires review')}
+              </NativeSelectOption>
               <NativeSelectOption value='flagged'>
                 {t('Members with signals')}
               </NativeSelectOption>

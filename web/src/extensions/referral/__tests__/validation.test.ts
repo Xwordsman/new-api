@@ -24,6 +24,10 @@ const settings = {
   enabled: true,
   signup_bonus_enabled: false,
   signup_bonus_usd: 1,
+  signup_cooling_hours: 24,
+  review_shared_browser: true,
+  invite_burst_limit: 5,
+  invite_burst_minutes: 60,
   rate: 5,
   window_days: 30,
   cooling_hours: 24,
@@ -38,6 +42,8 @@ describe('referral settings validation', () => {
         ...settings,
         rate: 0.29,
         cooling_hours: 0,
+        signup_cooling_hours: 0,
+        invite_burst_limit: 0,
       }).success
     ).toBe(true)
   })
@@ -48,6 +54,12 @@ describe('referral settings validation', () => {
     { window_days: 30.5 },
     { cooling_hours: -1 },
     { cooling_hours: 0.5 },
+    { signup_cooling_hours: -1 },
+    { signup_cooling_hours: 8761 },
+    { invite_burst_limit: 1 },
+    { invite_burst_limit: 2.5 },
+    { invite_burst_minutes: 0 },
+    { invite_burst_minutes: 10081 },
     { cap_usd: 0 },
     { cap_usd: 1_000_001 },
     { cny_per_usd: '0' },

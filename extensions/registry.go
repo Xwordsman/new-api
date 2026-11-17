@@ -20,7 +20,6 @@ import (
 	"github.com/QuantumNous/new-api/extensions/referral"
 	"github.com/QuantumNous/new-api/extensions/referral/ledger"
 	"github.com/QuantumNous/new-api/extensions/registrationrisk"
-	"github.com/QuantumNous/new-api/extensions/registrationrisk/guard"
 	"github.com/QuantumNous/new-api/extensions/requestprotection"
 	requestpolicy "github.com/QuantumNous/new-api/extensions/requestprotection/policy"
 	"github.com/QuantumNous/new-api/extensions/tickets"
@@ -65,7 +64,7 @@ func Migrate(db *gorm.DB) error {
 	if err := documentation.Migrate(db); err != nil {
 		return err
 	}
-	return guard.Migrate(db)
+	return registrationrisk.Migrate(db)
 }
 
 func Initialize(db *gorm.DB) {

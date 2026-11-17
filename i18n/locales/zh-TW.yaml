@@ -114,6 +114,7 @@ channel.upstream_update_failed_channels: "失敗管道 ID（顯示 {{.Shown}}/{{
 channel.upstream_update_more_omitted: "（其餘 {{.Count}} 個已省略）"
 
 registration_risk.alert_subject: "註冊風控預警"
+"Member analysis found {{count}} accounts requiring review": "會員分析發現 {{.count}} 個帳號需要核查"
 request_protection.blocked: "此請求已被本站請求風控策略攔截。如有異議，請聯絡管理員複核。"
 request_protection.restricted: "此 Key 或帳戶的 API 存取已被請求風控暫時限制，請聯絡管理員複核。"
 request_protection.unavailable: "請求風控暫時無法使用，請稍後再試。"

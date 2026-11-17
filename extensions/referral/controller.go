@@ -76,15 +76,15 @@ func dashboard(c *gin.Context) {
 		respond(c, nil, err)
 		return
 	}
-	var heldBonus struct{ Quota int }
-	err = model.DB.Model(&ledger.Binding{}).Select("COALESCE(SUM(signup_bonus_quota), 0) AS quota").
+	var heldBonus struct{ Quota, Review int }
+	err = model.DB.Model(&ledger.Binding{}).Select("COALESCE(SUM(signup_bonus_quota), 0) AS quota, COALESCE(SUM(CASE WHEN state = 'review' THEN signup_bonus_quota ELSE 0 END), 0) AS review").
 		Where("inviter_id = ? AND signup_bonus_paid_at = 0 AND signup_bonus_quota > 0 AND state IN ?", userID, []string{"active", "review"}).Scan(&heldBonus).Error
 	if err != nil {
 		respond(c, nil, err)
 		return
 	}
 	pending.Pending += heldBonus.Quota
-	pending.Review += heldBonus.Quota
+	pending.Review += heldBonus.Review
 	var user struct{ AffCode string }
 	err = model.DB.Model(&model.User{}).Select("aff_code").Where("id = ?", userID).Take(&user).Error
 	respond(c, gin.H{"settings": rules, "account": account, "invited": counts.Invited, "paying": counts.Paying, "pending": pending.Pending, "review": pending.Review, "claimable": pending.Claimable, "code": user.AffCode, "server_time": now}, err)

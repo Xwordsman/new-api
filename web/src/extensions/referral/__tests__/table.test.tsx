@@ -46,6 +46,7 @@ it('shows issued fixed bonuses separately from invitations awaiting risk review'
     reviewed_at: 0,
     signup_bonus_quota: 500_000,
     signup_bonus_paid_at: 1700000001,
+    signup_bonus_available_at: 1700000000,
     net_paid: 0,
     earned: 0,
     pending: 0,

@@ -25,6 +25,13 @@ export const referralSettingsSchema = z
   .object({
     enabled: z.boolean(),
     signup_bonus_enabled: z.boolean(),
+    signup_cooling_hours: z.number().int().min(0).max(8760),
+    review_shared_browser: z.boolean(),
+    invite_burst_limit: z
+      .number()
+      .int()
+      .refine((n) => n === 0 || (n >= 2 && n <= 100000), invalid),
+    invite_burst_minutes: z.number().int().min(1).max(10080),
     signup_bonus_usd: z
       .number({ error: invalid })
       .min(0, invalid)

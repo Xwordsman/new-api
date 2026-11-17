@@ -47,7 +47,7 @@ func riskDB(t *testing.T, dialect string) *gorm.DB {
 		if dialect == "mysql" {
 			driver = mysql.Open(dsn)
 		} else {
-			driver = postgres.Open(dsn)
+			driver = postgres.New(postgres.Config{DSN: dsn, PreferSimpleProtocol: true})
 		}
 	}
 	db, err := gorm.Open(driver, &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
@@ -72,10 +72,11 @@ func riskDB(t *testing.T, dialect string) *gorm.DB {
 		common.SetMainDatabaseType(oldType)
 		common.RedisEnabled, common.BatchUpdateEnabled = oldRedis, oldBatch
 	})
-	for _, table := range []any{&guard.MemberProfile{}, &guard.MemberFinding{}, &guard.Secret{}, &guard.Counter{}, &guard.Challenge{}, &guard.Event{}, &guard.Account{}, &guard.Grant{}, &guard.Reservation{}, &guard.Alert{}, &guard.Audit{}, &guard.Payer{}, &ledger.Binding{}, &model.UserSession{}, &model.UserAccessToken{}, &model.AuditLog{}, &model.SystemTask{}, &model.SystemTaskLock{}, &model.User{}, &model.Token{}, &model.Option{}} {
+	for _, table := range []any{&guard.MemberProfile{}, &guard.MemberFinding{}, &guard.Secret{}, &guard.Counter{}, &guard.Challenge{}, &guard.Event{}, &guard.Account{}, &guard.Grant{}, &guard.Reservation{}, &guard.Alert{}, &guard.Audit{}, &guard.Payer{}, &ledger.RefundNotice{}, &ledger.Audit{}, &ledger.Transfer{}, &ledger.Reward{}, &ledger.PaymentIdentity{}, &ledger.Signal{}, &ledger.Binding{}, &ledger.Account{}, &ledger.Settings{}, &model.UserSession{}, &model.UserAccessToken{}, &model.AuditLog{}, &model.SystemTask{}, &model.SystemTaskLock{}, &model.User{}, &model.Token{}, &model.Option{}} {
 		require.NoError(t, db.Migrator().DropTable(table))
 	}
 	require.NoError(t, db.AutoMigrate(&model.User{}, &model.Token{}, &model.Option{}, &ledger.Binding{}))
+	require.NoError(t, ledger.Migrate(db))
 	require.NoError(t, guard.Migrate(db))
 	return db
 }
@@ -792,6 +793,122 @@ func TestMemberProfilesAndAnalysisDatabaseMatrix(t *testing.T) {
 			require.NoError(t, db.First(&user, newUser.Id).Error)
 			assert.Equal(t, 456, user.Quota)
 			assert.Equal(t, common.UserStatusEnabled, user.Status, "analysis and profile review never ban users or alter funds")
+		})
+	}
+}
+
+func TestMemberRewardReviewDatabaseMatrix(t *testing.T) {
+	dialects := []string{"sqlite"}
+	if os.Getenv("REGISTRATIONRISK_TEST_EXTERNAL") == "1" {
+		dialects = append(dialects, "mysql", "postgres")
+	}
+	for _, dialect := range dialects {
+		t.Run(dialect, func(t *testing.T) {
+			db := riskDB(t, dialect)
+			now := time.Now().Truncate(time.Second)
+			for id := 1; id <= 7; id++ {
+				user := model.User{Username: fmt.Sprintf("office-member-%d", id), AffCode: fmt.Sprintf("office-%d", id), Email: fmt.Sprintf("office-%d@example.com", id), Status: common.UserStatusEnabled, CreatedAt: now.Unix(), Quota: 500000}
+				ip := "198.51.100.10"
+				if id >= 2 && id <= 4 {
+					user.InviterId, ip = 1, "192.0.2.10"
+				}
+				require.NoError(t, db.Create(&user).Error)
+				require.Equal(t, id, user.Id)
+				device := fmt.Sprintf("office-browser-%d", id)
+				if id == 7 {
+					device = "office-browser-6"
+				}
+				require.NoError(t, db.Create(&guard.Account{UserID: id, CreatedAt: now.Unix(), DeviceHash: device, NetworkHash: ip, State: "active"}).Error)
+				require.NoError(t, db.Create(&guard.MemberProfile{UserID: id, RegistrationIP: ip, RegistrationAgent: "Identical office browser", RegisteredAt: now.Unix(), LastLoginIP: ip, LastSeenAt: now.Unix(), Note: "Preserve review note"}).Error)
+				if id >= 2 && id <= 4 {
+					binding := ledger.Binding{UserID: id, InviterID: 1, RegisteredAt: now.Unix() - int64(id)*60, State: "active", SignupBonusQuota: 500000, SignupBonusAvailableAt: now.Unix() + 86400}
+					if id == 2 {
+						binding.SignupBonusPaidAt = now.Unix()
+					}
+					require.NoError(t, db.Create(&binding).Error)
+				}
+			}
+			settings, err := ledger.GetSettings(db)
+			require.NoError(t, err)
+			settings.InviteBurstLimit = 0
+			require.NoError(t, ledger.UpdateSettings(db, settings, 1))
+			policy := guard.DefaultMemberPolicy()
+			policy.SignupIPLimit, policy.LoginIPLimit, policy.NetworkLimit, policy.InviterLimit = 2, 2, 2, 2
+			summary, err := analyzeMembers(db, "office-clues", memberAnalysisPayload{Policy: policy}, now)
+			require.NoError(t, err)
+			assert.Equal(t, 2, summary.Review, "only the repeated cookie needs review without the burst rule")
+			assert.Zero(t, summary.Priority)
+			var finding guard.MemberFinding
+			require.NoError(t, db.Where("task_id = ? AND user_id = ?", "office-clues", 2).Take(&finding).Error)
+			assert.Equal(t, 1, finding.Priority, "multiple network clues must not add up to identity evidence")
+			assert.EqualValues(t, 500000, finding.RewardPaid)
+			assert.Zero(t, finding.RewardPending, "manual wallet grants are not referral rewards")
+			require.NoError(t, db.Model(&ledger.Settings{}).Where("id = ?", 1).Update("invite_burst_limit", 3).Error)
+			riskSettings := guard.Defaults()
+			riskSettings.AlertEnabled, riskSettings.AlertWebhook = true, "https://alerts.example/hook"
+			_, err = guard.SaveSettings(db, riskSettings)
+			require.NoError(t, err)
+			for range 2 {
+				summary, err = analyzeMembers(db, "office-rewards", memberAnalysisPayload{Policy: policy}, now)
+				require.NoError(t, err)
+			}
+			assert.Equal(t, 6, summary.Review)
+			assert.Equal(t, 4, summary.Priority, "inviter and all three invitees require reward review")
+			finding = guard.MemberFinding{}
+			require.NoError(t, db.Where("task_id = ? AND user_id = ?", "office-rewards", 1).Take(&finding).Error)
+			assert.Equal(t, 3, finding.Priority)
+			assert.EqualValues(t, 500000, finding.RewardPaid)
+			assert.EqualValues(t, 1000000, finding.RewardPending)
+			assert.Contains(t, finding.Signals, guard.MemberSignal{Code: "invite-burst", Count: 3, Threshold: 3, RelatedIDs: []int{4, 3, 2}})
+			var alerts int64
+			require.NoError(t, db.Model(&guard.Alert{}).Where("kind = ?", "member-analysis").Count(&alerts).Error)
+			assert.EqualValues(t, 1, alerts, "scheduled and manual analyses share alert deduplication")
+			policy.AlertPriority = 0
+			_, err = analyzeMembers(db, "alerts-disabled", memberAnalysisPayload{Policy: policy}, now.Add(2*time.Hour))
+			require.NoError(t, err)
+			require.NoError(t, db.Model(&guard.Alert{}).Where("kind = ?", "member-analysis").Count(&alerts).Error)
+			assert.EqualValues(t, 1, alerts)
+			// Upgrade a representative released snapshot without the new fields.
+			require.NoError(t, db.Migrator().DropIndex(&guard.MemberFinding{}, "idx_extension_registration_member_findings_priority"))
+			for _, column := range []string{"Priority", "RewardPaid", "RewardPending", "Recommendation"} {
+				require.NoError(t, db.Migrator().DropColumn(&guard.MemberFinding{}, column))
+			}
+			require.NoError(t, db.Create(&ledger.Signal{UserID: 6, Network: "original-network", Client: "original-client"}).Error)
+			require.NoError(t, db.Migrator().DropIndex(&ledger.Signal{}, "idx_extension_referral_signals_browser"))
+			require.NoError(t, db.Migrator().DropColumn(&ledger.Signal{}, "Browser"))
+			for range 2 {
+				require.NoError(t, ledger.Migrate(db))
+				require.NoError(t, Migrate(db))
+			}
+			var signal ledger.Signal
+			require.NoError(t, db.First(&signal, "user_id = ?", 6).Error)
+			assert.NotEmpty(t, signal.Browser, "old signup cookies must participate in future reward checks")
+			assert.Equal(t, "original-network", signal.Network)
+			require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+				tx = SignupContext(tx, &guard.Decision{Event: guard.Event{DeviceHash: "office-browser-6"}})
+				return ledger.Register(ledger.WithSignupContext(tx, "203.0.113.7", "different-browser-version"), 7, 1, now.Unix())
+			}))
+			var binding ledger.Binding
+			require.NoError(t, db.First(&binding, "user_id = ?", 7).Error)
+			assert.Equal(t, "review", binding.State)
+			assert.Equal(t, "Shared registration browser requires review", binding.Reason)
+			var profile guard.MemberProfile
+			require.NoError(t, db.First(&profile, "user_id = ?", 6).Error)
+			assert.Equal(t, "Preserve review note", profile.Note)
+			finding = guard.MemberFinding{}
+			require.NoError(t, db.Where("task_id = ? AND user_id = ?", "office-rewards", 1).Take(&finding).Error)
+			assert.NotEmpty(t, finding.Signals)
+			require.Error(t, db.Create(&guard.MemberFinding{TaskID: "office-rewards", UserID: 1}).Error)
+			var users []model.User
+			require.NoError(t, db.Find(&users).Error)
+			for _, user := range users {
+				assert.Equal(t, 500000, user.Quota)
+				assert.Equal(t, common.UserStatusEnabled, user.Status)
+			}
+			policy.AutoAnalysis, policy.AnalysisMinutes = false, 90
+			require.NoError(t, guard.SaveMemberPolicy(db, policy, 1, now))
+			assert.False(t, memberAnalysisHandler{}.Enabled())
+			assert.Equal(t, 90*time.Minute, memberAnalysisHandler{}.Interval())
 		})
 	}
 }

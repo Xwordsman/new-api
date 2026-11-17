@@ -114,6 +114,7 @@ channel.upstream_update_failed_channels: "失败渠道 ID（展示 {{.Shown}}/{{
 channel.upstream_update_more_omitted: "（其余 {{.Count}} 个已省略）"
 
 registration_risk.alert_subject: "注册风控预警"
+"Member analysis found {{count}} accounts requiring review": "会员分析发现 {{.count}} 个账号需要核查"
 request_protection.blocked: "此请求已被本站请求风控策略拦截。如有异议，请联系管理员复核。"
 request_protection.restricted: "此 Key 或账户的 API 访问已被请求风控暂时限制，请联系管理员复核。"
 request_protection.unavailable: "请求风控暂时不可用，请稍后重试。"

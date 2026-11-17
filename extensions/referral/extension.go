@@ -1,15 +1,36 @@
 package referral
 
 import (
+	"context"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/extensions/referral/ledger"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+type signupBonusHandler struct{}
+
+func RegisterTasks()                               { service.RegisterSystemTaskHandler(signupBonusHandler{}) }
+func (signupBonusHandler) Type() string            { return "extension-referral-signup-bonuses" }
+func (signupBonusHandler) Interval() time.Duration { return time.Minute }
+func (signupBonusHandler) NewPayload() any         { return nil }
+func (signupBonusHandler) Enabled() bool           { return true }
+func (signupBonusHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	err := ledger.ReleaseSignupBonuses(model.DB.WithContext(ctx), time.Now().Unix())
+	status, message := model.SystemTaskStatusSucceeded, ""
+	if err != nil {
+		status, message = model.SystemTaskStatusFailed, "Referral qualification requires review"
+		common.SysError("referral signup bonus task failed: " + err.Error())
+	}
+	if err := model.FinishSystemTask(task.TaskID, runnerID, status, nil, message); err != nil {
+		common.SysError("referral signup bonus task finish failed: " + err.Error())
+	}
+}
 
 func Migrate(db *gorm.DB) error {
 	if err := ledger.Migrate(db); err != nil {

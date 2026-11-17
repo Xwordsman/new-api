@@ -21,6 +21,7 @@ import (
 	"github.com/QuantumNous/new-api/extensions"
 	"github.com/QuantumNous/new-api/extensions/benchmark"
 	"github.com/QuantumNous/new-api/extensions/leaderboard"
+	"github.com/QuantumNous/new-api/extensions/referral"
 	"github.com/QuantumNous/new-api/extensions/registrationrisk"
 	"github.com/QuantumNous/new-api/extensions/requestprotection"
 	"github.com/QuantumNous/new-api/i18n"
@@ -164,6 +165,7 @@ func main() {
 	benchmark.RegisterTasks(controller.RunBenchmarkProbe)
 	leaderboard.RegisterTasks()
 	registrationrisk.RegisterTasks()
+	referral.RegisterTasks()
 	requestprotection.RegisterTasks()
 	service.StartSystemTaskRunner()
 

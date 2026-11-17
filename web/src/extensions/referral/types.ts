@@ -20,6 +20,10 @@ export type ReferralSettings = {
   enabled: boolean
   signup_bonus_enabled: boolean
   signup_bonus_quota: number
+  signup_cooling_hours: number
+  review_shared_browser: boolean
+  invite_burst_limit: number
+  invite_burst_minutes: number
   rate_bps: number
   window_days: number
   cooling_hours: number
@@ -65,6 +69,7 @@ export type Invitee = {
   reviewed_at: number
   signup_bonus_quota: number
   signup_bonus_paid_at: number
+  signup_bonus_available_at: number
   net_paid: number
   earned: number
   pending: number
