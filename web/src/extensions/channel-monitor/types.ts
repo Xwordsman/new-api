@@ -89,6 +89,8 @@ export type MonitorGroup = MonitorGroupSettings &
         period_start: number
         period_end: number
         next_factor: number
+        daily_periods?: { start: string; end: string; ratio: number }[]
+        next_offer?: { starts_at: number; ends_at: number; factor: number }
       }
     }
     status: MonitorStatus

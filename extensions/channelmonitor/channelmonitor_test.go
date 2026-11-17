@@ -195,10 +195,22 @@ func TestChannelMonitorDatabaseMatrix(t *testing.T) {
 						update.Options["UserUsableGroups"] = `{"gpt":"Public","idle":"Idle"}`
 						update.Options["AutoGroups"] = `["gpt"]`
 						update.Options["GroupGroupRatio"] = `{"member":{"gpt":0.24}}`
-						update.Promotions.Groups = []grouppricing.Group{{Group: "gpt", Promotion: &groupdiscount.Rule{Enabled: true, Ratio: new(0.12), DailyStart: "18:00", DailyEnd: "22:00", Timezone: "Asia/Shanghai"}}}
+						update.Promotions.Groups = []grouppricing.Group{{Group: "gpt", Promotion: &groupdiscount.Rule{Enabled: true, DailyPeriods: []groupdiscount.DailyPeriod{{Start: "18:00", End: "22:00", Ratio: 0.12}, {Start: "10:00", End: "11:00", Ratio: 0.03}}, Timezone: "Asia/Shanghai"}}}
 						saved, err := grouppricing.Save(db, update)
 						require.NoError(t, err)
 						assert.Equal(t, initial.Promotions.Revision+1, saved.Promotions.Revision)
+						assert.Equal(t, "10:00", saved.Promotions.Groups[0].Promotion.DailyPeriods[0].Start)
+						for range 2 {
+							require.NoError(t, grouppricing.Migrate(db))
+						}
+						reloaded, err := grouppricing.Read(db)
+						require.NoError(t, err)
+						assert.Equal(t, saved, reloaded)
+						raw, err := common.Marshal(reloaded.Promotions)
+						require.NoError(t, err)
+						restarted := &groupdiscount.Runtime{}
+						require.NoError(t, restarted.Load(string(raw)))
+						assert.InDelta(t, 0.1, restarted.Capture(time.Date(2026, 11, 14, 2, 30, 0, 0, time.UTC))["gpt"], 1e-12)
 						monitor, _, err := getSettings(db)
 						require.NoError(t, err)
 						require.Len(t, monitor.Groups, 2)
@@ -215,7 +227,7 @@ func TestChannelMonitorDatabaseMatrix(t *testing.T) {
 						invalid := grouppricing.Update{Snapshot: saved, Baseline: maps.Clone(saved.Options)}
 						invalid.Options = maps.Clone(saved.Options)
 						invalid.Options["GroupDisplayOrder"] = `["gpt","idle"]`
-						invalid.Promotions = grouppricing.Promotions{Revision: saved.Promotions.Revision, Groups: []grouppricing.Group{{Group: "gpt", Promotion: &groupdiscount.Rule{Ratio: new(0.12), DailyStart: "25:00", DailyEnd: "22:00"}}}}
+						invalid.Promotions = grouppricing.Promotions{Revision: saved.Promotions.Revision, Groups: []grouppricing.Group{{Group: "gpt", Promotion: &groupdiscount.Rule{DailyPeriods: []groupdiscount.DailyPeriod{{Start: "18:00", End: "22:00", Ratio: 0.12}, {Start: "21:00", End: "23:00", Ratio: 0.03}}}}}}
 						_, err = grouppricing.Save(db, invalid)
 						assert.ErrorIs(t, err, grouppricing.ErrInvalid)
 						persisted, err := grouppricing.Read(db)
@@ -758,4 +770,102 @@ func TestFinalPublicMultiplier(t *testing.T) {
 	assert.InDelta(t, 0.4, runtime.Capture(time.Unix(monitorEpoch, 0))["public"], 1e-12)
 	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"public":0.1}`))
 	assert.Equal(t, 1.0, runtime.Capture(time.Unix(monitorEpoch, 0))["public"], "a falling base price must never turn a discount into a surcharge")
+}
+
+func TestMultipleDailyPublicMultipliers(t *testing.T) {
+	monitorTestSettings(t)
+	location, err := time.LoadLocation("Asia/Shanghai")
+	require.NoError(t, err)
+	day := time.Date(2026, 11, 17, 0, 0, 0, 0, location).Unix()
+	periods := []groupdiscount.DailyPeriod{{Start: "17:00", End: "18:00", Ratio: 0.03}, {Start: "21:00", End: "22:00", Ratio: 0.01}}
+	for _, tc := range []struct {
+		name                  string
+		periods               []groupdiscount.DailyPeriod
+		at, start, end        int64
+		factor                float64
+		transition, nextOffer int64
+		nextFactor            float64
+	}{
+		{"before first", periods, 16 * 3600, 0, 0, 1, 17 * 3600, 17 * 3600, 0.1},
+		{"first start included", periods, 17 * 3600, 0, 0, 0.1, 18 * 3600, 21 * 3600, 1},
+		{"first end excluded", periods, 18 * 3600, 0, 0, 1, 21 * 3600, 21 * 3600, 1.0 / 30},
+		{"second start included", periods, 21 * 3600, 0, 0, 1.0 / 30, 22 * 3600, 41 * 3600, 1},
+		{"tomorrow first period", periods, 22 * 3600, 0, 0, 1, 41 * 3600, 41 * 3600, 0.1},
+		{"clip campaign start", periods, 16 * 3600, 17*3600 + 1800, 0, 1, 17*3600 + 1800, 17*3600 + 1800, 0.1},
+		{"clip campaign end", periods, 17 * 3600, 0, 17*3600 + 1800, 0.1, 17*3600 + 1800, 0, 1},
+		{"expired", periods, 18 * 3600, 0, 18 * 3600, 1, 0, 0, 1},
+		{"future campaign", periods, 0, 30*86400 + 21*3600 + 1800, 0, 1, 30*86400 + 21*3600 + 1800, 30*86400 + 21*3600 + 1800, 1.0 / 30},
+		{"adjacent transitions", []groupdiscount.DailyPeriod{{Start: "17:00", End: "18:00", Ratio: 0.03}, {Start: "18:00", End: "19:00", Ratio: 0.01}}, 17 * 3600, 0, 0, 0.1, 18 * 3600, 18 * 3600, 1.0 / 30},
+		{"overnight after midnight", []groupdiscount.DailyPeriod{{Start: "22:00", End: "02:00", Ratio: 0.03}, {Start: "02:00", End: "03:00", Ratio: 0.01}}, 3600, 0, 0, 0.1, 2 * 3600, 2 * 3600, 1.0 / 30},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rule := groupdiscount.Rule{Enabled: true, DailyPeriods: tc.periods, Timezone: "Asia/Shanghai"}
+			if tc.start > 0 {
+				rule.StartsAt = day + tc.start
+			}
+			if tc.end > 0 {
+				rule.EndsAt = day + tc.end
+			}
+			raw, err := common.Marshal(grouppricing.Promotions{Revision: 1, Groups: []grouppricing.Group{{Group: "public", Promotion: &rule}}})
+			require.NoError(t, err)
+			runtime := &groupdiscount.Runtime{}
+			require.NoError(t, runtime.Load(string(raw)))
+			offer := runtime.Offers(time.Unix(day+tc.at, 0))["public"]
+			assert.InDelta(t, tc.factor, offer.Factor, 1e-12)
+			transition := int64(0)
+			if tc.transition > 0 {
+				transition = day + tc.transition
+			}
+			assert.Equal(t, transition, offer.Schedule.PeriodEnd)
+			assert.InDelta(t, tc.nextFactor, offer.Schedule.NextFactor, 1e-12)
+			if tc.nextOffer == 0 {
+				assert.Nil(t, offer.Schedule.NextOffer)
+			} else {
+				require.NotNil(t, offer.Schedule.NextOffer)
+				assert.Equal(t, day+tc.nextOffer, offer.Schedule.NextOffer.StartsAt)
+			}
+		})
+	}
+
+	t.Run("captured billing survives a different period and a new revision", func(t *testing.T) {
+		runtime := &groupdiscount.Runtime{}
+		raw, err := common.Marshal(grouppricing.Promotions{Revision: 1, Groups: []grouppricing.Group{{Group: "public", Promotion: &groupdiscount.Rule{Enabled: true, DailyPeriods: periods}}}})
+		require.NoError(t, err)
+		require.NoError(t, runtime.Load(string(raw)))
+		captured := runtime.Capture(time.Unix(day+17*3600, 0))
+		assert.InDelta(t, 1.0/30, runtime.Capture(time.Unix(day+21*3600, 0))["public"], 1e-12)
+		require.NoError(t, runtime.Load(`{"revision":2,"groups":[]}`))
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+		info := &relaycommon.RelayInfo{UserGroup: "other", UsingGroup: "public", GroupDiscounts: captured}
+		assert.InDelta(t, 0.03, helper.HandleGroupRatio(c, info).GroupRatio, 1e-12)
+	})
+
+	t.Run("lower and free base prices never increase", func(t *testing.T) {
+		runtime := &groupdiscount.Runtime{}
+		require.NoError(t, runtime.Load(`{"revision":1,"groups":[{"group":"public","promotion":{"enabled":true,"daily_periods":[{"start":"17:00","end":"18:00","ratio":0.03}]}}]}`))
+		for _, base := range []string{`{"public":0.01}`, `{"public":0}`} {
+			require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(base))
+			assert.Equal(t, 1.0, runtime.Capture(time.Unix(day+17*3600, 0))["public"])
+		}
+	})
+}
+
+func TestDailyPublicMultiplierValidation(t *testing.T) {
+	for _, periods := range [][]groupdiscount.DailyPeriod{
+		{{Start: "21:00", End: "22:00", Ratio: 0.01}, {Start: "21:30", End: "23:00", Ratio: 0.03}},
+		{{Start: "22:00", End: "02:00", Ratio: 0.01}, {Start: "01:00", End: "03:00", Ratio: 0.03}},
+		{{Start: "21:00", End: "21:00", Ratio: 0.01}},
+		{{Start: "25:00", End: "22:00", Ratio: 0.01}},
+		{{Start: "1:00", End: "22:00", Ratio: 0.01}},
+		{{Start: "21:00", End: "22:00", Ratio: 0}},
+		{{Start: "21:00", End: "22:00", Ratio: -1}},
+		{{Start: "21:00", End: "22:00", Ratio: math.NaN()}},
+		{{Start: "21:00", End: "22:00", Ratio: math.Inf(1)}},
+		make([]groupdiscount.DailyPeriod, 49),
+	} {
+		_, err := groupdiscount.Normalize(groupdiscount.Rule{DailyPeriods: periods})
+		assert.Error(t, err)
+	}
+	_, err := groupdiscount.Normalize(groupdiscount.Rule{DailyStart: "21:00", DailyEnd: "22:00", DailyPeriods: []groupdiscount.DailyPeriod{{Start: "17:00", End: "18:00", Ratio: 0.01}}})
+	assert.Error(t, err, "ambiguous legacy and multiple-period schedules must not be accepted together")
 }

@@ -58,17 +58,25 @@ function promotionValues(snapshot: PricingSnapshot): PromotionForm {
   >
   return {
     revision: snapshot.promotions.revision,
-    groups: snapshot.promotions.groups.map((entry) => ({
-      group: entry.group,
-      promotion: entry.promotion
-        ? {
-            ...entry.promotion,
-            ratio:
-              entry.promotion.ratio ??
-              (bases[entry.group] ?? 1) * (entry.promotion.factor ?? 1),
-          }
-        : null,
-    })),
+    groups: snapshot.promotions.groups.map((entry) => {
+      if (!entry.promotion) return { group: entry.group, promotion: null }
+      const rule = entry.promotion
+      const ratio = rule.ratio ?? (bases[entry.group] ?? 1) * (rule.factor ?? 1)
+      let periods = rule.daily_periods
+      if (!periods?.length && rule.daily_start && rule.daily_end) {
+        periods = [{ start: rule.daily_start, end: rule.daily_end, ratio }]
+      }
+      return {
+        group: entry.group,
+        promotion: {
+          ...rule,
+          ratio: periods?.length ? undefined : ratio,
+          daily_start: periods?.length ? '' : rule.daily_start,
+          daily_end: periods?.length ? '' : rule.daily_end,
+          ...(periods ? { daily_periods: periods } : {}),
+        },
+      }
+    }),
   }
 }
 

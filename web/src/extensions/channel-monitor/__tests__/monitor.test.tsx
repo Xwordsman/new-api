@@ -651,6 +651,95 @@ it('counts down from server time while the multiplier details are open', async (
   expect(screen.getByText('00:00:00')).toBeVisible()
 })
 
+it.each([
+  {
+    nextStart: '2026-11-14T13:00:00Z',
+    nextEnd: '2026-11-14T14:00:00Z',
+    nextFactor: 1,
+    nextPrice: 'Regular price ×0.3',
+  },
+  {
+    nextStart: '2026-11-14T10:00:00Z',
+    nextEnd: '2026-11-14T11:00:00Z',
+    nextFactor: 1 / 30,
+    nextPrice: 'Discount ×0.01',
+  },
+  {
+    nextStart: '2026-11-14T14:00:00Z',
+    nextEnd: '2026-11-14T18:00:00Z',
+    nextFactor: 1,
+    nextPrice: 'Regular price ×0.3',
+  },
+])(
+  'shows the immediate next price and the actual offer window starting at $nextStart',
+  async ({ nextStart, nextEnd, nextFactor, nextPrice }) => {
+    const user = userEvent.setup()
+    const now = Date.parse('2026-11-14T09:30:00Z')
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+    render(
+      <GroupRatio
+        receivedAt={now}
+        group={{
+          ...group,
+          ratio: 0.03,
+          offer: {
+            ...group.offer,
+            factor: 0.1,
+            timezone: 'Asia/Shanghai',
+            schedule: {
+              evaluated_at: now / 1000,
+              starts_at: 0,
+              ends_at: Date.parse('2026-11-30T15:00:00Z') / 1000,
+              daily_start: '',
+              daily_end: '',
+              daily_periods: [
+                { start: '17:00', end: '18:00', ratio: 0.03 },
+                { start: '21:00', end: '22:00', ratio: 0.01 },
+              ],
+              period_start: Date.parse('2026-11-14T09:00:00Z') / 1000,
+              period_end: Date.parse('2026-11-14T10:00:00Z') / 1000,
+              next_factor: nextFactor,
+              next_offer: {
+                starts_at: Date.parse(nextStart) / 1000,
+                ends_at: Date.parse(nextEnd) / 1000,
+                factor: 1 / 30,
+              },
+            },
+          },
+        }}
+      />
+    )
+    await user.click(
+      screen.getByRole('button', { name: 'Discount details for Public group' })
+    )
+    const details = within(
+      await screen.findByRole('region', { name: 'Discount details' })
+    )
+    expect(details.getByText('Next pricing change')).toBeVisible()
+    expect(details.getByText('Today 18:00')).toHaveAttribute(
+      'datetime',
+      '2026-11-14T10:00:00.000Z'
+    )
+    expect(details.getByText(nextPrice)).toBeVisible()
+    const offerRow = details.getByText('Next offer window').parentElement
+    if (!offerRow) throw new Error('Next offer window row is missing')
+    const times = offerRow.querySelectorAll('time')
+    expect(times[0]).toHaveAttribute(
+      'datetime',
+      new Date(nextStart).toISOString()
+    )
+    expect(times[1]).toHaveAttribute(
+      'datetime',
+      new Date(nextEnd).toISOString()
+    )
+    if (nextEnd === '2026-11-14T18:00:00Z') {
+      expect(times[1]).toHaveTextContent(/11\/15.*02:00/)
+    }
+    expect(within(offerRow).getByText('×0.01')).toBeVisible()
+    expect(details.getByText('Activity end time')).toBeVisible()
+  }
+)
+
 it('refreshes the displayed multiplier at a period boundary even with metric auto-refresh disabled', async () => {
   vi.useFakeTimers()
   const now = Date.parse('2026-11-14T13:59:58Z')

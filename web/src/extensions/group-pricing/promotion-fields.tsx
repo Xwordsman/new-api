@@ -29,9 +29,11 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Switch } from '@/components/ui/switch'
 import { toIntlLocale } from '@/i18n/languages'
 
+import { PromotionPeriods } from './promotion-periods'
 import type { PromotionForm } from './schema'
 
 export function PromotionFields(props: {
@@ -42,6 +44,7 @@ export function PromotionFields(props: {
   const { t, i18n } = useTranslation()
   const form = useFormContext<PromotionForm>()
   const promotion = form.watch(`groups.${props.index}.promotion`)
+  const scheduled = Boolean(promotion?.daily_periods?.length)
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const formatter = new Intl.NumberFormat(locale, { maximumFractionDigits: 8 })
   return (
@@ -87,35 +90,82 @@ export function PromotionFields(props: {
       />
       {promotion && (
         <>
+          <FormField
+            control={form.control}
+            name={`groups.${props.index}.promotion.daily_periods`}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Offer schedule')}</FormLabel>
+                <FormControl aria-invalid={false}>
+                  <NativeSelect
+                    className='w-full sm:max-w-xs'
+                    value={scheduled ? 'daily' : 'all-day'}
+                    onBlur={field.onBlur}
+                    disabled={props.disabled}
+                    onChange={(event) => {
+                      const ratio =
+                        promotion.ratio ??
+                        promotion.daily_periods?.[0]?.ratio ??
+                        (props.baseRatio ?? 1) * 0.8
+                      const daily = event.target.value === 'daily'
+                      field.onChange(
+                        daily ? [{ start: '21:00', end: '22:00', ratio }] : []
+                      )
+                      form.setValue(
+                        `groups.${props.index}.promotion.ratio`,
+                        daily ? undefined : ratio,
+                        { shouldDirty: true }
+                      )
+                      form.clearErrors(`groups.${props.index}.promotion`)
+                    }}
+                  >
+                    <NativeSelectOption value='all-day'>
+                      {t('All day')}
+                    </NativeSelectOption>
+                    <NativeSelectOption value='daily'>
+                      {t('Daily periods')}
+                    </NativeSelectOption>
+                  </NativeSelect>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
           <div className='grid gap-5 sm:grid-cols-2'>
-            <FormField
-              control={form.control}
-              name={`groups.${props.index}.promotion.ratio`}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Discounted multiplier')}</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      type='number'
-                      min='0.00000001'
-                      step='any'
-                      value={Number.isNaN(field.value) ? '' : field.value}
-                      onChange={(event) =>
-                        field.onChange(event.target.valueAsNumber)
-                      }
-                      disabled={props.disabled}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    {t(
-                      'Enter the final multiplier, for example 0.24 instead of a base multiplier of 0.3. If the base falls below it, the lower base applies.'
-                    )}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {!scheduled && (
+              <FormField
+                control={form.control}
+                name={`groups.${props.index}.promotion.ratio`}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Discounted multiplier')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type='number'
+                        min='0.00000001'
+                        step='any'
+                        value={
+                          field.value === undefined || Number.isNaN(field.value)
+                            ? ''
+                            : field.value
+                        }
+                        onChange={(event) =>
+                          field.onChange(event.target.valueAsNumber)
+                        }
+                        disabled={props.disabled}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Enter the final multiplier, for example 0.24 instead of a base multiplier of 0.3. If the base falls below it, the lower base applies.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             <FormField
               control={form.control}
               name={`groups.${props.index}.promotion.label`}
@@ -176,43 +226,46 @@ export function PromotionFields(props: {
               'Dates use your browser time zone. Leave the start empty for immediate availability, or the end empty for no expiry.'
             )}
           </p>
-          <div className='grid gap-5 sm:grid-cols-3'>
-            {(['daily_start', 'daily_end', 'timezone'] as const).map((key) => {
-              let label = t('Daily time zone')
-              if (key === 'daily_start') label = t('Daily start time')
-              if (key === 'daily_end') label = t('Daily end time')
-              return (
-                <FormField
-                  key={key}
-                  control={form.control}
-                  name={`groups.${props.index}.promotion.${key}`}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{label}</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type={key === 'timezone' ? 'text' : 'time'}
-                          step={key === 'timezone' ? undefined : 60}
-                          placeholder={
-                            key === 'timezone' ? 'Asia/Shanghai' : undefined
-                          }
-                          disabled={props.disabled}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )
-            })}
-          </div>
-          <p className='text-muted-foreground text-xs leading-5'>
-            {t(
-              'Optional daily schedule, using the IANA time zone above (default: Asia/Shanghai). Overnight periods are supported. Leave both times empty for all day. The end time is exclusive.'
-            )}
-          </p>
-          {props.baseRatio !== undefined &&
+          {scheduled && (
+            <>
+              <FormField
+                control={form.control}
+                name={`groups.${props.index}.promotion.timezone`}
+                render={({ field }) => (
+                  <FormItem className='sm:max-w-xs'>
+                    <FormLabel>{t('Daily time zone')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        placeholder='Asia/Shanghai'
+                        disabled={props.disabled}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <PromotionPeriods
+                key={props.index}
+                index={props.index}
+                disabled={props.disabled}
+                baseRatio={props.baseRatio}
+              />
+              <p className='text-muted-foreground text-xs leading-5'>
+                {t(
+                  'Each daily period has its own final multiplier. Overnight periods are supported; end times are exclusive. Outside these periods, the base multiplier applies.'
+                )}
+              </p>
+              <p className='text-muted-foreground text-xs leading-5'>
+                {t(
+                  'Keys protected at a lower accepted multiplier may pause when the multiplier rises after an offer.'
+                )}
+              </p>
+            </>
+          )}
+          {!scheduled &&
+            props.baseRatio !== undefined &&
+            promotion.ratio !== undefined &&
             Number.isFinite(promotion.ratio) &&
             promotion.ratio > 0 && (
               <p className='rounded-lg border border-sky-500/20 bg-sky-500/5 p-3 text-sm text-sky-700 dark:text-sky-300'>

@@ -157,6 +157,23 @@ it('expands only one group and preserves drafts when switching groups or sorting
     screen.getByRole('textbox', { name: 'Offer label' }),
     'Public sale'
   )
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Offer schedule' }),
+    'daily'
+  )
+  await user.click(screen.getByRole('button', { name: 'Add daily period' }))
+  fireEvent.change(
+    within(
+      screen.getByRole('group', { name: 'Daily period 2' })
+    ).getByLabelText('Daily start time'),
+    { target: { value: '17:00' } }
+  )
+  fireEvent.change(
+    within(
+      screen.getByRole('group', { name: 'Daily period 2' })
+    ).getByLabelText('Daily end time'),
+    { target: { value: '18:00' } }
+  )
   await user.click(vipToggle)
   expect(publicToggle).toHaveAttribute('aria-expanded', 'false')
   expect(vipToggle).toHaveAttribute('aria-expanded', 'true')
@@ -168,8 +185,16 @@ it('expands only one group and preserves drafts when switching groups or sorting
   await user.click(publicToggle)
   expect(vipToggle).toHaveAttribute('aria-expanded', 'false')
   expect(
-    screen.getByRole('spinbutton', { name: 'Discounted multiplier' })
+    within(screen.getByRole('group', { name: 'Daily period 1' })).getByRole(
+      'spinbutton',
+      { name: 'Discounted multiplier' }
+    )
   ).toHaveValue(0.18)
+  expect(
+    within(
+      screen.getByRole('group', { name: 'Daily period 2' })
+    ).getByLabelText('Daily start time')
+  ).toHaveValue('17:00')
   expect(screen.getByRole('textbox', { name: 'Offer label' })).toHaveValue(
     'Public sale'
   )
@@ -346,7 +371,7 @@ it('preserves discounted multiplier precision and previews the lower base when p
   expect(screen.getByText('×0.1')).toBeVisible()
 })
 
-it('saves final public pricing and daily schedule together, including collapsed offers', async () => {
+it('saves distinct daily multipliers together with base pricing while the offer is collapsed', async () => {
   const user = userEvent.setup()
   const { client, put } = renderPricing()
   const toggle = await screen.findByRole('button', {
@@ -365,12 +390,32 @@ it('saves final public pricing and daily schedule together, including collapsed 
     screen.getByRole('textbox', { name: 'Offer label' }),
     'Evening offer'
   )
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Offer schedule' }),
+    'daily'
+  )
   fireEvent.change(screen.getByLabelText('Daily start time'), {
     target: { value: '18:00' },
   })
   fireEvent.change(screen.getByLabelText('Daily end time'), {
     target: { value: '22:00' },
   })
+  fireEvent.change(
+    screen.getByRole('spinbutton', { name: 'Discounted multiplier' }),
+    { target: { value: '0.01' } }
+  )
+  await user.click(screen.getByRole('button', { name: 'Add daily period' }))
+  const second = within(screen.getByRole('group', { name: 'Daily period 2' }))
+  fireEvent.change(second.getByLabelText('Daily start time'), {
+    target: { value: '17:00' },
+  })
+  fireEvent.change(second.getByLabelText('Daily end time'), {
+    target: { value: '18:00' },
+  })
+  fireEvent.change(
+    second.getByRole('spinbutton', { name: 'Discounted multiplier' }),
+    { target: { value: '0.03' } }
+  )
   await user.click(toggle)
   await user.click(screen.getByRole('button', { name: 'Save group settings' }))
   await waitFor(() => expect(put).toHaveBeenCalledOnce())
@@ -386,9 +431,12 @@ it('saves final public pricing and daily schedule together, including collapsed 
             group: 'public',
             promotion: {
               ...rule,
+              ratio: undefined,
               label: 'Evening offer',
-              daily_start: '18:00',
-              daily_end: '22:00',
+              daily_periods: [
+                { start: '18:00', end: '22:00', ratio: 0.01 },
+                { start: '17:00', end: '18:00', ratio: 0.03 },
+              ],
             },
           },
         ],
@@ -400,6 +448,199 @@ it('saves final public pricing and daily schedule together, including collapsed 
   )
   client.clear()
 })
+
+it('converts a legacy daily offer and supports removing periods or returning to all-day pricing', async () => {
+  const user = userEvent.setup()
+  const { client, put } = renderPricing({
+    ...settings,
+    promotions: {
+      revision: 1,
+      groups: [
+        {
+          group: 'public',
+          promotion: { ...rule, daily_start: '21:00', daily_end: '22:00' },
+        },
+      ],
+    },
+  })
+  await user.click(
+    await screen.findByRole('button', { name: 'Public discount for public' })
+  )
+  expect(screen.getByRole('combobox', { name: 'Offer schedule' })).toHaveValue(
+    'daily'
+  )
+  expect(screen.getByLabelText('Daily start time')).toHaveValue('21:00')
+  expect(
+    screen.getByRole('spinbutton', { name: 'Discounted multiplier' })
+  ).toHaveValue(0.24)
+  expect(
+    screen.getByRole('button', { name: 'Remove daily period 1' })
+  ).toBeDisabled()
+  await user.click(screen.getByRole('button', { name: 'Add daily period' }))
+  await user.click(
+    screen.getByRole('button', { name: 'Remove daily period 2' })
+  )
+  expect(screen.getAllByRole('group', { name: /Daily period/ })).toHaveLength(1)
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Offer schedule' }),
+    'all-day'
+  )
+  expect(screen.queryByRole('button', { name: 'Add daily period' })).toBeNull()
+  expect(
+    screen.getByRole('spinbutton', { name: 'Discounted multiplier' })
+  ).toHaveValue(0.24)
+  await user.click(screen.getByRole('button', { name: 'Save group settings' }))
+  await waitFor(() => expect(put).toHaveBeenCalledOnce())
+  expect(
+    (put.mock.calls[0][1] as PricingUpdate).promotions.groups[0].promotion
+  ).toEqual({ ...rule, daily_periods: [] })
+  client.clear()
+})
+
+it('reveals the conflicting daily period and focuses its input when a collapsed offer is saved', async () => {
+  const user = userEvent.setup()
+  const { client, put } = renderPricing({
+    ...settings,
+    promotions: {
+      revision: 1,
+      groups: [
+        {
+          group: 'public',
+          promotion: {
+            ...rule,
+            ratio: undefined,
+            daily_periods: [
+              { start: '21:00', end: '22:00', ratio: 0.01 },
+              { start: '21:30', end: '23:00', ratio: 0.03 },
+            ],
+          },
+        },
+      ],
+    },
+  })
+  await user.click(
+    await screen.findByRole('button', { name: 'Save group settings' })
+  )
+  const second = within(
+    await screen.findByRole('group', { name: 'Daily period 2' })
+  )
+  expect(
+    second.getByText(
+      'Daily periods must not overlap, including overnight periods.'
+    )
+  ).toBeVisible()
+  const start = second.getByLabelText('Daily start time')
+  expect(start).toHaveAttribute('aria-invalid', 'true')
+  await waitFor(() => expect(start).toHaveFocus())
+  expect(put).not.toHaveBeenCalled()
+  client.clear()
+})
+
+it('disables all daily period controls while saving a scheduled offer', async () => {
+  const user = userEvent.setup()
+  const { client, put } = renderPricing({
+    ...settings,
+    promotions: {
+      revision: 1,
+      groups: [
+        {
+          group: 'public',
+          promotion: {
+            ...rule,
+            ratio: undefined,
+            daily_periods: [{ start: '21:00', end: '22:00', ratio: 0.01 }],
+          },
+        },
+      ],
+    },
+  })
+  const save = put.getMockImplementation()
+  if (!save) throw new Error('Pricing save fixture is missing')
+  let finishSave = () => {}
+  const pending = new Promise<void>((resolve) => {
+    finishSave = resolve
+  })
+  put.mockImplementationOnce(async (...args) => {
+    await pending
+    return save(...args)
+  })
+  await user.click(
+    await screen.findByRole('button', { name: 'Public discount for public' })
+  )
+  await user.click(screen.getByRole('button', { name: 'Save group settings' }))
+  expect(
+    screen.getByRole('combobox', { name: 'Offer schedule' })
+  ).toBeDisabled()
+  expect(
+    screen.getByRole('button', { name: 'Add daily period' })
+  ).toBeDisabled()
+  expect(screen.getByLabelText('Daily start time')).toBeDisabled()
+  expect(screen.getByLabelText('Daily end time')).toBeDisabled()
+  expect(
+    screen.getByRole('spinbutton', { name: 'Discounted multiplier' })
+  ).toBeDisabled()
+  finishSave()
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Add daily period' })
+    ).toBeEnabled()
+  )
+  client.clear()
+})
+
+it.each([
+  {
+    patch: {},
+    now: '2026-11-15T09:30:00Z',
+    value: '×0.03',
+    status: 'Offer active',
+  },
+  {
+    patch: {},
+    now: '2026-11-15T10:00:00Z',
+    value: 'From ×0.01',
+    status: 'Outside daily hours',
+  },
+  {
+    patch: { starts_at: Date.parse('2026-11-16T00:00:00Z') / 1000 },
+    now: '2026-11-15T09:30:00Z',
+    value: 'From ×0.01',
+    status: 'Offer scheduled',
+  },
+  {
+    patch: { ends_at: Date.parse('2026-11-15T00:00:00Z') / 1000 },
+    now: '2026-11-15T09:30:00Z',
+    value: 'From ×0.01',
+    status: 'Offer ended',
+  },
+])(
+  'shows the current or lowest scheduled multiplier with $status',
+  ({ patch, now, value, status }) => {
+    render(
+      <PromotionToggle
+        group='public'
+        promotion={{
+          ...rule,
+          ratio: undefined,
+          daily_periods: [
+            { start: '17:00', end: '18:00', ratio: 0.03 },
+            { start: '21:00', end: '22:00', ratio: 0.01 },
+          ],
+          ...patch,
+        }}
+        baseRatio={0.3}
+        now={Date.parse(now)}
+        expanded={false}
+        controls='public-details'
+        disabled={false}
+        onToggle={() => {}}
+      />
+    )
+    expect(screen.getByText(status)).toBeVisible()
+    expect(screen.getByText(value)).toBeVisible()
+    expect(screen.getByText(/Daily periods: 2/)).toBeVisible()
+  }
+)
 
 it('preserves offers and references across repeated visual renames and a JSON editor remount', async () => {
   const user = userEvent.setup()
@@ -586,10 +827,53 @@ it.each([
     patch: { timezone: 'not/a-timezone' },
     message: 'Enter a valid IANA time zone.',
   },
+  {
+    patch: { ratio: undefined },
+    message: 'Enter a positive discounted multiplier.',
+  },
+  {
+    patch: { daily_periods: [{ start: '21:00', end: '22:00', ratio: 0 }] },
+    message: 'Enter a positive discounted multiplier.',
+  },
+  {
+    patch: { daily_periods: [{ start: '21:00', end: '21:00', ratio: 0.01 }] },
+    message: 'Enter both daily times and use different start and end times.',
+  },
+  {
+    patch: {
+      daily_periods: [
+        { start: '22:00', end: '02:00', ratio: 0.01 },
+        { start: '01:00', end: '03:00', ratio: 0.03 },
+      ],
+    },
+    message: 'Daily periods must not overlap, including overnight periods.',
+  },
+  {
+    patch: {
+      daily_periods: Array.from({ length: 49 }, () => ({
+        start: '21:00',
+        end: '22:00',
+        ratio: 0.01,
+      })),
+    },
+    message: 'Use no more than 48 daily periods.',
+  },
 ])('rejects invalid public offer $patch', ({ patch, message }) => {
   const result = promotionSchema.safeParse({ ...rule, ...patch })
   expect(result.success).toBe(false)
   if (!result.success) {
     expect(result.error.issues.map((issue) => issue.message)).toContain(message)
   }
+})
+
+it('accepts adjacent overnight periods with independent final multipliers', () => {
+  const result = promotionSchema.safeParse({
+    ...rule,
+    ratio: undefined,
+    daily_periods: [
+      { start: '22:00', end: '02:00', ratio: 0.01 },
+      { start: '02:00', end: '03:00', ratio: 0.03 },
+    ],
+  })
+  expect(result.success).toBe(true)
 })

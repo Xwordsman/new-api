@@ -53,7 +53,10 @@ export function OfferScheduleDetails(props: {
   const { t, i18n } = useTranslation()
   const [clock, setClock] = useState(Date.now)
   const schedule = props.schedule
-  const hasDailyWindow = Boolean(schedule.daily_start && schedule.daily_end)
+  const hasDailyWindow = Boolean(
+    schedule.daily_periods?.length ||
+    (schedule.daily_start && schedule.daily_end)
+  )
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const now = props.receivedAt
     ? schedule.evaluated_at + Math.max(0, clock - props.receivedAt) / 1000
@@ -119,6 +122,9 @@ export function OfferScheduleDetails(props: {
     .map((value) => String(value).padStart(2, '0'))
     .join(':')
   const nextDiscounted = schedule.next_factor < 1
+  let transitionLabel = t('Current period ends')
+  if (nextDiscounted) transitionLabel = t('Next discount starts')
+  if (schedule.daily_periods?.length) transitionLabel = t('Next pricing change')
   return (
     <dl className='flex flex-col gap-2.5 text-[12.5px]'>
       {hasDailyWindow && (
@@ -134,9 +140,7 @@ export function OfferScheduleDetails(props: {
           <>
             <div className='flex items-baseline justify-between gap-4'>
               <dt className='text-muted-foreground shrink-0'>
-                {nextDiscounted
-                  ? t('Next discount starts')
-                  : t('Current period ends')}
+                {transitionLabel}
               </dt>
               <dd className='text-right leading-5 font-medium tabular-nums'>
                 <time
@@ -176,6 +180,42 @@ export function OfferScheduleDetails(props: {
             <dd className='text-right'>{t('No upcoming change')}</dd>
           </div>
         ))}
+      {hasDailyWindow &&
+        schedule.next_offer &&
+        (schedule.daily_periods?.length ||
+          schedule.next_offer.starts_at !== schedule.period_end) && (
+          <div className='flex items-baseline justify-between gap-4'>
+            <dt className='text-muted-foreground shrink-0'>
+              {t('Next offer window')}
+            </dt>
+            <dd className='text-right leading-5 font-medium tabular-nums'>
+              <time
+                dateTime={new Date(
+                  schedule.next_offer.starts_at * 1000
+                ).toISOString()}
+              >
+                {fullFormat.format(schedule.next_offer.starts_at * 1000)}
+              </time>
+              –
+              <time
+                dateTime={new Date(
+                  schedule.next_offer.ends_at * 1000
+                ).toISOString()}
+              >
+                {pricingDay(schedule.next_offer.starts_at, props.timezone) ===
+                pricingDay(schedule.next_offer.ends_at, props.timezone)
+                  ? timeFormat.format(schedule.next_offer.ends_at * 1000)
+                  : fullFormat.format(schedule.next_offer.ends_at * 1000)}
+              </time>
+              <span className='text-primary block'>
+                ×
+                {ratioFormat.format(
+                  props.baseRatio * schedule.next_offer.factor
+                )}
+              </span>
+            </dd>
+          </div>
+        )}
       {!hasDailyWindow && schedule.starts_at > now && (
         <div className='flex items-baseline justify-between gap-4'>
           <dt className='text-muted-foreground shrink-0'>

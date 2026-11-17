@@ -38,11 +38,13 @@ export function PromotionToggle(props: {
 }) {
   const { t, i18n } = useTranslation()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
+  const formatter = new Intl.NumberFormat(locale, { maximumFractionDigits: 8 })
   const promotion = props.promotion
   let status = t('Offer disabled')
   let variant: StatusVariant = 'neutral'
   let schedule = ''
   let ratio: number | undefined
+  let fromPrice = false
   if (promotion) {
     const parsed = promotionSchema.safeParse(promotion)
     if (!parsed.success) {
@@ -50,8 +52,39 @@ export function PromotionToggle(props: {
       variant = 'danger'
     } else {
       const rule = parsed.data
-      ratio = Math.min(props.baseRatio ?? rule.ratio, rule.ratio)
+      let periods = rule.daily_periods ?? []
+      if (!periods.length && rule.daily_start && rule.ratio !== undefined) {
+        periods = [
+          { start: rule.daily_start, end: rule.daily_end, ratio: rule.ratio },
+        ]
+      }
       const epoch = props.now / 1000
+      const campaignActive =
+        rule.enabled &&
+        epoch >= rule.starts_at &&
+        (rule.ends_at === 0 || epoch < rule.ends_at)
+      let activePeriod: (typeof periods)[number] | undefined
+      if (periods.length) {
+        const parts = new Intl.DateTimeFormat('en-GB', {
+          timeZone: rule.timezone || 'Asia/Shanghai',
+          hour: '2-digit',
+          minute: '2-digit',
+          hourCycle: 'h23',
+        }).formatToParts(props.now)
+        const clock = `${parts.find((part) => part.type === 'hour')?.value}:${parts.find((part) => part.type === 'minute')?.value}`
+        activePeriod = periods.find((period) =>
+          period.start < period.end
+            ? clock >= period.start && clock < period.end
+            : clock >= period.start || clock < period.end
+        )
+        ratio =
+          campaignActive && activePeriod
+            ? activePeriod.ratio
+            : Math.min(...periods.map((period) => period.ratio))
+      } else {
+        ratio = rule.ratio
+      }
+      if (ratio !== undefined) ratio = Math.min(props.baseRatio ?? ratio, ratio)
       if (rule.enabled) {
         status = t('Offer active')
         variant = 'success'
@@ -61,26 +94,16 @@ export function PromotionToggle(props: {
         } else if (epoch < rule.starts_at) {
           status = t('Offer scheduled')
           variant = 'info'
-        } else if (rule.daily_start) {
-          const parts = new Intl.DateTimeFormat('en-GB', {
-            timeZone: rule.timezone || 'Asia/Shanghai',
-            hour: '2-digit',
-            minute: '2-digit',
-            hourCycle: 'h23',
-          }).formatToParts(props.now)
-          const clock = `${parts.find((part) => part.type === 'hour')?.value}:${parts.find((part) => part.type === 'minute')?.value}`
-          const active =
-            rule.daily_start < rule.daily_end
-              ? clock >= rule.daily_start && clock < rule.daily_end
-              : clock >= rule.daily_start || clock < rule.daily_end
-          if (!active) {
-            status = t('Outside daily hours')
-            variant = 'info'
-          }
+        } else if (periods.length && !activePeriod) {
+          status = t('Outside daily hours')
+          variant = 'info'
         }
       }
-      if (rule.daily_start) {
-        schedule = `${rule.daily_start}–${rule.daily_end} · ${rule.timezone || 'Asia/Shanghai'}`
+      fromPrice = periods.length > 1 && !(campaignActive && activePeriod)
+      if (periods.length > 1) {
+        schedule = `${t('Daily periods: {{count}}', { count: periods.length })} · ${rule.timezone || 'Asia/Shanghai'}`
+      } else if (periods.length) {
+        schedule = `${periods[0].start}–${periods[0].end} · ${rule.timezone || 'Asia/Shanghai'}`
       } else if (rule.starts_at > epoch || rule.ends_at > 0) {
         const timestamp = rule.starts_at > epoch ? rule.starts_at : rule.ends_at
         const label =
@@ -111,10 +134,9 @@ export function PromotionToggle(props: {
           </StatusBadge>
           {ratio !== undefined && (
             <span className='font-mono tabular-nums'>
-              ×
-              {new Intl.NumberFormat(locale, {
-                maximumFractionDigits: 8,
-              }).format(ratio)}
+              {fromPrice
+                ? t('From ×{{ratio}}', { ratio: formatter.format(ratio) })
+                : `×${formatter.format(ratio)}`}
             </span>
           )}
         </span>

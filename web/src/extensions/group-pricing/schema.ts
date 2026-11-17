@@ -18,14 +18,23 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { z } from 'zod'
 
+const discountedRatio = z
+  .number({ error: 'Enter a positive discounted multiplier.' })
+  .gt(0, 'Enter a positive discounted multiplier.')
+const dailyTime = z
+  .string()
+  .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, 'Use HH:mm for daily times.')
+
 export const promotionSchema = z
   .object({
     enabled: z.boolean(),
-    ratio: z
-      .number({
-        error: 'Enter a positive discounted multiplier.',
-      })
-      .gt(0, 'Enter a positive discounted multiplier.'),
+    ratio: discountedRatio.optional(),
+    daily_periods: z
+      .array(
+        z.object({ start: dailyTime, end: dailyTime, ratio: discountedRatio })
+      )
+      .max(48, 'Use no more than 48 daily periods.')
+      .optional(),
     label: z.string().trim().max(80, 'Invalid group pricing settings'),
     starts_at: z.number().int().min(0).max(253402300799),
     ends_at: z.number().int().min(0).max(253402300799),
@@ -49,6 +58,57 @@ export const promotionSchema = z
       }, 'Enter a valid IANA time zone.'),
   })
   .superRefine((rule, context) => {
+    const periods = rule.daily_periods ?? []
+    if (!periods.length && rule.ratio === undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['ratio'],
+        message: 'Enter a positive discounted multiplier.',
+      })
+    }
+    if (periods.length && (rule.daily_start || rule.daily_end)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['daily_periods'],
+        message: 'Invalid group pricing settings',
+      })
+    }
+    const occupied = new Set<number>()
+    for (const [index, period] of periods.entries()) {
+      if (
+        !dailyTime.safeParse(period.start).success ||
+        !dailyTime.safeParse(period.end).success
+      ) {
+        continue
+      }
+      if (period.start === period.end) {
+        context.addIssue({
+          code: 'custom',
+          path: ['daily_periods', index, 'end'],
+          message:
+            'Enter both daily times and use different start and end times.',
+        })
+        continue
+      }
+      const [startHour, startMinute] = period.start.split(':').map(Number)
+      const [endHour, endMinute] = period.end.split(':').map(Number)
+      const start = startHour * 60 + startMinute
+      let end = endHour * 60 + endMinute
+      if (end < start) end += 1440
+      let overlaps = false
+      for (let minute = start; minute < end; minute++) {
+        if (occupied.has(minute % 1440)) overlaps = true
+        occupied.add(minute % 1440)
+      }
+      if (overlaps) {
+        context.addIssue({
+          code: 'custom',
+          path: ['daily_periods', index, 'start'],
+          message:
+            'Daily periods must not overlap, including overnight periods.',
+        })
+      }
+    }
     if (rule.ends_at > 0 && rule.starts_at >= rule.ends_at) {
       context.addIssue({
         code: 'custom',

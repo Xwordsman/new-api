@@ -202,7 +202,7 @@ func validate(update Update) error {
 		}
 		seen[group.Group] = true
 		if group.Promotion != nil {
-			if group.Promotion.Ratio == nil {
+			if group.Promotion.Ratio == nil && len(group.Promotion.DailyPeriods) == 0 {
 				return ErrInvalid
 			}
 			rule, err := groupdiscount.Normalize(*group.Promotion)
