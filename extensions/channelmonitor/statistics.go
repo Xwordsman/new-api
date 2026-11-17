@@ -170,10 +170,14 @@ func healthStatus(outcomes int, rate *float64) string {
 
 func collectStats(db *gorm.DB, group string, window time.Duration, now int64, completeLogs bool) (GroupStats, error) {
 	start := now - int64(window.Seconds())
-	stats := GroupStats{Timeline: make([]Bucket, bucketCount), Models: []ModelStats{}, ObservedFrom: start}
 	step := int64(window.Seconds()) / bucketCount
+	timelineStart := start - start%step
+	// Keep clock-aligned periods while retaining the full rolling window,
+	// including the partially observed periods at both edges and live requests.
+	timelineSize := int((now-timelineStart)/step) + 1
+	stats := GroupStats{Timeline: make([]Bucket, timelineSize), Models: []ModelStats{}, ObservedFrom: start}
 	for i := range stats.Timeline {
-		stats.Timeline[i] = Bucket{Start: start + int64(i)*step, End: start + int64(i+1)*step, Status: "unknown"}
+		stats.Timeline[i] = Bucket{Start: timelineStart + int64(i)*step, End: timelineStart + int64(i+1)*step, Status: "unknown"}
 	}
 	var logs []model.Log
 	// The timestamp bounds and row cap keep scans bounded in memory. This also
@@ -220,7 +224,7 @@ func collectStats(db *gorm.DB, group string, window time.Duration, now int64, co
 			models[log.ModelName] = entry
 		}
 		entry.Metrics.observe(log, metadata, success)
-		index := min(int((log.CreatedAt-start)/step), bucketCount-1)
+		index := int((log.CreatedAt - timelineStart) / step)
 		stats.Timeline[index].Outcomes++
 		if success {
 			stats.Timeline[index].Successes++

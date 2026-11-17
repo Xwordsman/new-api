@@ -57,15 +57,19 @@ export function HistoryStrip(props: {
       aria-label={t('Observed history')}
     >
       {props.buckets.map((bucket, index) => {
-        const label = `${formatTimestamp(bucket.start)} – ${formatTimestamp(bucket.end)} · ${statuses[bucket.status].label} · ${t('Logged outcomes')}: ${formatNumber(bucket.outcomes, locale)}`
+        const successRate =
+          bucket.success_rate == null
+            ? '—'
+            : `${formatNumber(bucket.success_rate, locale)}%`
+        const summary = `${formatTimestamp(bucket.start).slice(0, 16)} · ${t('Requests')}: ${formatNumber(bucket.outcomes, locale)} · ${t('Success rate')}: ${successRate}`
         return (
           <Tooltip key={bucket.start}>
             <TooltipTrigger
               render={
                 <Button
-                  variant='ghost'
+                  variant='default'
                   type='button'
-                  aria-label={label}
+                  aria-label={`${summary} · ${statuses[bucket.status].label}`}
                   tabIndex={
                     index === Math.min(active, props.buckets.length - 1)
                       ? 0
@@ -98,16 +102,8 @@ export function HistoryStrip(props: {
                 />
               }
             />
-            <TooltipContent>
-              <div className='space-y-1'>
-                <p>{label}</p>
-                {bucket.success_rate != null && (
-                  <p>
-                    {t('Success rate')}:{' '}
-                    {formatNumber(bucket.success_rate, locale)}%
-                  </p>
-                )}
-              </div>
+            <TooltipContent className='max-w-none whitespace-nowrap'>
+              {summary}
             </TooltipContent>
           </Tooltip>
         )

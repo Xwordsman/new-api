@@ -329,7 +329,7 @@ func TestChannelMonitorDatabaseMatrix(t *testing.T) {
 				assert.Equal(t, 1, stats.Models[0].Outcomes)
 				assert.Equal(t, "openai-test", stats.Models[1].Model)
 				assert.Equal(t, 3, stats.Models[1].Outcomes)
-				require.Len(t, stats.Timeline, 48)
+				require.Len(t, stats.Timeline, 49)
 				assert.Equal(t, "unknown", stats.Timeline[0].Status)
 				assert.Nil(t, stats.Timeline[0].SuccessRate)
 				total := 0
@@ -347,6 +347,38 @@ func TestChannelMonitorDatabaseMatrix(t *testing.T) {
 				cancel()
 				_, err = collectStats(logs.WithContext(ctx), "public", time.Hour, monitorEpoch, true)
 				assert.ErrorIs(t, err, context.Canceled)
+			})
+			t.Run("history uses fixed clock boundaries without losing the rolling window or live requests", func(t *testing.T) {
+				logs := monitorTestDB(t, dialect, "_LOG")
+				boundary := time.Date(2026, 11, 17, 4, 0, 0, 0, time.UTC).Unix()
+				start := boundary - 24*3600 + 120
+				for i, at := range []int64{start - 1, start, boundary - 1, boundary, boundary + 120, boundary + 121} {
+					require.NoError(t, logs.Create(&model.Log{
+						Group: "public", ChannelId: 7, Type: model.LogTypeConsume,
+						ModelName: "test", CreatedAt: at, RequestId: fmt.Sprint(i),
+					}).Error)
+				}
+				stats, err := collectStats(logs, "public", 24*time.Hour, boundary+120, true)
+				require.NoError(t, err)
+				assert.Equal(t, start, stats.ObservedFrom)
+				assert.Equal(t, 4, stats.Outcomes, "exclude older and future logs from the unchanged rolling window")
+				require.Len(t, stats.Timeline, 49)
+				assert.Equal(t, 1, stats.Timeline[0].Outcomes)
+				assert.Equal(t, 1, stats.Timeline[47].Outcomes)
+				assert.Equal(t, 2, stats.Timeline[48].Outcomes)
+				for _, bucket := range stats.Timeline {
+					assert.Zero(t, bucket.Start%1800, "24-hour history starts at whole or half hours")
+					assert.Equal(t, int64(1800), bucket.End-bucket.Start)
+				}
+				later, err := collectStats(logs, "public", 24*time.Hour, boundary+180, true)
+				require.NoError(t, err)
+				assert.Equal(t, stats.Timeline[48].Start, later.Timeline[48].Start, "refreshing does not move the clock boundaries")
+				assert.Equal(t, 3, later.Timeline[48].Outcomes)
+				exact, err := collectStats(logs, "public", 24*time.Hour, boundary, true)
+				require.NoError(t, err)
+				require.Len(t, exact.Timeline, 49)
+				assert.Equal(t, boundary, exact.Timeline[48].Start)
+				assert.Equal(t, 1, exact.Timeline[48].Outcomes, "a request at the boundary belongs to the new period")
 			})
 			t.Run("publication respects permissions and shared caching never leaks user prices", func(t *testing.T) {
 				monitorTestSettings(t)

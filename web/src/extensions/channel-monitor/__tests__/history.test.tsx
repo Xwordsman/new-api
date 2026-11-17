@@ -79,3 +79,56 @@ it('keeps all 48 compact history bars visible without transparent button borders
     expect(period).toHaveClass('border-0')
   }
 })
+
+it('shows one bucket timestamp, request count and success rate on one line when hovering a period', async () => {
+  const user = userEvent.setup()
+  const start = new Date(2026, 10, 17, 12, 0).getTime() / 1000
+  render(
+    <HistoryStrip
+      buckets={[
+        {
+          start,
+          end: start + 1800,
+          status: 'healthy',
+          outcomes: 2,
+          successes: 2,
+          success_rate: 100,
+        },
+      ]}
+    />
+  )
+
+  await user.hover(screen.getByRole('button'))
+
+  const tooltip = await screen.findByText(
+    /^2026-11-17 12:00 · Requests: 2 · Success rate: 100%$/
+  )
+  expect(tooltip).toHaveClass('max-w-none', 'whitespace-nowrap')
+})
+
+it('shows an unknown success rate for an unobserved period instead of implying success', async () => {
+  const user = userEvent.setup()
+  const start = new Date(2026, 10, 17, 12, 30).getTime() / 1000
+  render(
+    <HistoryStrip
+      buckets={[
+        {
+          start,
+          end: start + 1800,
+          status: 'unknown',
+          outcomes: 0,
+          successes: 0,
+          success_rate: null,
+        },
+      ]}
+    />
+  )
+
+  await user.hover(screen.getByRole('button'))
+
+  expect(
+    await screen.findByText(
+      /^2026-11-17 12:30 · Requests: 0 · Success rate: —$/
+    )
+  ).toBeVisible()
+})
