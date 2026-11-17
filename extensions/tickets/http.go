@@ -103,7 +103,17 @@ func getTicket(c *gin.Context) {
 		respond(c, nil, errInvalid)
 		return
 	}
-	data, err := detail(model.DB.WithContext(c.Request.Context()), currentActor(c), id, before)
+	a := currentActor(c)
+	data, err := detail(model.DB.WithContext(c.Request.Context()), a, id, before)
+	if err == nil && !a.Staff {
+		// Keep staff attribution in storage and the team API, not in user responses.
+		for i := range data.Messages {
+			if data.Messages[i].Staff {
+				data.Messages[i].AuthorName = ""
+				data.Messages[i].AuthorID = 0
+			}
+		}
+	}
 	respond(c, data, err)
 }
 

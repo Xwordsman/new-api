@@ -68,7 +68,8 @@ function MessageBubble(props: { message: TicketMessage; view: TicketView }) {
   if (message.event) {
     return (
       <p className='text-muted-foreground py-2 text-center text-[11px]'>
-        {message.author_name} · {t(ticketActions[message.event].eventKey)} ·{' '}
+        {message.staff ? t('Support team') : message.author_name} ·{' '}
+        {t(ticketActions[message.event].eventKey)} ·{' '}
         {formatDateTimeObject(new Date(message.created_at * 1000))}
       </p>
     )
@@ -81,11 +82,12 @@ function MessageBubble(props: { message: TicketMessage; view: TicketView }) {
       )}
     >
       <div className='text-muted-foreground flex flex-wrap items-center gap-2 text-[11px]'>
-        <span>{message.author_name}</span>
-        {message.staff && (
+        {message.staff ? (
           <Badge variant='secondary' className='text-[10px]'>
             {t('Support team')}
           </Badge>
+        ) : (
+          <span>{message.author_name}</span>
         )}
         <time dateTime={new Date(message.created_at * 1000).toISOString()}>
           {formatDateTimeObject(new Date(message.created_at * 1000))}

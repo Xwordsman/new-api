@@ -37,6 +37,56 @@ import {
 let client: QueryClient
 afterEach(() => clearTickets(client))
 
+it.each(['mine', 'team'] as const)(
+  'shows support replies and actions without staff usernames in the %s conversation',
+  async (view) => {
+    vi.spyOn(api, 'get').mockResolvedValue(
+      success({
+        ...conversation,
+        messages: [
+          message,
+          {
+            ...message,
+            id: 82,
+            author_id: 3,
+            author_name: 'private-support-name',
+            staff: true,
+            body: 'A support reply',
+          },
+          {
+            ...message,
+            id: 83,
+            author_id: 3,
+            author_name: 'private-support-name',
+            staff: true,
+            body: '',
+            event: 'resolve',
+          },
+          { ...message, id: 84, body: '', event: 'reopen' },
+        ],
+      } satisfies Conversation)
+    )
+    ;({ client } = renderTickets(
+      <TicketConversation id={41} view={view} onBack={vi.fn()} />,
+      { admin: view === 'team' }
+    ))
+
+    await screen.findByText('A support reply')
+    const messages = within(screen.getByLabelText('Messages'))
+    expect(messages.getByText('Support team', { exact: true })).toBeVisible()
+    expect(
+      messages.getByText(/Support team · Marked the ticket as resolved/)
+    ).toBeVisible()
+    expect(messages.queryByText(/private-support-name/)).not.toBeInTheDocument()
+    expect(
+      messages.getByText(message.author_name, { exact: true })
+    ).toBeVisible()
+    expect(
+      messages.getByText(/ticket-owner · Reopened the ticket/)
+    ).toBeVisible()
+  }
+)
+
 it('keeps a failed reply draft and sends the current version before showing the saved reply', async () => {
   const user = userEvent.setup()
   let current: Conversation = structuredClone(conversation)

@@ -245,6 +245,41 @@ func TestTicketRoutesEnforceSessionOwnershipAndPrivateImages(t *testing.T) {
 	assert.Equal(t, "nosniff", served.Header().Get("X-Content-Type-Options"))
 	assert.Equal(t, "private, no-store", served.Header().Get("Cache-Control"))
 	assert.Equal(t, 200, request("GET", strings.Replace(imageURL, base, base+"/admin", 1), "support", "", "", nil).Code)
+	t.Run("user responses hide staff identities and preserve user names and internal attribution", func(t *testing.T) {
+		var support model.User
+		require.NoError(t, db.Where("username = ?", "support").Take(&support).Error)
+		staff := actor{ID: support.Id, Username: support.Username, Staff: true}
+		require.NoError(t, update(db, staff, created.Data.ID, 1, submission{Body: "A support reply"}, "reply"))
+		require.NoError(t, update(db, staff, created.Data.ID, 2, submission{}, "resolve"))
+		for _, view := range []struct {
+			path string
+			who  string
+		}{{base, "owner"}, {base + "/admin", "support"}} {
+			response := request("GET", fmt.Sprintf("%s/%d", view.path, created.Data.ID), view.who, "", "", nil)
+			require.Equal(t, 200, response.Code)
+			var result struct {
+				Success bool
+				Data    conversation
+			}
+			require.NoError(t, common.Unmarshal(response.Body.Bytes(), &result))
+			require.True(t, result.Success)
+			require.Len(t, result.Data.Messages, 3)
+			assert.Equal(t, "owner", result.Data.Messages[0].AuthorName)
+			assert.Equal(t, created.Data.UserID, result.Data.Messages[0].AuthorID)
+			assert.Equal(t, "A support reply", result.Data.Messages[1].Body)
+			assert.Equal(t, "resolve", result.Data.Messages[2].Event)
+			for _, message := range result.Data.Messages[1:] {
+				assert.True(t, message.Staff)
+				if view.who == "owner" {
+					assert.Empty(t, message.AuthorName)
+					assert.Zero(t, message.AuthorID)
+				} else {
+					assert.Equal(t, support.Username, message.AuthorName)
+					assert.Equal(t, support.Id, message.AuthorID)
+				}
+			}
+		}
+	})
 	for _, tc := range []struct {
 		name string
 		data []byte
