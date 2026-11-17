@@ -61,13 +61,13 @@ export async function saveMemberPolicy(body: MemberPolicy) {
   ).data
 }
 export async function getMemberAnalysis(
-  params: { page: number; kind: string },
+  params: { page: number; page_size: number; kind: string; search: string },
   signal?: AbortSignal
 ) {
   return requireServerSuccess(
     (
       await api.get<Envelope<AnalysisResult>>(`${base}/member-analysis`, {
-        params: { ...params, view: 'groups' },
+        params: { ...params, view: 'accounts' },
         signal,
       })
     ).data

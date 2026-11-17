@@ -233,6 +233,13 @@ func memberAnalysis(c *gin.Context) {
 	}
 	page, _ := strconv.Atoi(c.Query("page"))
 	page = max(1, min(page, 100000))
+	if c.Query("view") == "accounts" {
+		pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+		pageSize = max(10, min(pageSize, 100))
+		items, total, err := loadMemberAccounts(db, completed.TaskID, c.DefaultQuery("kind", "review"), c.Query("search"), page, pageSize)
+		respond(c, gin.H{"status": status, "summary": summary, "items": items, "total": total, "page": page, "page_size": pageSize}, err)
+		return
+	}
 	if c.Query("view") == "groups" {
 		groups, total, err := loadMemberGroups(db, completed.TaskID, c.DefaultQuery("kind", "review"), page)
 		respond(c, gin.H{"status": status, "summary": summary, "groups": groups, "total": total, "page": page}, err)

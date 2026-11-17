@@ -1325,6 +1325,77 @@ func TestAssociatedInviterRewardsRequireExplicitApproval(t *testing.T) {
 	assert.Equal(t, 600, account.Balance, "retries cannot pay twice")
 }
 
+func TestMemberAccountAnalysisPaginatesAccountsAndKeepsExternalInvitationReview(t *testing.T) {
+	db := riskDB(t, "sqlite")
+	ids := make([]int, 21)
+	for i := range 23 {
+		id := i + 1
+		user := model.User{Username: fmt.Sprintf("table-member-%02d", id), AffCode: fmt.Sprintf("table-%d", id), Status: common.UserStatusEnabled}
+		require.NoError(t, db.Create(&user).Error)
+		require.NoError(t, db.Create(&guard.MemberProfile{UserID: user.Id, LastLoginIP: fmt.Sprintf("2001:db8::%d", id), LastLoginAgent: "Browser"}).Error)
+		if i < len(ids) {
+			ids[i] = user.Id
+		}
+	}
+	for _, id := range ids {
+		require.NoError(t, db.Create(&guard.MemberFinding{TaskID: "account-table", UserID: id, Priority: 3, Signals: []guard.MemberSignal{{Code: "device", RelatedIDs: ids}}}).Error)
+	}
+	// A weak clue stays visible without being promoted into a shared-device group.
+	require.NoError(t, db.Create(&guard.MemberFinding{TaskID: "account-table", UserID: 23, Priority: 1, Coverage: "unavailable", Signals: []guard.MemberSignal{{Code: "login-ip", RelatedIDs: []int{22, 23}}}}).Error)
+	binding := ledger.Binding{UserID: 22, InviterID: 1, State: "review", SignupBonusQuota: 500}
+	require.NoError(t, db.Create(&binding).Error)
+	require.NoError(t, db.Create(&ledger.Reward{UserID: 22, InviterID: 1, TradeNo: "account-table", Quota: 100, State: "pending"}).Error)
+	first, total, err := loadMemberAccounts(db, "account-table", "review", "", 1, 20)
+	require.NoError(t, err)
+	assert.Equal(t, 22, total)
+	require.Len(t, first, 20)
+	for i, row := range first {
+		assert.Equal(t, i+1, row.Member.ID)
+		assert.Nil(t, row.Binding, "the inviter and peers must not receive the invitee's review buttons")
+		assert.Len(t, row.RelatedAccounts, 20)
+	}
+	second, total, err := loadMemberAccounts(db, "account-table", "review", "", 2, 20)
+	require.NoError(t, err)
+	assert.Equal(t, 22, total)
+	require.Len(t, second, 2)
+	assert.Equal(t, 21, second[0].Member.ID)
+	assert.Equal(t, 22, second[1].Member.ID)
+	assert.Equal(t, 22, second[1].GroupID, "an invitation link must not imply shared-device evidence")
+	assert.Empty(t, second[1].RelatedAccounts)
+	assert.Empty(t, second[1].Signals)
+	require.NotNil(t, second[1].Binding)
+	assert.Equal(t, binding.ID, second[1].Binding.ID)
+	assert.EqualValues(t, 100, second[1].Binding.Pending)
+	filtered, total, err := loadMemberAccounts(db, "account-table", "review", "2001:DB8::22", 1, 10)
+	require.NoError(t, err)
+	assert.Equal(t, 1, total)
+	require.Len(t, filtered, 1)
+	assert.Equal(t, 22, filtered[0].Member.ID)
+	weak, total, err := loadMemberAccounts(db, "account-table", "insufficient", "", 1, 10)
+	require.NoError(t, err)
+	assert.Equal(t, 1, total)
+	require.Len(t, weak, 1)
+	assert.Equal(t, []relatedMember{{ID: 22, Username: "table-member-22"}}, weak[0].RelatedAccounts)
+	assert.Equal(t, []string{"login-ip"}, weak[0].Signals)
+	assert.Nil(t, weak[0].Binding)
+	_, _, err = loadMemberAccounts(db, "account-table", "invalid", "", 1, 20)
+	assert.ErrorIs(t, err, guard.ErrInvalid)
+	_, _, err = loadMemberAccounts(db, "account-table", "all", strings.Repeat("x", 255), 1, 20)
+	assert.ErrorIs(t, err, guard.ErrInvalid)
+	// Explicit decisions and reward balances are read live without rescanning.
+	require.NoError(t, db.Model(&binding).Update("state", "ineligible").Error)
+	require.NoError(t, db.Model(&ledger.Reward{}).Where("trade_no = ?", "account-table").Update("state", "rejected").Error)
+	filtered, _, err = loadMemberAccounts(db, "account-table", "review", "table-member-22", 1, 20)
+	require.NoError(t, err)
+	require.Len(t, filtered, 1)
+	assert.Equal(t, "ineligible", filtered[0].Binding.State)
+	assert.Zero(t, filtered[0].Binding.Pending)
+	encoded, err := common.Marshal(filtered)
+	require.NoError(t, err)
+	assert.NotContains(t, string(encoded), "device_hash")
+	assert.NotContains(t, string(encoded), "password")
+}
+
 func TestAPIRequestIPsRecordedWithoutMemberOptIn(t *testing.T) {
 	db := riskDB(t, "sqlite")
 	require.NoError(t, db.AutoMigrate(&model.Log{}))

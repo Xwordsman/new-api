@@ -94,12 +94,13 @@ export type MemberGroupBinding = {
   signup_bonus_paid_at: number
   pending: number
 }
-export type MemberGroup = {
-  id: number
+export type MemberAnalysisAccount = {
+  member: MemberProfile
+  group_id: number
   priority: number
   signals: string[]
-  members: MemberProfile[]
-  bindings: MemberGroupBinding[]
+  related_accounts: { id: number; username: string }[]
+  binding: MemberGroupBinding | null
 }
 export type AnalysisResult = {
   status: 'idle' | 'pending' | 'running' | 'succeeded' | 'failed'
@@ -112,7 +113,7 @@ export type AnalysisResult = {
     completed_at: number
     policy: MemberPolicy
   }
-  groups: MemberGroup[]
+  items: MemberAnalysisAccount[]
   total: number
   page?: number
 }

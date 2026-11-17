@@ -90,13 +90,14 @@ const analysis: AnalysisResult = {
     completed_at: 1700002000,
     policy,
   },
-  groups: [
+  items: [
     {
-      id: 42,
+      member,
+      group_id: 42,
       priority: 1,
       signals: ['login-ip'],
-      members: [member],
-      bindings: [],
+      related_accounts: [],
+      binding: null,
     },
   ],
   total: 1,
@@ -128,16 +129,16 @@ function mockReads(result: AnalysisResult = analysis) {
     }
     if (url === `${base}/member-analysis`) {
       const params = config?.params as { kind: string }
-      const groups = result.groups.filter(
-        (group) =>
+      const items = result.items.filter(
+        (row) =>
           params.kind !== 'review' ||
-          group.priority >= 2 ||
-          group.bindings.some((b) => b.state === 'review')
+          row.priority >= 2 ||
+          row.binding?.state === 'review'
       )
       return {
         data: {
           success: true,
-          data: { ...result, groups, total: groups.length },
+          data: { ...result, items, total: items.length },
         },
       }
     }
@@ -392,7 +393,7 @@ it('prevents duplicate analyses while a task is pending and retains the previous
   expect(post).not.toHaveBeenCalled()
 })
 
-it('groups associated members with named invitations and requires explicit referral approval', async () => {
+it('shows one account per row with separate evidence and reward columns and reviews only its own invitation', async () => {
   const user = userEvent.setup()
   const binding = {
     id: 9,
@@ -408,17 +409,28 @@ it('groups associated members with named invitations and requires explicit refer
   }
   const get = mockReads({
     ...analysis,
-    groups: [
-      ...analysis.groups,
+    items: [
+      ...analysis.items,
       {
-        id: 44,
+        member: { ...member, id: 44, username: 'shared-browser-member' },
+        group_id: 44,
         priority: 3,
         signals: ['device'],
-        members: [
-          { ...member, id: 44, username: 'shared-browser-member' },
-          { ...member, id: 45, username: 'related-member' },
-        ],
-        bindings: [binding],
+        related_accounts: [{ id: 45, username: 'related-member' }],
+        binding: null,
+      },
+      {
+        member: {
+          ...member,
+          id: 45,
+          username: 'related-member',
+          registration_ip: '2001:db8::45',
+        },
+        group_id: 44,
+        priority: 3,
+        signals: ['device'],
+        related_accounts: [{ id: 44, username: 'shared-browser-member' }],
+        binding,
       },
     ],
   })
@@ -426,26 +438,55 @@ it('groups associated members with named invitations and requires explicit refer
     .spyOn(api, 'post')
     .mockResolvedValue({ data: { success: true } })
   mount(<MemberAnalysis />)
-  const row = await screen.findByRole('row', { name: /shared-browser-member/ })
+  await screen.findByRole('button', { name: '#45 related-member' })
+  const row = screen
+    .getByRole('button', { name: '#45 related-member' })
+    .closest('tr')
+  const inviterRow = screen.getByRole('cell', { name: '44' }).closest('tr')
+  if (!row || !inviterRow) {
+    throw new Error('Account rows are missing')
+  }
+  expect(row).not.toBe(inviterRow)
   expect(
-    within(row).getByRole('button', { name: /#45 related-member/ })
-  ).toBeVisible()
+    within(inviterRow).queryByRole('button', {
+      name: 'Approve referral qualification',
+    })
+  ).not.toBeInTheDocument()
+  expect(within(inviterRow).queryByText('2001:db8::45')).not.toBeInTheDocument()
+  for (const column of [
+    'Registration IP',
+    'Last login IP',
+    'Browser / UA',
+    'Associated accounts',
+    'Signup bonus',
+    'Pending payment rewards',
+    'Referral status',
+    'Actions',
+  ]) {
+    expect(screen.getByRole('columnheader', { name: column })).toBeVisible()
+  }
   expect(within(row).getByText('Shared browser marker')).toBeVisible()
   expect(within(row).getAllByText(/192\.0\.2\.10/)).toHaveLength(1)
   expect(within(row).getAllByText(/Example Browser/)).toHaveLength(1)
-  expect(within(row).getByText('#44, #45')).toBeVisible()
+  expect(within(row).getByText('2001:db8::45')).toBeVisible()
   expect(
     within(row).getByText('Held until administrator approval')
   ).toBeVisible()
-  expect(within(row).getByText(/Signup bonus.*\$1/)).toBeVisible()
-  expect(within(row).getByText(/Pending payment rewards.*\$2/)).toBeVisible()
+  expect(within(row).getByText('$1')).toBeVisible()
+  expect(within(row).getByText('$2')).toBeVisible()
   expect(
     screen.queryByRole('button', { name: /#42 historical-member/ })
   ).not.toBeInTheDocument()
   expect(get).toHaveBeenCalledWith(
     `${base}/member-analysis`,
     expect.objectContaining({
-      params: { page: 1, kind: 'review', view: 'groups' },
+      params: {
+        page: 1,
+        page_size: 20,
+        search: '',
+        kind: 'review',
+        view: 'accounts',
+      },
     })
   )
   await user.click(
@@ -487,29 +528,49 @@ it('groups associated members with named invitations and requires explicit refer
   ).not.toBeInTheDocument()
 })
 
+it('lets administrators hide and restore evidence columns through the shared view menu', async () => {
+  const user = userEvent.setup()
+  mockReads({ ...analysis, items: [{ ...analysis.items[0], priority: 3 }] })
+  mount(<MemberAnalysis />)
+  await screen.findByRole('columnheader', { name: 'Registration IP' })
+  await user.click(screen.getByRole('button', { name: 'View' }))
+  await user.click(
+    screen.getByRole('menuitemcheckbox', { name: 'Registration IP' })
+  )
+  expect(
+    screen.queryByRole('columnheader', { name: 'Registration IP' })
+  ).not.toBeInTheDocument()
+  expect(screen.getByRole('columnheader', { name: 'Username' })).toBeVisible()
+  await user.click(
+    screen.getByRole('menuitemcheckbox', { name: 'Registration IP' })
+  )
+  expect(
+    screen.getByRole('columnheader', { name: 'Registration IP' })
+  ).toBeVisible()
+})
+
 it('keeps previously held rewards actionable when current association evidence is unavailable', async () => {
   mockReads({
     ...analysis,
-    groups: [
+    items: [
       {
-        id: member.id,
+        member: { ...member, id: 45, username: 'related-member' },
+        group_id: 45,
         priority: 0,
         signals: [],
-        members: [member],
-        bindings: [
-          {
-            id: 9,
-            user_id: 45,
-            inviter_id: member.id,
-            username: 'related-member',
-            inviter_name: member.username,
-            state: 'review',
-            reason: 'Associated accounts require referral review',
-            signup_bonus_quota: 500000,
-            signup_bonus_paid_at: 0,
-            pending: 0,
-          },
-        ],
+        related_accounts: [],
+        binding: {
+          id: 9,
+          user_id: 45,
+          inviter_id: member.id,
+          username: 'related-member',
+          inviter_name: member.username,
+          state: 'review',
+          reason: 'Associated accounts require referral review',
+          signup_bonus_quota: 500000,
+          signup_bonus_paid_at: 0,
+          pending: 0,
+        },
       },
     ],
   })
@@ -524,4 +585,80 @@ it('keeps previously held rewards actionable when current association evidence i
     screen.getByRole('button', { name: 'Approve referral qualification' })
   ).toBeEnabled()
   expect(screen.queryByText('Network clue only')).not.toBeInTheDocument()
+})
+
+it('paginates by account and keeps long account evidence truncated in a horizontally scrollable table', async () => {
+  const user = userEvent.setup()
+  const longUA = `Browser/${'long-agent-'.repeat(60)}`
+  const get = mockReads()
+  get.mockImplementation(async (url, config) => {
+    if (url === `${base}/member-analysis`) {
+      const params = config?.params as { page: number }
+      const id = params.page === 1 ? 44 : 45
+      return {
+        data: {
+          success: true,
+          data: {
+            ...analysis,
+            total: 21,
+            items: [
+              {
+                ...analysis.items[0],
+                member: {
+                  ...member,
+                  id,
+                  username: `account-${id}`,
+                  last_login_agent: longUA,
+                },
+                priority: 3,
+              },
+            ],
+          },
+        },
+      }
+    }
+    return { data: { success: true, data: policy } }
+  })
+  mount(<MemberAnalysis />)
+  const row = await screen.findByRole('row', { name: /account-44/ })
+  const agent = within(row).getByText(longUA)
+  expect(agent).toHaveClass('truncate')
+  expect(agent.closest('[tabindex]')).toHaveAttribute('tabindex', '0')
+  expect(row.closest('[data-slot="table-container"]')).toHaveClass(
+    'overflow-x-auto'
+  )
+  await user.click(screen.getByRole('button', { name: 'Go to next page' }))
+  expect(
+    await screen.findByRole('button', { name: '#45 account-45' })
+  ).toBeVisible()
+  expect(
+    screen.queryByRole('button', { name: '#44 account-44' })
+  ).not.toBeInTheDocument()
+  expect(get).toHaveBeenCalledWith(
+    `${base}/member-analysis`,
+    expect.objectContaining({
+      params: {
+        page: 2,
+        page_size: 20,
+        search: '',
+        kind: 'review',
+        view: 'accounts',
+      },
+    })
+  )
+  await user.type(screen.getByPlaceholderText('Search members'), '192.0.2.10')
+  await waitFor(() =>
+    expect(get).toHaveBeenCalledWith(
+      `${base}/member-analysis`,
+      expect.objectContaining({
+        params: {
+          page: 1,
+          page_size: 20,
+          search: '192.0.2.10',
+          kind: 'review',
+          view: 'accounts',
+        },
+      })
+    )
+  )
 })
