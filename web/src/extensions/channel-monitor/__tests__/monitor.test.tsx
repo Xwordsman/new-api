@@ -1056,13 +1056,13 @@ it.each([
     })
     const view = renderMonitor()
     const trigger = await screen.findByRole('button', { name: 'Sort groups' })
-    expect(trigger).toHaveTextContent('Request success rate')
+    expect(trigger).toHaveTextContent('Configured order')
     await user.click(trigger)
     expect(trigger).toHaveAttribute('aria-expanded', 'true')
     const menu = screen.getByRole('menu', { name: 'Sort groups' })
     expect(
       within(menu).getByRole('menuitemradio', { checked: true })
-    ).toHaveTextContent('Request success rate')
+    ).toHaveTextContent('Configured order')
     await user.click(
       within(menu).getByRole('menuitemradio', {
         name: `${label} ${direction}`.trim(),

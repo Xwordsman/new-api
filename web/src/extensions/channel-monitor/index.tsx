@@ -73,7 +73,7 @@ export function ChannelMonitorPage() {
   const [window, setWindow] = useState('24h')
   const [automatic, setAutomatic] = useState(true)
   const [status, setStatus] = useState('all')
-  const [sort, setSort] = useState('success')
+  const [sort, setSort] = useState('default')
   const [search, setSearch] = useState('')
   const statuses = useMonitorStatuses()
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
