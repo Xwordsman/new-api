@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -149,7 +150,26 @@ func adminSettings(c *gin.Context) {
 		groups = append(groups, availableGroup{Group: group, Models: models})
 	}
 	slices.SortFunc(groups, func(a, b availableGroup) int { return strings.Compare(a.Group, b.Group) })
-	respond(c, gin.H{"settings": s, "available_groups": groups}, nil)
+	type syncOption struct {
+		ID              int      `json:"id"`
+		Name            string   `json:"name"`
+		Groups          []string `json:"groups"`
+		TokenName       string   `json:"token_name"`
+		TokenConfigured bool     `json:"token_configured"`
+	}
+	channels := []model.Channel{}
+	if err := db.Select("id", "name", "base_url", "group").Where("status = ?", common.ChannelStatusEnabled).Order("id").Find(&channels).Error; err != nil {
+		respond(c, nil, err)
+		return
+	}
+	upstreams := []syncOption{}
+	for _, channel := range channels {
+		if supportsSync(channel) {
+			name := syncTokenName(channel.Id)
+			upstreams = append(upstreams, syncOption{channel.Id, channel.Name, strings.Split(channel.Group, ","), name, strings.TrimSpace(os.Getenv(name)) != ""})
+		}
+	}
+	respond(c, gin.H{"settings": s, "available_groups": groups, "upstream_channels": upstreams}, nil)
 }
 
 func updateSettings(c *gin.Context) {
@@ -175,6 +195,10 @@ type totals struct {
 
 type publicGroup struct {
 	GroupSettings
+	LastSyncAt      int64        `json:"last_sync_at,omitempty"`
+	SyncError       string       `json:"sync_error,omitempty"`
+	UpstreamAt      int64        `json:"upstream_at,omitempty"`
+	SyncStale       bool         `json:"sync_stale,omitempty"`
 	IntervalSeconds int64        `json:"interval_seconds"`
 	NextAt          int64        `json:"next_at"`
 	Runs            []RunSummary `json:"runs"`
@@ -216,16 +240,24 @@ func buildSnapshot(db *gorm.DB, s Settings, userGroup string, now int64) (snapsh
 	data := snapshot{Enabled: s.Enabled, UpdatedAt: now, RefreshSeconds: 15, HistoryHours: s.HistoryHours, Groups: []publicGroup{}}
 	for _, config := range visibleGroups(s, userGroup) {
 		g := publicGroup{GroupSettings: config, IntervalSeconds: config.interval(s), Runs: []RunSummary{}}
+		// Channel identifiers are management configuration, not public metadata.
+		g.UpstreamChannel = 0
 		var latest GroupState
 		err := db.Where("group_name = ?", config.Group).Take(&latest).Error
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return data, err
 		}
 		if s.Enabled && config.Enabled {
-			g.NextAt = nextAutomaticAt(latest.LastAutoAt, g.IntervalSeconds, now)
+			g.NextAt = nextGroupAt(config, s, latest, now)
+		}
+		if config.Mode == "upstream" {
+			if latest.SyncSource == syncSource(config) {
+				g.LastSyncAt, g.SyncError, g.UpstreamAt = latest.LastSyncAt, latest.SyncError, latest.UpstreamAt
+			}
+			g.SyncStale = g.LastSyncAt == 0 || now-g.LastSyncAt > max(2*g.IntervalSeconds, 3600) || g.UpstreamAt == 0 || now-g.UpstreamAt > max(2*g.IntervalSeconds, 3600)
 		}
 		var runs []Run
-		err = db.Select(summaryColumns).Where("group_name = ? AND created_at >= ? AND (manual = ? OR manual IS NULL)", config.Group, now-int64(s.HistoryHours)*3600, false).Order("id DESC").Limit(600 * s.HistoryHours / 24).Find(&runs).Error
+		err = db.Scopes(currentRuns(config)).Select(summaryColumns).Where("created_at >= ? AND (manual = ? OR manual IS NULL)", now-int64(s.HistoryHours)*3600, false).Order("created_at DESC, id DESC").Limit(600 * s.HistoryHours / 24).Find(&runs).Error
 		if err != nil {
 			return data, err
 		}
@@ -239,7 +271,7 @@ func buildSnapshot(db *gorm.DB, s Settings, userGroup string, now int64) (snapsh
 			Manual                bool
 			Count                 int64
 		}
-		if err := db.Model(&Run{}).Select("kind, status, quality, manual, COUNT(*) AS count").Where("group_name = ? AND created_at >= ? AND status <> ?", config.Group, now-86400, "running").Group("kind, status, quality, manual").Scan(&counts).Error; err != nil {
+		if err := db.Model(&Run{}).Scopes(currentRuns(config)).Select("kind, status, quality, manual, COUNT(*) AS count").Where("created_at >= ? AND status <> ?", now-86400, "running").Group("kind, status, quality, manual").Scan(&counts).Error; err != nil {
 			return data, err
 		}
 		for _, count := range counts {
@@ -276,6 +308,16 @@ func buildSnapshot(db *gorm.DB, s Settings, userGroup string, now int64) (snapsh
 		data.Groups = append(data.Groups, g)
 	}
 	return data, nil
+}
+
+func currentRuns(g GroupSettings) func(*gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		db = db.Where("group_name = ?", g.Group)
+		if g.Mode == "upstream" {
+			return db.Where("origin = ? AND upstream_group = ? AND model = ?", "apizn", g.UpstreamGroup, g.Model)
+		}
+		return db.Where("(origin = '' OR origin IS NULL) AND (model = ? OR model = '' OR model IS NULL)", g.Model)
+	}
 }
 
 func getRun(c *gin.Context) {
@@ -354,6 +396,6 @@ func getArtworks(c *gin.Context) {
 	// Artwork HTML is fetched only when opened. Listing stays bounded even
 	// when a model produces hundreds of kilobytes of animation code.
 	items := []Run{}
-	err = query.Select(summaryColumns + ", group_name, model").Order("id DESC").Offset((page - 1) * 15).Limit(15).Find(&items).Error
+	err = query.Select(summaryColumns + ", group_name").Order("created_at DESC, id DESC").Offset((page - 1) * 15).Limit(15).Find(&items).Error
 	respond(c, gin.H{"items": items, "total": total, "page": page, "page_size": 15}, err)
 }

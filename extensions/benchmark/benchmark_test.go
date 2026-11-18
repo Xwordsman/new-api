@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -27,6 +28,191 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+// Redirect only at the test transport boundary; production URLs stay fixed.
+type benchmarkTestTransport struct{ origin string }
+
+func (transport benchmarkTestTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	copy := request.Clone(request.Context())
+	u, err := url.Parse(transport.origin + request.URL.RequestURI())
+	if err != nil {
+		return nil, err
+	}
+	copy.URL = u
+	return http.DefaultTransport.RoundTrip(copy)
+}
+
+func TestBenchmarkSyncMatrix(t *testing.T) {
+	dialects := []string{"sqlite"}
+	if os.Getenv("BENCHMARK_TEST_EXTERNAL") == "1" {
+		dialects = append(dialects, "mysql", "postgres")
+	}
+	for _, dialect := range dialects {
+		t.Run(dialect, func(t *testing.T) {
+			db := benchmarkTestDB(t, dialect)
+			s := benchmarkTestSettings(t)
+			baseURL := apiznOrigin
+			channel := model.Channel{Id: 29, Name: "Read results", BaseURL: &baseURL, Group: "public", Status: common.ChannelStatusEnabled, Key: "model-secret-never-use"}
+			require.NoError(t, db.Create(&channel).Error)
+			g := s.Groups[0]
+			g.Mode, g.UpstreamChannel, g.UpstreamGroup = "upstream", channel.Id, "Exact upstream group"
+			s.Groups = []GroupSettings{g}
+			s.SVGPrompts = nil
+			s, err := saveSettings(db, s)
+			require.NoError(t, err, "sync does not require a local SVG prompt")
+			now := int64(1800000000)
+			// Upgrade a representative released schema and retain local history.
+			added := []string{"Origin", "UpstreamID", "UpstreamGroup", "UpstreamURL", "SyncedAt"}
+			for _, field := range added {
+				require.NoError(t, db.Migrator().DropColumn(&Run{}, field))
+			}
+			for _, field := range []string{"SyncSource", "LastSyncAt", "SyncError", "UpstreamAt"} {
+				require.NoError(t, db.Migrator().DropColumn(&GroupState{}, field))
+			}
+			require.NoError(t, db.Migrator().DropTable(&SyncReceipt{}))
+			original := Run{GroupName: g.Group, Model: g.Model, Kind: "candy", Status: "passed", Output: "21", CreatedAt: now - 100}
+			require.NoError(t, db.Omit(added...).Create(&original).Error)
+			require.NoError(t, Migrate(db))
+			require.NoError(t, Migrate(db))
+			var saved Run
+			require.NoError(t, db.First(&saved, original.ID).Error)
+			assert.Equal(t, original, saved)
+			item := upstreamRun{ID: 11419, Group: g.UpstreamGroup, Model: g.Model, StartedAt: now - 60, FinishedAt: now - 10, Status: "succeeded", SVGStatus: "succeeded", CandyStatus: "passed", HTML: "<svg><circle/></svg>", Prompt: "Saved SVG", CandyPrompt: "Saved candy", CandyAnswer: "21", InputTokens: 149, OutputTokens: 2921, CandyInputTokens: 77, CandyOutputTokens: 1, DurationMS: 50000, CandyDurationMS: 900}
+			target := upstreamTarget{Group: g.UpstreamGroup, Model: g.Model, Available: true, Enabled: true}
+			timeline := upstreamTimeline{Items: []upstreamRun{item}, Targets: []upstreamTarget{target}}
+			detailRequests := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, "Bearer read-only-test", r.Header.Get("Authorization"))
+				var data any = timeline
+				if r.URL.Path == "/api/benchmark/runs/11419" {
+					detailRequests++
+					data = item
+				} else {
+					assert.Equal(t, "/api/benchmark/runs?timeline=1", r.URL.RequestURI())
+				}
+				body, encodeErr := common.Marshal(gin.H{"success": true, "data": data})
+				assert.NoError(t, encodeErr)
+				_, _ = w.Write(body)
+			}))
+			defer server.Close()
+			client := upstreamClient{http: &http.Client{Transport: benchmarkTestTransport{server.URL}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, token: "read-only-test"}
+			latest, err := client.importRuns(context.Background(), db, s, g, now)
+			require.NoError(t, err)
+			assert.Equal(t, item.FinishedAt, latest)
+			_, err = client.importRuns(context.Background(), db, s, g, now)
+			require.NoError(t, err)
+			assert.Equal(t, 1, detailRequests, "duplicate polls must not refetch saved output")
+			var imports []Run
+			require.NoError(t, db.Where("origin = ?", "apizn").Order("id").Find(&imports).Error)
+			require.Len(t, imports, 2)
+			assert.Equal(t, "", imports[0].Expected, "upstream did not provide its expected answer")
+			assert.Equal(t, 77, imports[0].InputTokens, "detail usage is authoritative, not timeline zeros")
+			assert.Equal(t, "21", string(imports[0].Output))
+			assert.Equal(t, apiznOrigin+"/pelican/11419", imports[0].UpstreamURL)
+			assert.Equal(t, "passed", imports[1].Status)
+			assert.False(t, regenerationEnabled(s, imports[0]))
+			assert.False(t, regenerationEnabled(s, original))
+			state := GroupState{GroupName: g.Group, SyncSource: syncSource(g), LastAutoAt: now, LastSyncAt: now, UpstreamAt: latest}
+			require.NoError(t, db.Create(&state).Error)
+			data, err := buildSnapshot(db, s, "member", now)
+			require.NoError(t, err)
+			require.Len(t, data.Groups, 1)
+			assert.Len(t, data.Groups[0].Runs, 2, "local results must not mix into upstream statistics")
+			assert.False(t, data.Groups[0].SyncStale)
+			assert.Zero(t, data.Groups[0].UpstreamChannel)
+			svgSettings := s
+			svgSettings.Groups = []GroupSettings{{Group: g.Group, Model: g.Model, Enabled: true, SVGEnabled: true, Mode: g.Mode, UpstreamChannel: g.UpstreamChannel, UpstreamGroup: g.UpstreamGroup}}
+			changedChecks, err := scheduledGroups(db, svgSettings, now+15, "")
+			require.NoError(t, err)
+			assert.Len(t, changedChecks, 1, "changing enabled upstream checks must refresh their health immediately")
+			due, err := scheduledGroups(db, s, now+15, "")
+			require.NoError(t, err)
+			assert.Empty(t, due)
+			timeline.Targets[0].Model = "other-model"
+			_, err = client.importRuns(context.Background(), db, s, g, now)
+			require.EqualError(t, err, "upstream_target_missing")
+			timeline.Targets[0] = target
+			_, err = deleteHistory(db, []int64{imports[0].ID}, 42)
+			require.NoError(t, err)
+			_, err = client.importRuns(context.Background(), db, s, g, now)
+			require.NoError(t, err)
+			var count int64
+			require.NoError(t, db.Model(&Run{}).Where("id = ?", imports[0].ID).Count(&count).Error)
+			assert.Zero(t, count, "deleted upstream history must stay deleted")
+			assert.Equal(t, 1, detailRequests)
+			timeline.Items[0].CandyStatus = "running"
+			_, err = client.importRuns(context.Background(), db, s, g, now)
+			require.EqualError(t, err, "upstream_no_results", "completed SVG output cannot hide a missing enabled candy check")
+			svgOnly := g
+			svgOnly.CandyEnabled = false
+			latest, err = client.importRuns(context.Background(), db, s, svgOnly, now)
+			require.NoError(t, err)
+			assert.Equal(t, item.FinishedAt, latest)
+			timeline.Items[0].CandyStatus = item.CandyStatus
+			// A changed source schedules immediately and must not inherit old health.
+			g.UpstreamGroup = "New exact group"
+			s.Groups[0] = g
+			due, err = scheduledGroups(db, s, now+15, "")
+			require.NoError(t, err)
+			assert.Len(t, due, 1)
+			data, err = buildSnapshot(db, s, "member", now+15)
+			require.NoError(t, err)
+			assert.True(t, data.Groups[0].SyncStale)
+			assert.Zero(t, data.Groups[0].LastSyncAt)
+			t.Setenv(syncTokenName(channel.Id), "")
+			stored, _, err := getSettings(db)
+			require.NoError(t, err)
+			s.Revision = stored.Revision
+			_, err = saveSettings(db, s)
+			require.NoError(t, err)
+			h := taskHandler{execute: func(context.Context, string, string, string, int) (ProbeResult, error) {
+				t.Error("sync failure must never invoke a paid model check")
+				return ProbeResult{}, nil
+			}}
+			require.NoError(t, h.run(context.Background(), db, &model.SystemTask{TaskID: "sync-missing-token"}, now+15))
+			state = GroupState{}
+			require.NoError(t, db.Where("group_name = ?", g.Group).Take(&state).Error)
+			assert.Equal(t, "upstream_token_missing", state.SyncError)
+			assert.Zero(t, state.LastSyncAt)
+			assert.Equal(t, now+15+g.interval(s), nextGroupAt(g, s, state, now+30))
+			for _, bad := range []string{"https://ai.apizn.com.attacker.test", "http://ai.apizn.com", "https://user@ai.apizn.com", "https://ai.apizn.com/?token=secret"} {
+				channel.BaseURL = &bad
+				assert.False(t, supportsSync(channel))
+			}
+		})
+	}
+}
+
+func TestBenchmarkUpstreamReadContract(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status int
+		body   string
+		want   string
+	}{
+		{"unauthorized", 401, "private-token", "upstream_unauthorized"},
+		{"forbidden", 403, "private-token", "upstream_unauthorized"},
+		{"redirect", 302, "", "upstream_request_failed"},
+		{"invalid JSON", 200, "<html>login</html>", "upstream_invalid_response"},
+		{"null data", 200, `{"success":true,"data":null}`, "upstream_invalid_response"},
+		{"oversized", 200, strings.Repeat("x", 65), "upstream_invalid_response"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Location", "https://attacker.test/")
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+			client := upstreamClient{http: &http.Client{Transport: benchmarkTestTransport{server.URL}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, token: "test-token"}
+			var result upstreamTimeline
+			require.EqualError(t, client.get(context.Background(), "/api/benchmark/runs?timeline=1", &result, 64), tc.want)
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			require.EqualError(t, client.get(ctx, "/api/benchmark/runs?timeline=1", &result, 64), "upstream_request_failed")
+		})
+	}
+}
 
 func benchmarkTestDB(t *testing.T, dialect string) *gorm.DB {
 	t.Helper()
@@ -51,10 +237,10 @@ func benchmarkTestDB(t *testing.T, dialect string) *gorm.DB {
 		connection.SetMaxOpenConns(1)
 	}
 	t.Cleanup(func() { require.NoError(t, connection.Close()) })
-	for _, table := range []any{&Run{}, &GroupState{}, &HistoryAudit{}, &model.Option{}, &model.SystemTask{}} {
+	for _, table := range []any{&Run{}, &GroupState{}, &HistoryAudit{}, &SyncReceipt{}, &model.Channel{}, &model.Option{}, &model.SystemTask{}} {
 		require.NoError(t, db.Migrator().DropTable(table))
 	}
-	require.NoError(t, db.AutoMigrate(&model.Option{}, &model.SystemTask{}))
+	require.NoError(t, db.AutoMigrate(&model.Option{}, &model.SystemTask{}, &model.Channel{}))
 	require.NoError(t, Migrate(db))
 	require.NoError(t, Migrate(db))
 	return db

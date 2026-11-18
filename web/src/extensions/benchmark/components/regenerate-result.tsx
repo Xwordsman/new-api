@@ -53,7 +53,12 @@ export function RegenerateResult(props: {
   const sourceExists =
     !props.run.versions ||
     props.run.versions.some((version) => version.id === sourceRunID)
-  if (role < ROLE.ADMIN && !props.run.manual && !sourceRunID) return null
+  if (
+    props.run.origin ||
+    (role < ROLE.ADMIN && !props.run.manual && !sourceRunID)
+  ) {
+    return null
+  }
   return (
     <div className='flex flex-wrap items-center gap-2'>
       {props.run.manual && (

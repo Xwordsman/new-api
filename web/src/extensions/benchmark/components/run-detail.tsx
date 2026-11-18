@@ -103,6 +103,30 @@ export function RunResult(props: {
           </StatusBadge>
         </div>
       </div>
+      {run.origin && (
+        <p className='text-muted-foreground text-xs break-words'>
+          {t('Sync upstream results')} · {run.model} · {run.upstream_group}
+          {' · '}
+          {t('Upstream result time')}: {formatTimestamp(run.created_at)}
+          {' · '}
+          {t('Last successful sync')}:{' '}
+          {run.synced_at ? formatTimestamp(run.synced_at) : '—'}
+          {run.upstream_url?.startsWith('https://ai.apizn.com/pelican/') && (
+            <>
+              {' '}
+              ·{' '}
+              <a
+                className='underline'
+                href={run.upstream_url}
+                target='_blank'
+                rel='noopener noreferrer'
+              >
+                {t('View upstream result')}
+              </a>
+            </>
+          )}
+        </p>
+      )}
       {(run.versions?.length ?? 0) > 1 && (
         <div className='flex flex-wrap items-center gap-2'>
           <Label
@@ -191,7 +215,7 @@ export function RunResult(props: {
           <dl className='benchmark-answers'>
             <div>
               <dt className='text-muted-foreground text-xs'>
-                {t('Expected answer')}
+                {run.origin ? t('Upstream verdict') : t('Expected answer')}
               </dt>
               <dd
                 className={cn(
@@ -199,7 +223,7 @@ export function RunResult(props: {
                   run.status === 'passed' && 'text-success'
                 )}
               >
-                {run.expected || '—'}
+                {run.origin ? statuses[run.status].label : run.expected || '—'}
               </dd>
             </div>
             <div>
@@ -317,7 +341,7 @@ export function RunResult(props: {
       )}
       {(run.kind === 'candy' || !props.inline) && (
         <p className='text-muted-foreground text-[11px] leading-5'>
-          {run.kind === 'candy' && (
+          {run.kind === 'candy' && !run.origin && (
             <>
               {t(
                 'Passing rule: the final answer must exactly match {{answer}} after trimming whitespace; answers embedded in reasoning are not accepted.',
@@ -325,9 +349,13 @@ export function RunResult(props: {
               )}{' '}
             </>
           )}
-          {t(
-            'A group probe samples one routed channel. A passed check does not prove model identity or overall intelligence.'
-          )}
+          {run.origin
+            ? t(
+                'Imported results reflect upstream checks and do not verify the route used by this site.'
+              )
+            : t(
+                'A group probe samples one routed channel. A passed check does not prove model identity or overall intelligence.'
+              )}
         </p>
       )}
     </article>

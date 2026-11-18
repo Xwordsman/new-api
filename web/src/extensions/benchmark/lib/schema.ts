@@ -71,7 +71,23 @@ export const benchmarkSettingsSchema = z
             ),
             candy_enabled: z.boolean(),
             svg_enabled: z.boolean(),
+            mode: z.enum(['', 'local', 'upstream']).optional(),
+            upstream_channel: integer(0, Number.MAX_SAFE_INTEGER).optional(),
+            upstream_group: z
+              .string()
+              .trim()
+              .refine((value) => [...value].length <= 191, invalid)
+              .optional(),
           })
+          .refine(
+            (g) =>
+              g.mode !== 'upstream' ||
+              (!!g.upstream_channel && !!g.upstream_group),
+            {
+              message: invalid,
+              path: ['upstream_group'],
+            }
+          )
           .refine((g) => !g.enabled || g.candy_enabled || g.svg_enabled, {
             message: invalid,
             path: ['candy_enabled'],
@@ -92,7 +108,9 @@ export const benchmarkSettingsSchema = z
       seen.add(g.group)
     })
     if (
-      s.groups.some((g) => g.enabled && g.svg_enabled) &&
+      s.groups.some(
+        (g) => g.mode !== 'upstream' && g.enabled && g.svg_enabled
+      ) &&
       !s.svg_prompts.some((p) => p.enabled)
     ) {
       ctx.addIssue({ code: 'custom', path: ['svg_prompts'], message: invalid })

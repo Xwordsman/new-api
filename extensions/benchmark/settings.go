@@ -27,6 +27,9 @@ type GroupSettings struct {
 	IntervalMinutes int    `json:"interval_minutes"`
 	CandyEnabled    bool   `json:"candy_enabled"`
 	SVGEnabled      bool   `json:"svg_enabled"`
+	Mode            string `json:"mode,omitempty"`
+	UpstreamChannel int    `json:"upstream_channel,omitempty"`
+	UpstreamGroup   string `json:"upstream_group,omitempty"`
 }
 
 type SVGPrompt struct {
@@ -100,6 +103,18 @@ func saveSettings(db *gorm.DB, settings Settings) (Settings, error) {
 	for i := range settings.Groups {
 		g := &settings.Groups[i]
 		g.Model = strings.TrimSpace(g.Model)
+		g.UpstreamGroup = strings.TrimSpace(g.UpstreamGroup)
+		if g.Mode != "" && g.Mode != "local" && g.Mode != "upstream" {
+			return settings, errInvalid
+		}
+		if g.Mode == "upstream" {
+			if g.UpstreamChannel <= 0 || g.UpstreamGroup == "" || utf8.RuneCountInString(g.UpstreamGroup) > 191 {
+				return settings, errInvalid
+			}
+			if _, err := syncChannel(db, *g); err != nil {
+				return settings, errInvalid
+			}
+		}
 		if g.Group == "" || utf8.RuneCountInString(g.Group) > 191 || g.Group == "auto" || seen[g.Group] || !ratio_setting.ContainsGroupRatio(g.Group) ||
 			g.Model == "" || utf8.RuneCountInString(g.Model) > 200 || g.IntervalMinutes < 0 || g.IntervalMinutes > 10080 || (g.IntervalMinutes > 0 && g.IntervalMinutes < 5) ||
 			(g.Enabled && !g.CandyEnabled && !g.SVGEnabled) {
@@ -120,7 +135,7 @@ func saveSettings(db *gorm.DB, settings Settings) (Settings, error) {
 		}
 	}
 	for _, g := range settings.Groups {
-		if g.Enabled && g.SVGEnabled && activePrompts == 0 {
+		if g.Mode != "upstream" && g.Enabled && g.SVGEnabled && activePrompts == 0 {
 			return settings, errInvalid
 		}
 	}

@@ -107,17 +107,27 @@ func scheduledGroups(db *gorm.DB, s Settings, now int64, manualGroup string) ([]
 	if err := db.Find(&latest).Error; err != nil {
 		return nil, err
 	}
-	lastRun := make(map[string]int64, len(latest))
+	lastRun := make(map[string]GroupState, len(latest))
 	for _, r := range latest {
-		lastRun[r.GroupName] = r.LastAutoAt
+		lastRun[r.GroupName] = r
 	}
 	due := make([]GroupSettings, 0, len(groups))
 	for _, g := range groups {
-		if nextAutomaticAt(lastRun[g.Group], g.interval(s), now) <= now {
+		if nextGroupAt(g, s, lastRun[g.Group], now) <= now {
 			due = append(due, g)
 		}
 	}
 	return due, nil
+}
+
+func nextGroupAt(g GroupSettings, s Settings, state GroupState, now int64) int64 {
+	if g.Mode == "upstream" {
+		if state.SyncSource != syncSource(g) || state.LastAutoAt == 0 {
+			return now
+		}
+		return state.LastAutoAt + g.interval(s)
+	}
+	return nextAutomaticAt(state.LastAutoAt, g.interval(s), now)
 }
 
 func (h taskHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
@@ -163,6 +173,12 @@ func (h taskHandler) run(ctx context.Context, db *gorm.DB, task *model.SystemTas
 	}
 	jobs := make([]Run, 0)
 	for _, g := range groups {
+		if g.Mode == "upstream" {
+			if err := syncGroup(ctx, db, s, g, now); err != nil {
+				return err
+			}
+			continue
+		}
 		var batch []Run
 		var state GroupState
 		if err := db.WithContext(ctx).Where("group_name = ?", g.Group).Take(&state).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -289,11 +305,11 @@ func (h regenerationHandler) run(ctx context.Context, db *gorm.DB, task *model.S
 }
 
 func regenerationEnabled(s Settings, run Run) bool {
-	if !s.Enabled {
+	if !s.Enabled || run.Origin != "" {
 		return false
 	}
 	for _, g := range s.Groups {
-		if g.Group == run.GroupName && g.Enabled {
+		if g.Group == run.GroupName && g.Enabled && g.Mode != "upstream" {
 			return run.Kind == "candy" && g.CandyEnabled || run.Kind == "svg" && g.SVGEnabled
 		}
 	}

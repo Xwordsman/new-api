@@ -112,6 +112,96 @@ it('rejects unsupported history ranges without accepting arbitrary hours', () =>
   ).toBe(false)
 })
 
+it('preserves local prompts and upstream settings when switching result sources and saves the selected source', async () => {
+  const user = userEvent.setup()
+  const client = renderSettings({
+    ...fixture,
+    upstream_channels: [
+      {
+        id: 29,
+        name: 'Upstream A',
+        groups: ['gpt-public'],
+        token_name: 'BENCHMARK_UPSTREAM_TOKEN_29',
+        token_configured: false,
+      },
+    ],
+  })
+  await user.click(await screen.findByRole('button', { name: 'gpt-public' }))
+  const source = screen.getByRole('combobox', { name: 'Result source' })
+  expect(source).toHaveValue('local')
+  await user.selectOptions(source, 'upstream')
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Upstream channel' }),
+    '29'
+  )
+  expect(screen.getByText(/Upstream credential missing/)).toBeVisible()
+  expect(screen.getByText('BENCHMARK_UPSTREAM_TOKEN_29')).toBeVisible()
+  await user.type(
+    screen.getByRole('textbox', { name: 'Upstream group' }),
+    'Exact upstream group'
+  )
+  await user.selectOptions(source, 'local')
+  expect(
+    screen.queryByRole('textbox', { name: 'Upstream group' })
+  ).not.toBeInTheDocument()
+  expect(screen.getByRole('textbox', { name: 'Candy question' })).toHaveValue(
+    'Candy question'
+  )
+  await user.selectOptions(source, 'upstream')
+  expect(screen.getByRole('textbox', { name: 'Upstream group' })).toHaveValue(
+    'Exact upstream group'
+  )
+  const put = vi.spyOn(api, 'put').mockResolvedValue({
+    data: { success: true, data: { ...fixture.settings, revision: 3 } },
+  })
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() =>
+    expect(put).toHaveBeenCalledWith(
+      '/api/extensions/benchmark/admin/settings',
+      {
+        ...fixture.settings,
+        groups: [
+          {
+            ...fixture.settings.groups[0],
+            mode: 'upstream',
+            upstream_channel: 29,
+            upstream_group: 'Exact upstream group',
+          },
+        ],
+      }
+    )
+  )
+  client.clear()
+})
+
+it('requires an exact upstream group and channel while allowing sync without local SVG prompts', () => {
+  const settings = {
+    ...fixture.settings,
+    svg_prompts: [],
+    groups: [
+      {
+        ...fixture.settings.groups[0],
+        mode: 'upstream',
+        upstream_channel: 29,
+        upstream_group: 'Exact upstream group',
+      },
+    ],
+  }
+  expect(benchmarkSettingsSchema.safeParse(settings).success).toBe(true)
+  expect(
+    benchmarkSettingsSchema.safeParse({
+      ...settings,
+      groups: [{ ...settings.groups[0], upstream_group: '' }],
+    }).success
+  ).toBe(false)
+  expect(
+    benchmarkSettingsSchema.safeParse({
+      ...settings,
+      groups: [{ ...settings.groups[0], upstream_channel: 0 }],
+    }).success
+  ).toBe(false)
+})
+
 it('starts at 60 minutes with group settings collapsed and preserves edits across collapse and save', async () => {
   const user = userEvent.setup()
   const client = renderSettings()

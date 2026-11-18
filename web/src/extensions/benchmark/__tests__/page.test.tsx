@@ -177,6 +177,98 @@ function renderPage(data = snapshot, translations: i18n = i18next) {
   return get
 }
 
+it('shows upstream authorization failures instead of a normal status from previously passed results', async () => {
+  renderPage({
+    ...snapshot,
+    groups: [
+      {
+        ...group,
+        mode: 'upstream',
+        last_sync_at: 1800000000,
+        sync_error: 'upstream_unauthorized',
+        runs: [{ ...run, status: 'passed' }],
+      },
+    ],
+  })
+  expect(
+    await screen.findByText('Upstream authorization required')
+  ).toBeVisible()
+  expect(screen.getByText('Sync upstream results')).toBeVisible()
+  const card = screen
+    .getByRole('button', { name: 'gpt-public' })
+    .closest('[data-slot="accordion-item"]') as HTMLElement
+  expect(within(card).queryByText('Checks normal')).not.toBeInTheDocument()
+})
+
+it('marks stale upstream results without presenting them as healthy checks', async () => {
+  renderPage({
+    ...snapshot,
+    groups: [
+      {
+        ...group,
+        mode: 'upstream',
+        last_sync_at: 1799900000,
+        sync_stale: true,
+        runs: [{ ...run, status: 'passed' }],
+      },
+    ],
+  })
+  expect(await screen.findByText('Upstream results out of date')).toBeVisible()
+  const card = screen
+    .getByRole('button', { name: 'gpt-public' })
+    .closest('[data-slot="accordion-item"]') as HTMLElement
+  expect(within(card).queryByText('Checks normal')).not.toBeInTheDocument()
+})
+
+it('identifies imported model results and hides paid regeneration and local grading for administrators', async () => {
+  useAuthStore
+    .getState()
+    .auth.setUser({ id: 1, username: 'admin', role: ROLE.ADMIN })
+  const user = userEvent.setup()
+  const imported: BenchmarkRun = {
+    ...run,
+    origin: 'apizn',
+    status: 'passed',
+    expected: '',
+    upstream_group: 'Exact upstream group',
+    upstream_url: 'https://ai.apizn.com/pelican/11419',
+    synced_at: 1800000000,
+  }
+  const data = {
+    ...snapshot,
+    groups: [
+      {
+        ...group,
+        mode: 'upstream' as const,
+        runs: [imported],
+        last_sync_at: 1800000000,
+      },
+    ],
+  }
+  const get = renderPage(data)
+  get.mockImplementation(async (url) => {
+    if (url.endsWith('/snapshot')) return { data: { success: true, data } }
+    if (url.endsWith('/runs/21')) {
+      return { data: { success: true, data: imported } }
+    }
+    return {
+      data: {
+        success: true,
+        data: { items: [], total: 0, page: 1, page_size: 15 },
+      },
+    }
+  })
+  await user.click(await screen.findByRole('button', { name: 'gpt-public' }))
+  expect(
+    await screen.findByRole('link', { name: 'View upstream result' })
+  ).toHaveAttribute('href', 'https://ai.apizn.com/pelican/11419')
+  expect(screen.getByText('Upstream verdict')).toBeVisible()
+  expect(
+    screen.queryByRole('button', { name: 'Regenerate result' })
+  ).not.toBeInTheDocument()
+  expect(screen.queryByText(/Passing rule:/)).not.toBeInTheDocument()
+})
+
 it('translates Chinese benchmark labels and statuses and updates them when the language changes', async () => {
   const translations = i18next.createInstance()
   await translations.use(initReactI18next).init({

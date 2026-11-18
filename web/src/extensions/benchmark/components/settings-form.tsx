@@ -111,7 +111,7 @@ export function BenchmarkSettingsForm(props: { data: SettingsResponse }) {
             <Alert>
               <AlertDescription>
                 {t(
-                  'Probes call upstream models at platform expense. Each enabled group runs one candy check and one rotating SVG prompt per interval. Visitors are not charged.'
+                  'Local checks call models at platform expense. Upstream sync imports existing results without model calls. Sync failures never trigger local checks.'
                 )}
               </AlertDescription>
             </Alert>
@@ -271,6 +271,115 @@ export function BenchmarkSettingsForm(props: { data: SettingsResponse }) {
                   <span className='min-w-0 break-all'>{group.group}</span>
                 </AccordionTrigger>
                 <AccordionContent className='space-y-5 border-t p-5'>
+                  <FormField
+                    control={form.control}
+                    name={`groups.${index}.mode`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Result source')}</FormLabel>
+                        <FormControl>
+                          <NativeSelect
+                            {...field}
+                            value={field.value || 'local'}
+                          >
+                            <NativeSelectOption value='local'>
+                              {t('Local checks')}
+                            </NativeSelectOption>
+                            <NativeSelectOption value='upstream'>
+                              {t('Sync upstream results')}
+                            </NativeSelectOption>
+                          </NativeSelect>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {group.mode === 'upstream' && (
+                    <div className='space-y-4'>
+                      <FormField
+                        control={form.control}
+                        name={`groups.${index}.upstream_channel`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('Upstream channel')}</FormLabel>
+                            <FormControl>
+                              <NativeSelect
+                                {...field}
+                                value={field.value || ''}
+                                onChange={(event) =>
+                                  field.onChange(Number(event.target.value))
+                                }
+                              >
+                                <NativeSelectOption value=''>
+                                  {t('Select channel')}
+                                </NativeSelectOption>
+                                {(props.data.upstream_channels ?? [])
+                                  .filter((channel) =>
+                                    channel.groups.includes(group.group)
+                                  )
+                                  .map((channel) => (
+                                    <NativeSelectOption
+                                      key={channel.id}
+                                      value={channel.id}
+                                    >
+                                      #{channel.id} · {channel.name}
+                                    </NativeSelectOption>
+                                  ))}
+                              </NativeSelect>
+                            </FormControl>
+                            <FormDescription>
+                              {t(
+                                'Currently supports ai.apizn.com channels. Requires a dedicated upstream management read credential.'
+                              )}
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      {(props.data.upstream_channels ?? [])
+                        .filter(
+                          (channel) => channel.id === group.upstream_channel
+                        )
+                        .map((channel) => (
+                          <Alert
+                            key={channel.id}
+                            variant={
+                              channel.token_configured
+                                ? 'default'
+                                : 'destructive'
+                            }
+                          >
+                            <AlertDescription>
+                              {channel.token_configured
+                                ? t('Upstream credential configured')
+                                : t('Upstream credential missing')}
+                              {' · '}
+                              <code className='break-all'>
+                                {channel.token_name}
+                              </code>
+                            </AlertDescription>
+                          </Alert>
+                        ))}
+                      <FormField
+                        control={form.control}
+                        name={`groups.${index}.upstream_group`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('Upstream group')}</FormLabel>
+                            <FormControl>
+                              <Input {...field} value={field.value ?? ''} />
+                            </FormControl>
+                            <FormDescription>
+                              {t(
+                                'Enter the exact upstream group and model. Similar names are not matched automatically. Local prompts are retained for switching back.'
+                              )}
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  )}
                   <div className='grid gap-5 sm:grid-cols-2'>
                     <FormField
                       control={form.control}

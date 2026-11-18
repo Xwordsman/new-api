@@ -33,6 +33,11 @@ type Run struct {
 	LatencyMS     int64          `json:"latency_ms"`
 	InputTokens   int            `json:"input_tokens"`
 	OutputTokens  int            `json:"output_tokens"`
+	Origin        string         `gorm:"size:16" json:"origin,omitempty"`
+	UpstreamID    int64          `json:"upstream_id,omitempty"`
+	UpstreamGroup string         `gorm:"size:191" json:"upstream_group,omitempty"`
+	UpstreamURL   string         `gorm:"size:200" json:"upstream_url,omitempty"`
+	SyncedAt      int64          `json:"synced_at,omitempty"`
 }
 
 // GroupState keeps scheduling and prompt rotation independent of history
@@ -41,12 +46,16 @@ type GroupState struct {
 	GroupName   string `gorm:"size:191;primaryKey"`
 	LastAutoAt  int64
 	SVGSequence int64
+	SyncSource  string `gorm:"size:64"`
+	LastSyncAt  int64
+	SyncError   string `gorm:"size:40"`
+	UpstreamAt  int64
 }
 
 func (GroupState) TableName() string { return "extension_benchmark_group_states" }
 
 func Migrate(db *gorm.DB) error {
-	if err := db.AutoMigrate(&Run{}, &GroupState{}, &HistoryAudit{}); err != nil {
+	if err := db.AutoMigrate(&Run{}, &GroupState{}, &HistoryAudit{}, &SyncReceipt{}); err != nil {
 		return err
 	}
 	// Old regenerations only stored their immediate parent. Resolve in creation
@@ -92,10 +101,12 @@ type RunSummary struct {
 	Quality       string `json:"quality"`
 	QualityReason string `json:"quality_reason"`
 	ReviewedAt    int64  `json:"reviewed_at"`
+	Origin        string `json:"origin,omitempty"`
+	Model         string `json:"model"`
 }
 
 func (r Run) summary() RunSummary {
-	return RunSummary{ID: r.ID, Kind: r.Kind, Status: r.Status, CreatedAt: r.CreatedAt, LatencyMS: r.LatencyMS, PromptName: r.PromptName, Manual: r.Manual, SourceRunID: r.SourceRunID, RootRunID: r.RootRunID, Quality: r.Quality, QualityReason: r.QualityReason, ReviewedAt: r.ReviewedAt}
+	return RunSummary{ID: r.ID, Kind: r.Kind, Status: r.Status, CreatedAt: r.CreatedAt, LatencyMS: r.LatencyMS, PromptName: r.PromptName, Manual: r.Manual, SourceRunID: r.SourceRunID, RootRunID: r.RootRunID, Quality: r.Quality, QualityReason: r.QualityReason, ReviewedAt: r.ReviewedAt, Origin: r.Origin, Model: r.Model}
 }
 
 // HistoryAudit survives deletion of the output and records administrator actions
@@ -122,4 +133,12 @@ func (r Run) seriesID() int64 {
 	return r.ID
 }
 
-const summaryColumns = "id, kind, status, created_at, latency_ms, prompt_name, manual, source_run_id, root_run_id, quality, quality_reason, reviewed_at"
+const summaryColumns = "id, kind, status, created_at, latency_ms, prompt_name, manual, source_run_id, root_run_id, quality, quality_reason, reviewed_at, origin, model"
+
+// Receipts survive history deletion, so a subsequent poll cannot restore an
+// administrator's deleted result. No credentials or generated content is kept.
+type SyncReceipt struct {
+	Key string `gorm:"size:64;primaryKey"`
+}
+
+func (SyncReceipt) TableName() string { return "extension_benchmark_sync_receipts" }

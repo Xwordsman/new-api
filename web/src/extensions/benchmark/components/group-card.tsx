@@ -104,6 +104,30 @@ export const GroupCard = memo(function GroupCard(props: {
     failed: 'warning',
     unknown: checking ? 'info' : 'neutral',
   } as const
+  let healthLabel = g.enabled ? labels[status] : t('Disabled')
+  let healthVariant: 'success' | 'neutral' | 'danger' | 'warning' | 'info' =
+    variants[status]
+  if (g.enabled && g.mode === 'upstream') {
+    if (g.sync_error) {
+      healthLabel = t('Upstream sync failed')
+      if (
+        g.sync_error === 'upstream_unauthorized' ||
+        g.sync_error === 'upstream_token_missing'
+      ) {
+        healthLabel = t('Upstream authorization required')
+      }
+      if (g.sync_error === 'upstream_target_missing') {
+        healthLabel = t('Upstream group or model unavailable')
+      }
+      healthVariant = 'warning'
+    } else if (!g.last_sync_at) {
+      healthLabel = t('Waiting for first sync')
+      healthVariant = 'neutral'
+    } else if (g.sync_stale) {
+      healthLabel = t('Upstream results out of date')
+      healthVariant = 'warning'
+    }
+  }
   const provider = resolveModelProvider(g.model)
   const completed = runs.filter(
     (r) =>
@@ -172,21 +196,35 @@ export const GroupCard = memo(function GroupCard(props: {
             </AccordionTrigger>
             <div className='benchmark-badges'>
               <StatusBadge
-                variant={variants[status]}
-                label={g.enabled ? labels[status] : t('Disabled')}
+                variant={healthVariant}
+                label={healthLabel}
                 copyable={false}
                 className='text-[11px]'
               />
+              <span>
+                {g.mode === 'upstream'
+                  ? t('Sync upstream results')
+                  : t('Local checks')}
+              </span>
               <span className='rounded-sm border px-1.5 py-0.5'>
                 {t('Every {{minutes}} min', {
                   minutes: formatNumber(g.interval_seconds / 60, locale),
                 })}
               </span>
               <span className='text-muted-foreground'>
-                {t('Next check')}{' '}
+                {g.mode === 'upstream' ? t('Next sync') : t('Next check')}{' '}
                 {g.next_at ? formatTimestamp(g.next_at).slice(11, 16) : '—'}
               </span>
             </div>
+            {g.mode === 'upstream' && (
+              <p className='text-muted-foreground text-xs break-words'>
+                {t('Last successful sync')}:{' '}
+                {g.last_sync_at ? formatTimestamp(g.last_sync_at) : '—'}
+                {' · '}
+                {t('Upstream result time')}:{' '}
+                {g.upstream_at ? formatTimestamp(g.upstream_at) : '—'}
+              </p>
+            )}
             <dl className='benchmark-group-stats'>
               <div>
                 <dt>{t('Basic check pass rate')}</dt>

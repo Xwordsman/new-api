@@ -55,6 +55,10 @@ export function groupStatus(
   group: BenchmarkGroup
 ): 'passed' | 'pending' | 'suspected' | 'failed' | 'unknown' {
   if (!group.enabled) return 'unknown'
+  if (group.mode === 'upstream') {
+    if (group.sync_error) return 'failed'
+    if (!group.last_sync_at || group.sync_stale) return 'unknown'
+  }
   const candy =
     group.candy_enabled &&
     group.runs.find((r) => r.kind === 'candy' && !r.manual)

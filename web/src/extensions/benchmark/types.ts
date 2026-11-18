@@ -23,6 +23,9 @@ export type BenchmarkGroupSettings = {
   interval_minutes: number
   candy_enabled: boolean
   svg_enabled: boolean
+  mode?: '' | 'local' | 'upstream'
+  upstream_channel?: number
+  upstream_group?: string
 }
 
 export type BenchmarkSettings = {
@@ -43,6 +46,13 @@ export type BenchmarkSettings = {
 export type SettingsResponse = {
   settings: BenchmarkSettings
   available_groups: { group: string; models: string[] }[]
+  upstream_channels?: {
+    id: number
+    name: string
+    groups: string[]
+    token_name: string
+    token_configured: boolean
+  }[]
 }
 
 export type RunStatus =
@@ -67,6 +77,8 @@ export type RunSummary = {
   quality?: '' | 'normal' | 'suspected' | 'abnormal'
   quality_reason?: string
   reviewed_at?: number
+  origin?: string
+  model?: string
 }
 
 export type BenchmarkRun = RunSummary & {
@@ -80,6 +92,10 @@ export type BenchmarkRun = RunSummary & {
   input_tokens: number
   output_tokens: number
   manual: boolean
+  upstream_id?: number
+  upstream_group?: string
+  upstream_url?: string
+  synced_at?: number
   versions?: RunSummary[]
 }
 
@@ -101,6 +117,10 @@ export type BenchmarkGroup = BenchmarkGroupSettings & {
   next_at: number
   runs: RunSummary[]
   totals: Totals
+  last_sync_at?: number
+  upstream_at?: number
+  sync_error?: string
+  sync_stale?: boolean
 }
 
 export type Snapshot = {
