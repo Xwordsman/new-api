@@ -20,19 +20,17 @@ import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { LobeIconField } from '@/components/lobe-icon-field'
-import { TagInput } from '@/components/tag-input'
 import { Combobox } from '@/components/ui/combobox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { Textarea } from '@/components/ui/textarea'
 
 import { appearanceSchema } from './schema'
 import type { GroupAppearance, GroupCategory } from './types'
 
 export function AppearanceFields(props: {
   value: GroupAppearance
-  categories: GroupCategory[]
+  category?: GroupCategory
   onChange: (value: GroupAppearance) => void
   disabled?: boolean
   showErrors?: boolean
@@ -46,50 +44,15 @@ export function AppearanceFields(props: {
   const errors = props.showErrors ? validation.error?.issues : undefined
   return (
     <div className='space-y-5'>
-      <div className='grid gap-4 sm:grid-cols-2'>
-        <div className='space-y-2'>
-          <Label htmlFor={`${prefix}-name`}>{t('Display name')}</Label>
-          <Input
-            id={`${prefix}-name`}
-            value={value.display_name}
-            maxLength={120}
-            onChange={(event) => patch({ display_name: event.target.value })}
-          />
-        </div>
-        <div className='space-y-2'>
-          <Label htmlFor={`${prefix}-category`}>{t('Display category')}</Label>
-          <Combobox
-            disabled={props.disabled}
-            id={`${prefix}-category`}
-            value={value.category}
-            options={[
-              { value: '', label: t('Other groups') },
-              ...props.categories.map((category) => ({
-                value: category.id,
-                label: category.name,
-              })),
-            ]}
-            onValueChange={(category) => patch({ category: category ?? '' })}
-          />
-        </div>
-      </div>
-      <div className='space-y-2'>
-        <Label htmlFor={`${prefix}-description`}>
-          {t('Short description')}
-        </Label>
-        <Textarea
-          id={`${prefix}-description`}
-          value={value.description}
-          maxLength={600}
-          onChange={(event) => patch({ description: event.target.value })}
-        />
-      </div>
       <div className='space-y-2'>
         <Label htmlFor={`${prefix}-icon`}>{t('Group icon')}</Label>
         <LobeIconField
           disabled={props.disabled}
           id={`${prefix}-icon`}
           value={value.icon}
+          allowInheritance
+          inheritedIcon={props.category?.icon}
+          inheritedName={props.category?.name}
           onChange={(icon) => patch({ icon })}
         />
         <p className='text-muted-foreground text-xs'>
@@ -178,18 +141,6 @@ export function AppearanceFields(props: {
       <div className='flex flex-wrap gap-6'>
         <Label
           className='flex items-center gap-2'
-          htmlFor={`${prefix}-featured`}
-        >
-          <Switch
-            disabled={props.disabled}
-            id={`${prefix}-featured`}
-            checked={value.featured}
-            onCheckedChange={(featured) => patch({ featured })}
-          />
-          {t('Featured')}
-        </Label>
-        <Label
-          className='flex items-center gap-2'
           htmlFor={`${prefix}-background`}
         >
           <Switch
@@ -202,30 +153,7 @@ export function AppearanceFields(props: {
         </Label>
       </div>
       <div className='space-y-3'>
-        <Label htmlFor={`${prefix}-tags`}>{t('Tags')}</Label>
-        <TagInput
-          id={`${prefix}-tags`}
-          disabled={props.disabled}
-          value={value.tags.map((tag) => tag.label)}
-          maxTags={6}
-          maxLength={32}
-          onChange={(labels) =>
-            patch({
-              tags: labels.map(
-                (label) =>
-                  value.tags.find((tag) => tag.label === label) ?? {
-                    label,
-                    color: '',
-                  }
-              ),
-            })
-          }
-        />
-        <p className='text-muted-foreground text-xs'>
-          {t(
-            'Press Enter to add up to six tags. Empty tag colors use the group accent.'
-          )}
-        </p>
+        {value.tags.length > 0 && <Label>{t('Tag colors')}</Label>}
         <div className='grid gap-3 sm:grid-cols-2'>
           {value.tags.map((tag, index) => (
             <div key={tag.label} className='space-y-1'>

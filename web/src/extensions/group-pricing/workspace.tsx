@@ -26,8 +26,8 @@ import { z } from 'zod'
 
 import { ErrorState } from '@/components/error-state'
 import { LoadingState } from '@/components/loading-state'
-import { Button } from '@/components/ui/button'
 import { Form } from '@/components/ui/form'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { GroupDisplayWorkspace } from '@/extensions/group-display/workspace'
 import {
   GroupRatioForm,
@@ -173,7 +173,7 @@ function PricingEditor(props: {
   const [renames, setRenames] = useState<Record<string, string>>({})
   const [expanded, setExpanded] = useState<string | null>(null)
   const [reveal, setReveal] = useState<{ group: string }>()
-  const [showAppearance, setShowAppearance] = useState(false)
+  const [section, setSection] = useState('pricing')
   const [appearanceOpened, setAppearanceOpened] = useState(false)
   const [now, setNow] = useState(Date.now)
   const panelPrefix = useId()
@@ -340,116 +340,123 @@ function PricingEditor(props: {
     )
   }
   return (
-    <div className='space-y-6'>
-      <GroupRatioForm
-        key={baseline.promotions.revision}
-        form={props.form}
-        isSaving={save.isPending}
-        onRename={onRename}
-        rowExtension={{
-          header: t('Public discount'),
-          description: (
-            <div className='text-muted-foreground space-y-1 text-sm'>
-              <p>
-                {t(
-                  'Expand a group to configure its public discount. Save group settings to apply pricing and offers together.'
-                )}
-              </p>
-              <p>
-                {t(
-                  'Visual renames update pricing rules, public offers and monitor references. Existing channel, user and API key group assignments must be updated separately.'
-                )}
-              </p>
-            </div>
-          ),
-          renderCell: renderToggle,
-          renderDetails,
-          reveal,
-          renderFooter: (configuredGroups) => {
-            const configured = new Set(configuredGroups)
-            const orphaned = groups.filter(
-              (group) => group.promotion && !configured.has(group.group)
-            )
-            if (!orphaned.length) return null
-            return (
-              <div className='divide-y rounded-md border'>
-                {orphaned.map(({ group }) => (
-                  <div key={group}>
-                    <div className='flex flex-wrap items-center justify-between gap-3 p-3'>
-                      <div className='min-w-0 space-y-1'>
-                        <p className='font-mono break-all'>{group}</p>
-                        <p className='text-muted-foreground text-xs'>
-                          {t('Group no longer configured')}
-                        </p>
-                      </div>
-                      {renderToggle(group)}
-                    </div>
-                    {expanded === group && (
-                      <div className='bg-muted/20 border-t p-5'>
-                        {renderDetails(group)}
-                      </div>
-                    )}
-                  </div>
-                ))}
+    <Tabs
+      value={section}
+      onValueChange={(value) => {
+        setSection(String(value))
+        if (value === 'appearance') setAppearanceOpened(true)
+      }}
+      className='min-w-0 gap-5'
+    >
+      <TabsList
+        aria-label={t('Group configuration')}
+        className='h-10 w-full sm:w-fit'
+      >
+        <TabsTrigger value='pricing' className='px-4'>
+          {t('Pricing and access')}
+        </TabsTrigger>
+        <TabsTrigger value='appearance' className='px-4'>
+          {t('API key group appearance')}
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value='pricing' keepMounted>
+        <GroupRatioForm
+          key={baseline.promotions.revision}
+          showSaveAction={section === 'pricing'}
+          form={props.form}
+          isSaving={save.isPending}
+          onRename={onRename}
+          rowExtension={{
+            header: t('Public discount'),
+            description: (
+              <div className='text-muted-foreground space-y-1 text-sm'>
+                <p>
+                  {t(
+                    'Expand a group to configure its public discount. Save group settings to apply pricing and offers together.'
+                  )}
+                </p>
+                <p>
+                  {t(
+                    'Visual renames update pricing rules, public offers and monitor references. Existing channel, user and API key group assignments must be updated separately.'
+                  )}
+                </p>
               </div>
-            )
-          },
-        }}
-        onSave={async (values) => {
-          await offers.handleSubmit(
-            async (promotions) => {
-              const options: Record<string, string> = { ...baseline.options }
-              for (const [key, value] of Object.entries(values)) {
-                options[
-                  key === 'GroupSpecialUsableGroup'
-                    ? 'group_ratio_setting.group_special_usable_group'
-                    : key
-                ] = String(value)
-              }
-              await save
-                .mutateAsync({
-                  options,
-                  baseline: baseline.options,
-                  renames,
-                  promotions: {
-                    ...promotions,
-                    groups: promotions.groups.filter(
-                      (group) => group.promotion
-                    ),
-                  },
-                })
-                .catch(() => {})
+            ),
+            renderCell: renderToggle,
+            renderDetails,
+            reveal,
+            renderFooter: (configuredGroups) => {
+              const configured = new Set(configuredGroups)
+              const orphaned = groups.filter(
+                (group) => group.promotion && !configured.has(group.group)
+              )
+              if (!orphaned.length) return null
+              return (
+                <div className='divide-y rounded-md border'>
+                  {orphaned.map(({ group }) => (
+                    <div key={group}>
+                      <div className='flex flex-wrap items-center justify-between gap-3 p-3'>
+                        <div className='min-w-0 space-y-1'>
+                          <p className='font-mono break-all'>{group}</p>
+                          <p className='text-muted-foreground text-xs'>
+                            {t('Group no longer configured')}
+                          </p>
+                        </div>
+                        {renderToggle(group)}
+                      </div>
+                      {expanded === group && (
+                        <div className='bg-muted/20 border-t p-5'>
+                          {renderDetails(group)}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )
             },
-            (errors) => {
-              const invalid = offers
-                .getValues('groups')
-                .find((_, index) => errors.groups?.[index])
-              if (!invalid) return
-              setExpanded(invalid.group)
-              setReveal({ group: invalid.group })
-            }
-          )()
-        }}
-      />
-      <div className='space-y-4'>
-        <Button
-          type='button'
-          variant='outline'
-          aria-expanded={showAppearance}
-          aria-controls={`${panelPrefix}-appearance`}
-          onClick={() => {
-            setAppearanceOpened(true)
-            setShowAppearance((current) => !current)
           }}
-        >
-          {t('Group appearance')}
-        </Button>
-        <div id={`${panelPrefix}-appearance`} hidden={!showAppearance}>
-          {appearanceOpened && (
-            <GroupDisplayWorkspace options={appearanceOptions} />
-          )}
-        </div>
-      </div>
-    </div>
+          onSave={async (values) => {
+            await offers.handleSubmit(
+              async (promotions) => {
+                const options: Record<string, string> = { ...baseline.options }
+                for (const [key, value] of Object.entries(values)) {
+                  options[
+                    key === 'GroupSpecialUsableGroup'
+                      ? 'group_ratio_setting.group_special_usable_group'
+                      : key
+                  ] = String(value)
+                }
+                await save
+                  .mutateAsync({
+                    options,
+                    baseline: baseline.options,
+                    renames,
+                    promotions: {
+                      ...promotions,
+                      groups: promotions.groups.filter(
+                        (group) => group.promotion
+                      ),
+                    },
+                  })
+                  .catch(() => {})
+              },
+              (errors) => {
+                const invalid = offers
+                  .getValues('groups')
+                  .find((_, index) => errors.groups?.[index])
+                if (!invalid) return
+                setExpanded(invalid.group)
+                setReveal({ group: invalid.group })
+              }
+            )()
+          }}
+        />
+      </TabsContent>
+      <TabsContent value='appearance' keepMounted>
+        {appearanceOpened && (
+          <GroupDisplayWorkspace options={appearanceOptions} />
+        )}
+      </TabsContent>
+    </Tabs>
   )
 }

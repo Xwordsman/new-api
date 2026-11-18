@@ -134,22 +134,42 @@ it('opens a full-width offer panel immediately below its pricing row', async () 
   client.clear()
 })
 
-it('preserves appearance drafts when the appearance panel is collapsed and reopened', async () => {
+it('opens appearance from a visible tab and preserves drafts in both tabs', async () => {
   const user = userEvent.setup()
   const { client } = renderPricing()
-  const toggle = await screen.findByRole('button', { name: 'Group appearance' })
+  const tab = await screen.findByRole('tab', {
+    name: 'API key group appearance',
+  })
+  const pricingName = screen.getAllByRole('textbox', { name: 'Group name' })[0]
+  fireEvent.change(screen.getAllByRole('spinbutton', { name: 'Ratio' })[0], {
+    target: { value: '0.7' },
+  })
+  expect(pricingName).toHaveValue('vip')
   vi.mocked(api.get).mockResolvedValue({
     data: { success: true, data: { revision: 0, categories: [], groups: {} } },
   })
-  await user.click(toggle)
-  const name = await screen.findByRole('textbox', { name: 'Display name' })
+  await user.click(tab)
+  const table = await screen.findByRole('table', {
+    name: 'API key group appearance',
+  })
+  const name = within(table).getAllByRole('textbox', {
+    name: 'Display name',
+  })[1]
   fireEvent.change(name, { target: { value: 'Appearance draft' } })
-  await user.click(toggle)
-  expect(toggle).toHaveAttribute('aria-expanded', 'false')
-  await user.click(toggle)
-  expect(screen.getByRole('textbox', { name: 'Display name' })).toHaveValue(
-    'Appearance draft'
+  expect(
+    screen.queryByRole('button', { name: 'Save group settings' })
+  ).not.toBeInTheDocument()
+  await user.click(screen.getByRole('tab', { name: 'Pricing and access' }))
+  expect(tab).toHaveAttribute('aria-selected', 'false')
+  expect(screen.getAllByRole('spinbutton', { name: 'Ratio' })[0]).toHaveValue(
+    0.7
   )
+  expect(
+    screen.getByRole('button', { name: 'Save group settings' })
+  ).toBeVisible()
+  await user.click(tab)
+  expect(name).toHaveValue('Appearance draft')
+  expect(tab).toHaveAttribute('aria-selected', 'true')
   client.clear()
 })
 

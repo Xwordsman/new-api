@@ -84,6 +84,7 @@ type GroupRatioFormProps = {
   isSaving: boolean
   onRename?: (original: string, name: string) => boolean
   rowExtension?: GroupPricingRowExtension
+  showSaveAction?: boolean
 }
 
 export const GroupRatioForm = memo(function GroupRatioForm({
@@ -92,6 +93,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
   isSaving,
   onRename,
   rowExtension,
+  showSaveAction = true,
 }: GroupRatioFormProps) {
   const { t } = useTranslation()
   const values = useWatch({ control: form.control })
@@ -159,22 +161,26 @@ export const GroupRatioForm = memo(function GroupRatioForm({
       <GroupPricingGuide open={guideOpen} onOpenChange={setGuideOpen} />
 
       <Form {...form}>
-        <SettingsPageActionsPortal>
-          <Button
-            type='button'
-            size='sm'
-            onClick={form.handleSubmit(onSave, (errors) => {
-              if (errors.MaxTokenAutoGroups) {
-                setEditMode('visual')
-                setSection('auto')
-                requestAnimationFrame(() => form.setFocus('MaxTokenAutoGroups'))
-              }
-            })}
-            disabled={isSaving}
-          >
-            {isSaving ? t('Saving...') : t('Save group settings')}
-          </Button>
-        </SettingsPageActionsPortal>
+        {showSaveAction && (
+          <SettingsPageActionsPortal>
+            <Button
+              type='button'
+              size='sm'
+              onClick={form.handleSubmit(onSave, (errors) => {
+                if (errors.MaxTokenAutoGroups) {
+                  setEditMode('visual')
+                  setSection('auto')
+                  requestAnimationFrame(() =>
+                    form.setFocus('MaxTokenAutoGroups')
+                  )
+                }
+              })}
+              disabled={isSaving}
+            >
+              {isSaving ? t('Saving...') : t('Save group settings')}
+            </Button>
+          </SettingsPageActionsPortal>
+        )}
         {editMode === 'visual' ? (
           <GroupRatioVisualEditor
             onRename={onRename}
