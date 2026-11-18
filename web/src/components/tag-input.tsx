@@ -25,19 +25,25 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 interface TagInputProps {
+  id?: string
   value: string[]
   onChange: (tags: string[]) => void
   placeholder?: string
   className?: string
   disabled?: boolean
+  maxTags?: number
+  maxLength?: number
 }
 
 export function TagInput({
+  id,
   value = [],
   onChange,
   placeholder,
   className,
   disabled = false,
+  maxTags,
+  maxLength,
 }: TagInputProps) {
   const { t } = useTranslation()
   const placeholderText = placeholder ?? t('Add tags...')
@@ -46,7 +52,11 @@ export function TagInput({
 
   const addTag = (tag: string) => {
     const trimmed = tag.trim()
-    if (trimmed && !value.includes(trimmed)) {
+    if (
+      trimmed &&
+      !value.includes(trimmed) &&
+      (maxTags === undefined || value.length < maxTags)
+    ) {
       onChange([...value, trimmed])
       setInputValue('')
     }
@@ -61,7 +71,8 @@ export function TagInput({
       e.preventDefault()
       addTag(inputValue)
     } else if (e.key === 'Backspace' && !inputValue && value.length > 0) {
-      removeTag(value[value.length - 1])
+      const lastTag = value.at(-1)
+      if (lastTag !== undefined) removeTag(lastTag)
     }
   }
 
@@ -87,7 +98,7 @@ export function TagInput({
               type='button'
               variant='ghost'
               size='icon-sm'
-              aria-label='Remove tag'
+              aria-label={t('Remove tag')}
               onClick={(e) => {
                 e.stopPropagation()
                 removeTag(tag)
@@ -101,6 +112,7 @@ export function TagInput({
       ))}
       <input
         ref={inputRef}
+        id={id}
         type='text'
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
@@ -108,6 +120,8 @@ export function TagInput({
         onBlur={handleBlur}
         placeholder={value.length === 0 ? placeholderText : ''}
         disabled={disabled}
+        maxLength={maxLength}
+        readOnly={maxTags !== undefined && value.length >= maxTags}
         className='placeholder:text-muted-foreground min-w-[120px] flex-1 border-0 bg-transparent shadow-none outline-none focus-visible:ring-0'
       />
     </div>

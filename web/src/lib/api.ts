@@ -61,6 +61,7 @@ export async function getUserGroups(): Promise<{
   success: boolean
   message?: string
   group_order?: string[]
+  display?: import('@/extensions/group-display/types').GroupDisplaySettings
   data?: Record<string, { desc: string; ratio: number | string }>
 }> {
   const res = await api.get('/api/user/self/groups')

@@ -8,6 +8,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/extensions/groupdisplay"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -245,6 +246,15 @@ func TestGroupDisplayOrderAppliesAfterPermissionsAndPreservesAutoRouting(t *test
 	userGroup, err := model.GetUserGroup(user.Id, true)
 	require.NoError(t, err)
 	require.Equal(t, "member", userGroup)
+	require.NoError(t, model.DB.AutoMigrate(&model.Option{}))
+	_, err = groupdisplay.Save(model.DB, groupdisplay.Settings{
+		Categories: []groupdisplay.Category{{ID: "public", Name: "Public"}, {ID: "private", Name: "Private"}},
+		Groups: map[string]groupdisplay.Appearance{
+			"vip":    {Category: "public", DisplayName: "Premium route"},
+			"hidden": {Category: "private", Description: "Private details"},
+		},
+	})
+	require.NoError(t, err)
 
 	adminCtx, adminRecorder := newTokenAutoGroupsAuthenticatedContext(t, http.MethodGet, "/api/group/", nil, user.Id)
 	GetGroups(adminCtx)
@@ -260,7 +270,8 @@ func TestGroupDisplayOrderAppliesAfterPermissionsAndPreservesAutoRouting(t *test
 			Ratio float64 `json:"ratio"`
 			Desc  string  `json:"desc"`
 		} `json:"data"`
-		Order []string `json:"group_order"`
+		Order   []string              `json:"group_order"`
+		Display groupdisplay.Settings `json:"display"`
 	}
 	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
 	require.True(t, response.Success)
@@ -270,6 +281,10 @@ func TestGroupDisplayOrderAppliesAfterPermissionsAndPreservesAutoRouting(t *test
 	assert.Equal(t, 0.8, response.Groups["vip"].Ratio)
 	assert.Equal(t, "VIP", response.Groups["vip"].Desc)
 	assert.Equal(t, 2.0, response.Groups["member"].Ratio)
+	assert.Equal(t, "Premium route", response.Display.Groups["vip"].DisplayName)
+	assert.NotContains(t, response.Display.Groups, "hidden")
+	assert.Equal(t, []groupdisplay.Category{{ID: "public", Name: "Public"}}, response.Display.Categories)
+	assert.Zero(t, response.Display.Revision)
 
 	autoCtx, autoRecorder := newTokenAutoGroupsAuthenticatedContext(t, http.MethodGet, "/api/token/auto-groups", nil, user.Id)
 	GetTokenAutoGroups(autoCtx)

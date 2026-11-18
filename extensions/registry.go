@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/extensions/concurrency"
 	documentation "github.com/QuantumNous/new-api/extensions/documentation"
 	"github.com/QuantumNous/new-api/extensions/emailtemplate"
+	"github.com/QuantumNous/new-api/extensions/groupdisplay"
 	"github.com/QuantumNous/new-api/extensions/grouppricing"
 	"github.com/QuantumNous/new-api/extensions/invitation"
 	"github.com/QuantumNous/new-api/extensions/keypricing"
@@ -79,6 +80,7 @@ func Initialize(db *gorm.DB) {
 
 // RegisterRoutes mounts routes owned by compile-time extensions.
 func RegisterRoutes(apiRouter *gin.RouterGroup) {
+	groupdisplay.RegisterRoutes(apiRouter)
 	grouppricing.RegisterRoutes(apiRouter)
 	redemptionshop.RegisterRoutes(apiRouter)
 	documentation.RegisterRoutes(apiRouter)

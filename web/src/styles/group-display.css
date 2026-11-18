@@ -1,0 +1,271 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+.group-display-frame,
+.group-display-heading,
+.group-display-trigger {
+  --group-ink: color-mix(in srgb, var(--group-color) 60%, var(--foreground));
+}
+
+.group-display-menu {
+  padding: 8px;
+  border-radius: inherit;
+}
+
+.group-display-menu [data-slot='command-input-wrapper'] {
+  padding: 0 0 4px;
+}
+
+.group-display-menu [data-slot='input-group'] {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--foreground) 4%, var(--popover));
+}
+
+.group-display-list {
+  max-height: min(390px, calc(var(--available-height, 450px) - 52px));
+  padding: 0 0 2px;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.group-display-section {
+  padding: 0;
+}
+
+.group-display-section [cmdk-group-heading] {
+  padding: 12px 8px 6px;
+}
+
+.group-display-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.group-display-category-icon {
+  display: inline-flex;
+  color: var(--group-ink);
+}
+
+.group-display-frame {
+  --group-surface: var(--popover);
+  --group-surface-end: var(--popover);
+  --group-border: transparent;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(115deg, var(--group-surface), var(--group-surface-end))
+      padding-box,
+    var(--group-border) border-box;
+}
+
+.group-display-frame[data-tinted='true'] {
+  --group-surface: color-mix(in srgb, var(--group-color) 6%, var(--popover));
+  --group-surface-end: color-mix(
+    in srgb,
+    var(--group-gradient-to) 4%,
+    var(--popover)
+  );
+}
+
+.group-display-frame[data-border='solid'] {
+  --group-border: linear-gradient(var(--group-color), var(--group-color));
+}
+
+.group-display-frame[data-border='gradient'] {
+  --group-border: linear-gradient(
+    115deg,
+    color-mix(in srgb, var(--group-color) 75%, var(--border)),
+    color-mix(in srgb, var(--group-gradient-to) 75%, var(--border))
+  );
+}
+
+.group-display-row {
+  min-height: 60px;
+  margin: 2px 0;
+  padding: 9px 10px 9px 34px;
+  transition:
+    background-color 150ms,
+    border-color 150ms;
+}
+
+.group-display-row[data-selected='true'],
+.group-display-row[data-checked='true'] {
+  --group-surface: color-mix(in srgb, var(--foreground) 4%, var(--popover));
+  --group-surface-end: var(--group-surface);
+}
+
+.group-display-row[data-tinted='true'][data-selected='true'],
+.group-display-row[data-tinted='true'][data-checked='true'] {
+  --group-surface: color-mix(in srgb, var(--group-color) 10%, var(--popover));
+  --group-surface-end: color-mix(
+    in srgb,
+    var(--group-gradient-to) 7%,
+    var(--popover)
+  );
+}
+
+.group-display-trigger {
+  border-color: var(--input);
+  background: var(--popover);
+  color: var(--foreground);
+  transition:
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.group-display-trigger:hover {
+  background: var(--popover);
+  color: var(--foreground);
+  border-color: color-mix(in srgb, var(--foreground) 30%, var(--border));
+}
+
+.group-display-trigger[data-popup-open] {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
+}
+
+.group-display-icon {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--group-color) 24%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--group-color) 10%, var(--popover));
+  color: var(--group-ink);
+}
+
+.group-display-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.group-display-title {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 5px;
+  line-height: 20px;
+}
+
+.group-display-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.group-display-description {
+  display: block;
+  overflow: hidden;
+  margin-top: 2px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-display-tag[data-slot='status-badge'],
+.group-display-featured[data-slot='status-badge'] {
+  height: 16px;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 0 5px;
+  border: 1px solid
+    color-mix(in srgb, var(--tag-color, var(--group-color)) 30%, var(--border));
+  border-radius: 999px;
+  background: color-mix(
+    in srgb,
+    var(--tag-color, var(--group-color)) 9%,
+    var(--popover)
+  );
+  color: color-mix(
+    in srgb,
+    var(--tag-color, var(--group-color)) 60%,
+    var(--foreground)
+  );
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+}
+
+.group-display-featured[data-slot='status-badge'] {
+  border-color: transparent;
+  background: linear-gradient(110deg, #9a3412, #9d174d 48%, #6d28d9);
+  color: #fff;
+}
+
+.group-display-featured svg {
+  width: 10px;
+  height: 10px;
+}
+
+.group-display-ratio {
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 1px;
+}
+
+.group-display-trigger .group-display-ratio {
+  align-self: center;
+}
+
+.group-display-multiplier[data-slot='badge'] {
+  height: 20px;
+  min-width: 48px;
+  padding: 0 7px;
+  border-color: color-mix(in srgb, var(--group-color) 27%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--group-color) 8%, var(--popover));
+  color: var(--group-ink);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.group-display-check {
+  color: var(--group-ink);
+}
+
+@media (max-width: 480px) {
+  .group-display-row {
+    padding-right: 7px;
+    padding-left: 26px;
+    gap: 8px;
+  }
+
+  .group-display-check {
+    left: 5px;
+    width: 12px;
+    height: 12px;
+  }
+
+  .group-display-ratio {
+    margin-left: 0;
+  }
+}

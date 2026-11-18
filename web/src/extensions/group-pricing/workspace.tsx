@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -26,11 +26,14 @@ import { z } from 'zod'
 
 import { ErrorState } from '@/components/error-state'
 import { LoadingState } from '@/components/loading-state'
+import { Button } from '@/components/ui/button'
 import { Form } from '@/components/ui/form'
+import { GroupDisplayWorkspace } from '@/extensions/group-display/workspace'
 import {
   GroupRatioForm,
   type GroupFormValues,
 } from '@/features/system-settings/models/group-ratio-form'
+import { orderGroupNames } from '@/lib/group-order'
 
 import { getGroupPricing, saveGroupPricing, type PricingSnapshot } from './api'
 import { PromotionFields } from './promotion-fields'
@@ -170,6 +173,8 @@ function PricingEditor(props: {
   const [renames, setRenames] = useState<Record<string, string>>({})
   const [expanded, setExpanded] = useState<string | null>(null)
   const [reveal, setReveal] = useState<{ group: string }>()
+  const [showAppearance, setShowAppearance] = useState(false)
+  const [appearanceOpened, setAppearanceOpened] = useState(false)
   const [now, setNow] = useState(Date.now)
   const panelPrefix = useId()
   const offers = useForm<PromotionForm>({
@@ -180,6 +185,25 @@ function PricingEditor(props: {
   const entries = new Map(
     groups.map((group, index) => [group.group, { ...group, index }])
   )
+  const appearanceOptions = useMemo(() => {
+    const ratios = JSON.parse(baseline.options.GroupRatio) as Record<
+      string,
+      number
+    >
+    const descriptions = JSON.parse(
+      baseline.options.UserUsableGroups
+    ) as Record<string, string>
+    const order = JSON.parse(baseline.options.GroupDisplayOrder) as string[]
+    return [
+      { value: 'auto', label: 'auto', ratio: 'auto' },
+      ...orderGroupNames(Object.keys(ratios), order).map((name) => ({
+        value: name,
+        label: name,
+        ratio: ratios[name],
+        desc: descriptions[name] || name,
+      })),
+    ]
+  }, [baseline.options])
   useEffect(() => {
     props.form.reset(pricingValues(baseline))
   }, [props.form, baseline])
@@ -210,6 +234,7 @@ function PricingEditor(props: {
           'channel-monitor',
           'model-pricing-config',
           'model-pricing-preview',
+          'group-display',
         ].map((key) => client.invalidateQueries({ queryKey: [key] }))
       )
       toast.success(t('Group settings saved'))
@@ -406,6 +431,25 @@ function PricingEditor(props: {
           )()
         }}
       />
+      <div className='space-y-4'>
+        <Button
+          type='button'
+          variant='outline'
+          aria-expanded={showAppearance}
+          aria-controls={`${panelPrefix}-appearance`}
+          onClick={() => {
+            setAppearanceOpened(true)
+            setShowAppearance((current) => !current)
+          }}
+        >
+          {t('Group appearance')}
+        </Button>
+        <div id={`${panelPrefix}-appearance`} hidden={!showAppearance}>
+          {appearanceOpened && (
+            <GroupDisplayWorkspace options={appearanceOptions} />
+          )}
+        </div>
+      </div>
     </div>
   )
 }

@@ -34,21 +34,22 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import { GroupOptionContents } from '@/extensions/group-display/group-option'
+import {
+  groupAppearanceStyle,
+  groupOptionSections,
+  type GroupDisplayOption,
+} from '@/extensions/group-display/types'
 import { useMediaQuery } from '@/hooks'
+import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 
 import {
   AUTO_GROUP_FRAME_CLASS_NAME,
   AutoGroupFlowBorder,
-  GroupRatioBadge,
 } from './auto-group-visuals'
 
-export type ApiKeyGroupOption = {
-  value: string
-  label: string
-  desc?: string
-  ratio?: number | string
-}
+export type ApiKeyGroupOption = GroupDisplayOption
 
 type ApiKeyGroupComboboxProps = {
   options: ApiKeyGroupOption[]
@@ -67,30 +68,13 @@ export function ApiKeyGroupCombobox({
 }: ApiKeyGroupComboboxProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
-  const [searchValue, setSearchValue] = useState('')
   const shouldReduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const selectedOption = options.find((option) => option.value === value)
   const isAutoSelected = selectedOption?.value === 'auto'
 
-  const filteredOptions = useMemo(() => {
-    const search = searchValue.trim().toLowerCase()
-    if (!search) return options
-
-    return options.filter((option) => {
-      const ratioText = String(option.ratio ?? '').toLowerCase()
-      return (
-        option.value.toLowerCase().includes(search) ||
-        option.label.toLowerCase().includes(search) ||
-        option.desc?.toLowerCase().includes(search) ||
-        ratioText.includes(search)
-      )
-    })
-  }, [options, searchValue])
-
   const handleSelect = (selectedValue: string) => {
     onValueChange(selectedValue)
     setOpen(false)
-    setSearchValue('')
   }
 
   return (
@@ -104,8 +88,11 @@ export function ApiKeyGroupCombobox({
             aria-expanded={open}
             data-auto-group-effect={isAutoSelected ? 'trigger' : undefined}
             disabled={disabled}
+            style={groupAppearanceStyle(selectedOption)}
+            data-border={selectedOption?.appearance?.border || undefined}
+            data-tinted={selectedOption?.appearance?.background || undefined}
             className={cn(
-              'border-input bg-muted/40 hover:bg-muted/55 hover:text-foreground active:bg-background data-popup-open:border-ring data-popup-open:bg-background data-popup-open:ring-ring/20 relative h-auto min-h-14 w-full justify-between gap-2 rounded-lg px-3 py-2 text-start shadow-none transition-[background-color,border-color,box-shadow] duration-150 data-popup-open:ring-[3px] sm:min-h-20 sm:gap-3 sm:px-4 sm:py-3',
+              'group-display-trigger relative h-auto min-h-18 w-full justify-between gap-2 rounded-xl px-3.5 py-3 text-start shadow-none sm:gap-3 sm:px-4',
               isAutoSelected &&
                 cn(
                   AUTO_GROUP_FRAME_CLASS_NAME,
@@ -118,24 +105,15 @@ export function ApiKeyGroupCombobox({
         {isAutoSelected && (
           <AutoGroupFlowBorder shouldReduceMotion={shouldReduceMotion} />
         )}
-        <span className='flex min-w-0 flex-1 items-center justify-between gap-2 sm:gap-3'>
-          <span className='min-w-0'>
-            <span className='block truncate font-medium'>
-              {selectedOption?.label || placeholder || t('Select a group')}
-            </span>
-            {selectedOption?.desc && (
-              <span className='text-muted-foreground block truncate text-[11px] sm:text-xs'>
-                {selectedOption.desc}
-              </span>
-            )}
-          </span>
-          <span className='hidden sm:block'>
-            <GroupRatioBadge
-              ratio={selectedOption?.ratio}
-              isAuto={isAutoSelected}
+        <span className='flex min-w-0 flex-1 items-center gap-2.5'>
+          {selectedOption ? (
+            <GroupOptionContents
+              option={selectedOption}
               shouldReduceMotion={shouldReduceMotion}
             />
-          </span>
+          ) : (
+            <span>{placeholder || t('Select a group')}</span>
+          )}
         </span>
         <ChevronsUpDown
           aria-hidden='true'
@@ -143,31 +121,117 @@ export function ApiKeyGroupCombobox({
         />
       </PopoverTrigger>
       <PopoverContent
-        className='data-closed:zoom-out-100 data-open:zoom-in-100 data-[side=bottom]:slide-in-from-top-0 data-[side=left]:slide-in-from-right-0 data-[side=right]:slide-in-from-left-0 data-[side=top]:slide-in-from-bottom-0 w-[var(--anchor-width)] overflow-hidden rounded-xl p-0 shadow-lg data-closed:duration-75 data-open:duration-100'
+        className='data-closed:zoom-out-100 data-open:zoom-in-100 data-[side=bottom]:slide-in-from-top-0 data-[side=left]:slide-in-from-right-0 data-[side=right]:slide-in-from-left-0 data-[side=top]:slide-in-from-bottom-0 w-[var(--anchor-width)] max-w-[var(--available-width)] overflow-hidden rounded-2xl p-0 shadow-lg data-closed:duration-75 data-open:duration-100'
         onWheel={(event) => event.stopPropagation()}
         onTouchMove={(event) => event.stopPropagation()}
         onPointerDown={(event) => event.stopPropagation()}
       >
-        <Command shouldFilter={false}>
-          <CommandInput
-            placeholder={t('Search...')}
-            value={searchValue}
-            onValueChange={setSearchValue}
-          />
-          <CommandList className='max-h-[360px]'>
-            <CommandEmpty>{t('No group found.')}</CommandEmpty>
-            <CommandGroup>
-              {filteredOptions.map((option) => {
+        <ApiKeyGroupOptions
+          options={options}
+          value={value}
+          onValueChange={handleSelect}
+        />
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+// Both the administrator preview and the real selector use this list.
+export function ApiKeyGroupOptions(
+  props: Pick<ApiKeyGroupComboboxProps, 'options' | 'value' | 'onValueChange'>
+) {
+  const { t } = useTranslation()
+  const [searchValue, setSearchValue] = useState('')
+  const shouldReduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+  const sections = useMemo(() => {
+    const search = searchValue.trim().toLowerCase()
+    const filtered = props.options.filter((option) =>
+      [
+        option.value,
+        option.label,
+        option.desc,
+        String(option.ratio ?? ''),
+        option.category?.name,
+        ...(option.appearance?.tags.map((tag) => tag.label) ?? []),
+      ].some((text) => text?.toLowerCase().includes(search))
+    )
+    return groupOptionSections(filtered)
+  }, [props.options, searchValue])
+  const hasCategories = props.options.some((option) => option.category)
+  return (
+    <Command
+      className='group-display-menu'
+      label={t('Search groups')}
+      shouldFilter={false}
+      defaultValue={props.value}
+    >
+      <CommandInput
+        placeholder={t('Search...')}
+        aria-label={t('Search groups')}
+        value={searchValue}
+        onValueChange={setSearchValue}
+      />
+      <CommandList className='group-display-list'>
+        <CommandEmpty>{t('No group found.')}</CommandEmpty>
+        {sections.map((section) => {
+          let heading
+          if (section.category) {
+            heading = (
+              <span
+                className='group-display-heading'
+                style={groupAppearanceStyle({
+                  value: section.id,
+                  label: section.category.name,
+                  category: section.category,
+                })}
+              >
+                <span
+                  aria-hidden='true'
+                  className='group-display-category-icon'
+                >
+                  {section.category.icon &&
+                    getLobeIcon(section.category.icon, 16)}
+                </span>
+                <span>{section.category.name}</span>
+                <span className='bg-border h-px flex-1' aria-hidden='true' />
+              </span>
+            )
+          } else if (hasCategories && section.id === '__other') {
+            heading = (
+              <span className='group-display-heading'>
+                <span
+                  aria-hidden='true'
+                  className='bg-muted-foreground/60 size-1.5 rounded-full'
+                />
+                <span>{t('Other groups')}</span>
+                <span className='bg-border h-px flex-1' aria-hidden='true' />
+              </span>
+            )
+          }
+          return (
+            <CommandGroup
+              key={section.id}
+              heading={heading}
+              className='group-display-section'
+            >
+              {section.options.map((option) => {
                 const isAutoOption = option.value === 'auto'
 
                 return (
                   <CommandItem
                     key={option.value}
                     value={option.value}
+                    data-checked={props.value === option.value}
+                    data-border={option.appearance?.border || undefined}
+                    data-tinted={option.appearance?.background || undefined}
+                    style={groupAppearanceStyle(option)}
                     data-auto-group-effect={isAutoOption ? 'option' : undefined}
-                    onSelect={() => handleSelect(option.value)}
+                    onSelect={() => {
+                      props.onValueChange(option.value)
+                      setSearchValue('')
+                    }}
                     className={cn(
-                      'data-[selected=true]:bg-muted items-start gap-3 rounded-lg px-3 py-3 transition-colors',
+                      'group-display-row group-display-frame items-center gap-2.5 rounded-[10px] [&>svg:last-child]:hidden',
                       isAutoOption &&
                         cn(
                           AUTO_GROUP_FRAME_CLASS_NAME,
@@ -183,32 +247,23 @@ export function ApiKeyGroupCombobox({
                     <Check
                       aria-hidden='true'
                       className={cn(
-                        'mt-0.5 size-4',
-                        value === option.value ? 'opacity-100' : 'opacity-0'
+                        'group-display-check pointer-events-none absolute left-2 size-3.5',
+                        props.value === option.value
+                          ? 'opacity-100'
+                          : 'opacity-0'
                       )}
                     />
-                    <span className='min-w-0 flex-1'>
-                      <span className='block truncate font-medium'>
-                        {option.label}
-                      </span>
-                      {option.desc && (
-                        <span className='text-muted-foreground block truncate text-xs'>
-                          {option.desc}
-                        </span>
-                      )}
-                    </span>
-                    <GroupRatioBadge
-                      ratio={option.ratio}
-                      isAuto={isAutoOption}
+                    <GroupOptionContents
+                      option={option}
                       shouldReduceMotion={shouldReduceMotion}
                     />
                   </CommandItem>
                 )
               })}
             </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+          )
+        })}
+      </CommandList>
+    </Command>
   )
 }

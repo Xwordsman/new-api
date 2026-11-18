@@ -36,6 +36,7 @@ For commercial licensing, please contact support@quantumnous.com
 @import './rankings.css';
 @import './documentation.css';
 @import './auth.css';
+@import './group-display.css';
 
 @layer base {
   :root {

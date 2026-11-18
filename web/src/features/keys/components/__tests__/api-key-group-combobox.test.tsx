@@ -17,7 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { fireEvent, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, test } from 'vitest'
+
+import {
+  applyGroupAppearance,
+  emptyAppearance,
+  type GroupDisplaySettings,
+} from '@/extensions/group-display/types'
 
 let shouldReduceMotion = false
 const reducedMotionMediaQuery = window.matchMedia('(prefers-reduced-motion)')
@@ -220,5 +227,138 @@ describe('API key group combobox Auto effect', () => {
     expect(autoOption.querySelector('[data-auto-group-flow-border]')).toBe(null)
     expect(within(autoOption).getByText('Auto')).toBeInTheDocument()
     setReducedMotion(false)
+  })
+})
+
+describe('API key group appearance', () => {
+  const settings: GroupDisplaySettings = {
+    revision: 1,
+    categories: [
+      { id: '__other', name: 'OpenAI', icon: '', color: '#16a34a' },
+      { id: 'anthropic', name: 'Anthropic', icon: '', color: '#e67e22' },
+    ],
+    groups: {
+      default: {
+        ...emptyAppearance,
+        category: '__other',
+        display_name: 'GPT standard',
+        description: 'Stable conversations',
+        tags: [{ label: 'Recommended', color: '' }],
+        sort_order: 20,
+        featured: true,
+        border: 'gradient',
+        gradient_to: '#38bdf8',
+        background: true,
+      },
+      vip: {
+        ...emptyAppearance,
+        category: '__other',
+        display_name: 'GPT priority',
+        sort_order: 1,
+      },
+    },
+  }
+
+  test('orders categories and rows, searches tags, and selects the original routing key', async () => {
+    const user = userEvent.setup()
+    const selected: string[] = []
+    render(
+      <I18nextProvider i18n={i18n}>
+        <ApiKeyGroupCombobox
+          options={applyGroupAppearance(
+            [...options, { value: 'other', label: 'Uncategorized' }],
+            settings
+          )}
+          value='auto'
+          onValueChange={(value) => selected.push(value)}
+        />
+      </I18nextProvider>
+    )
+    await user.click(getTrigger())
+    const rows = screen.getAllByRole('option')
+    expect(rows.map((row) => row.getAttribute('data-value'))).toEqual([
+      'auto',
+      'vip',
+      'default',
+      'other',
+    ])
+    expect(screen.getByRole('group', { name: 'OpenAI' })).toBeVisible()
+    expect(screen.getByRole('group', { name: 'Other groups' })).toBeVisible()
+    const search = screen.getByRole('combobox', { name: 'Search groups' })
+    await user.type(search, 'recommended')
+    expect(screen.getAllByRole('option')).toHaveLength(1)
+    const row = screen.getByRole('option')
+    expect(row).toHaveTextContent('GPT standard')
+    expect(row).toHaveTextContent('Stable conversations')
+    expect(row).toHaveTextContent('Featured')
+    expect(row).toHaveAttribute('data-border', 'gradient')
+    expect(row).toHaveAttribute('data-tinted', 'true')
+    await user.keyboard('{ArrowDown}{Enter}')
+    expect(selected).toEqual(['default'])
+    expect(getTrigger()).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  test('shows the empty result and restores selection after clearing search', async () => {
+    const user = userEvent.setup()
+    render(<Harness initialValue='vip' />)
+    await user.click(getTrigger())
+    const search = screen.getByRole('combobox', { name: 'Search groups' })
+    await user.type(search, 'nonexistent-group')
+    expect(screen.getByText('No group found.')).toBeVisible()
+    expect(screen.queryAllByRole('option')).toHaveLength(0)
+    await user.clear(search)
+    expect(getCommandItem('Priority group')).toHaveAttribute(
+      'data-checked',
+      'true'
+    )
+    await user.keyboard('{Escape}')
+    expect(getTrigger()).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  test('keeps the chosen group marked while keyboard focus moves to another styled row', async () => {
+    const user = userEvent.setup()
+    render(
+      <I18nextProvider i18n={i18n}>
+        <ApiKeyGroupCombobox
+          options={applyGroupAppearance(options, settings)}
+          value='default'
+          onValueChange={() => {}}
+        />
+      </I18nextProvider>
+    )
+    await user.click(getTrigger())
+    const chosen = screen.getByRole('option', { name: /GPT standard/ })
+    expect(chosen).toHaveAttribute('data-checked', 'true')
+    await user.keyboard('{Home}{ArrowDown}')
+    const focused = screen.getByRole('option', { name: /GPT priority/ })
+    expect(focused).toHaveAttribute('aria-selected', 'true')
+    expect(focused).toHaveAttribute('data-checked', 'false')
+    expect(chosen).toHaveAttribute('data-checked', 'true')
+    await user.keyboard('{Escape}')
+    expect(getTrigger()).toHaveTextContent('GPT standard')
+  })
+
+  test('keeps a disabled selector closed and leaves unconfigured reserved-looking keys usable', async () => {
+    const user = userEvent.setup()
+    const rendered = applyGroupAppearance(
+      [{ value: 'constructor', label: 'constructor' }],
+      settings
+    )
+    expect(rendered[0]).toEqual({ value: 'constructor', label: 'constructor' })
+    render(
+      <I18nextProvider i18n={i18n}>
+        <ApiKeyGroupCombobox
+          options={rendered}
+          value='constructor'
+          disabled
+          onValueChange={() => {
+            throw new Error('Disabled selector changed')
+          }}
+        />
+      </I18nextProvider>
+    )
+    expect(getTrigger()).toBeDisabled()
+    await user.click(getTrigger())
+    expect(getTrigger()).toHaveAttribute('aria-expanded', 'false')
   })
 })

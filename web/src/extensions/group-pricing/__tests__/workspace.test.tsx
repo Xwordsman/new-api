@@ -134,6 +134,25 @@ it('opens a full-width offer panel immediately below its pricing row', async () 
   client.clear()
 })
 
+it('preserves appearance drafts when the appearance panel is collapsed and reopened', async () => {
+  const user = userEvent.setup()
+  const { client } = renderPricing()
+  const toggle = await screen.findByRole('button', { name: 'Group appearance' })
+  vi.mocked(api.get).mockResolvedValue({
+    data: { success: true, data: { revision: 0, categories: [], groups: {} } },
+  })
+  await user.click(toggle)
+  const name = await screen.findByRole('textbox', { name: 'Display name' })
+  fireEvent.change(name, { target: { value: 'Appearance draft' } })
+  await user.click(toggle)
+  expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await user.click(toggle)
+  expect(screen.getByRole('textbox', { name: 'Display name' })).toHaveValue(
+    'Appearance draft'
+  )
+  client.clear()
+})
+
 it('expands only one group and preserves drafts when switching groups or sorting', async () => {
   const user = userEvent.setup()
   const { client } = renderPricing()

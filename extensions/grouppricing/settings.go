@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/extensions/groupdisplay"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting"
@@ -317,6 +318,9 @@ func Save(db *gorm.DB, update Update) (Snapshot, error) {
 			}
 		}
 		// A consistent order prevents two nodes from locking these rows in opposite orders.
+		if err := groupdisplay.Rename(tx, update.Renames); err != nil {
+			return err
+		}
 		keys := append(slices.Clone(optionKeys), groupdiscount.OptionKey)
 		slices.Sort(keys)
 		for _, key := range keys {
@@ -399,7 +403,7 @@ func respond(c *gin.Context, data any, err error) {
 		common.ApiSuccess(c, data)
 		return
 	}
-	if errors.Is(err, ErrInvalid) || errors.Is(err, ErrConflict) {
+	if errors.Is(err, ErrInvalid) || errors.Is(err, ErrConflict) || errors.Is(err, groupdisplay.ErrConflict) || errors.Is(err, groupdisplay.ErrInvalid) {
 		common.ApiError(c, err)
 		return
 	}

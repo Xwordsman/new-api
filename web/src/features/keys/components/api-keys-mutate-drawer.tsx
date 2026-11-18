@@ -62,6 +62,7 @@ import {
 } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { applyGroupAppearance } from '@/extensions/group-display/types'
 import { RelatedPolicyLink } from '@/features/system-settings/request-policies/related-policy-link'
 import { useStatus } from '@/hooks/use-status'
 import { getUserModels, getUserGroups } from '@/lib/api'
@@ -165,18 +166,20 @@ export function ApiKeysMutateDrawer({
   const models = modelsData?.data || []
   const groups = useMemo<ApiKeyGroupOption[]>(() => {
     const usableGroups = groupsData?.data ?? {}
-    return orderGroupNames(
-      Object.keys(usableGroups),
-      groupsData?.group_order
-    ).map((key) => {
-      const info = usableGroups[key]
-      return {
-        value: key,
-        label: key,
-        desc: info.desc ? translateServerText(t, info.desc) : key,
-        ratio: info.ratio,
-      }
-    })
+    return applyGroupAppearance(
+      orderGroupNames(Object.keys(usableGroups), groupsData?.group_order).map(
+        (key) => {
+          const info = usableGroups[key]
+          return {
+            value: key,
+            label: key,
+            desc: info.desc ? translateServerText(t, info.desc) : key,
+            ratio: info.ratio,
+          }
+        }
+      ),
+      groupsData?.display
+    )
   }, [groupsData, t])
   const backendHasAuto = groups.some((g) => g.value === 'auto')
   const availableAutoGroupNames = useMemo(

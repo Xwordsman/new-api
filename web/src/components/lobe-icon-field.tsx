@@ -30,6 +30,7 @@ export function LobeIconField(props: {
   allowInheritance?: boolean
   inheritedIcon?: string
   inheritedName?: string
+  disabled?: boolean
 }) {
   const { t } = useTranslation()
   const [custom, setCustom] = useState(false)
@@ -50,6 +51,7 @@ export function LobeIconField(props: {
         <div className='flex flex-wrap gap-2'>
           <Button
             type='button'
+            disabled={props.disabled}
             size='sm'
             variant={!usesCustom ? 'secondary' : 'outline'}
             aria-pressed={!usesCustom}
@@ -62,6 +64,7 @@ export function LobeIconField(props: {
           </Button>
           <Button
             type='button'
+            disabled={props.disabled}
             size='sm'
             variant={usesCustom ? 'secondary' : 'outline'}
             aria-pressed={usesCustom}
@@ -74,6 +77,7 @@ export function LobeIconField(props: {
       {usesCustom && (
         <div className='flex min-w-0 items-center gap-2'>
           <Combobox
+            disabled={props.disabled}
             id={props.id}
             options={options}
             value={props.value}
@@ -86,6 +90,7 @@ export function LobeIconField(props: {
           {props.value && (
             <Button
               type='button'
+              disabled={props.disabled}
               variant='ghost'
               size='sm'
               onClick={() => props.onChange('')}

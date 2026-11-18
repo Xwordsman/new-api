@@ -19,6 +19,9 @@ For commercial licensing, please contact support@quantumnous.com
 // Static translation keys that don't get picked up by the t('...') regex.
 // These cover dynamic labels (e.g. constants, configs) that are passed into t at runtime.
 export const STATIC_I18N_KEYS = [
+  'Invalid group appearance settings',
+  'Group appearance changed. Reload before saving.',
+  'Unable to save group appearance settings',
   // Public footer navigation labels composed from sidebar entries.
   'API Keys',
   // Lucky draw API errors, configurable prize labels and validation messages.

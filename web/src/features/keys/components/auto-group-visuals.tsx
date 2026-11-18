@@ -75,6 +75,7 @@ type GroupRatioBadgeProps = {
   isAuto?: boolean
   ratio: GroupRatio
   shouldReduceMotion?: boolean
+  className?: string
 }
 
 export function GroupRatioBadge(props: GroupRatioBadgeProps) {
@@ -90,7 +91,8 @@ export function GroupRatioBadge(props: GroupRatioBadgeProps) {
       label={typeof props.ratio === 'number' ? undefined : t('Auto')}
       className={cn(
         props.isAuto &&
-          'overflow-visible rounded-md border-primary/30 bg-primary/10 text-primary'
+          'overflow-visible rounded-md border-primary/30 bg-primary/10 text-primary',
+        props.className
       )}
     >
       {props.isAuto && (

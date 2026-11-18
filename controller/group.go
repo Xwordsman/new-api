@@ -3,6 +3,8 @@ package controller
 import (
 	"net/http"
 
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/extensions/groupdisplay"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
@@ -48,10 +50,16 @@ func GetUserGroups(c *gin.Context) {
 	for name := range usableGroups {
 		groupNames = append(groupNames, name)
 	}
+	display, _, err := groupdisplay.Read(model.DB.WithContext(c.Request.Context()))
+	if err != nil {
+		common.SysError("load group appearance: " + err.Error())
+		display = groupdisplay.Settings{}
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success":     true,
 		"message":     "",
 		"data":        usableGroups,
 		"group_order": setting.OrderGroupNames(groupNames),
+		"display":     display.Visible(groupNames),
 	})
 }
