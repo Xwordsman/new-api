@@ -41,17 +41,26 @@ export function GroupOptionContents(props: {
       </span>
       <span className='group-display-copy min-w-0 flex-1'>
         <span className='group-display-title'>
-          <span className='group-display-name' title={option.label}>
-            {option.label}
+          <span className='group-display-name-line'>
+            <span
+              className='group-display-name'
+              data-featured={option.appearance?.featured || undefined}
+              data-reduced-motion={props.shouldReduceMotion || undefined}
+              title={option.label}
+            >
+              {option.label}
+            </span>
+            {option.appearance?.featured && (
+              <span
+                role='img'
+                aria-label={t('Featured')}
+                title={t('Featured')}
+                className='group-display-featured'
+              >
+                <Sparkles aria-hidden='true' />
+              </span>
+            )}
           </span>
-          {option.appearance?.featured && (
-            <StatusBadge
-              copyable={false}
-              className='group-display-featured'
-              label={t('Featured')}
-              icon={Sparkles}
-            />
-          )}
           {option.appearance?.tags.map((tag) => (
             <StatusBadge
               key={tag.label}

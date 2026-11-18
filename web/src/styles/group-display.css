@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 .group-display-frame,
+.group-display-category,
 .group-display-heading,
 .group-display-trigger {
   --group-ink: color-mix(in srgb, var(--group-color) 60%, var(--foreground));
@@ -38,7 +39,7 @@ For commercial licensing, please contact support@quantumnous.com
 
 .group-display-list {
   max-height: min(390px, calc(var(--available-height, 450px) - 52px));
-  padding: 0 0 2px;
+  padding: 4px 6px 8px;
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
@@ -59,6 +60,23 @@ For commercial licensing, please contact support@quantumnous.com
   font-size: 11px;
   font-weight: 500;
   line-height: 18px;
+  color: var(--group-ink, var(--muted-foreground));
+}
+
+.group-display-heading > span:last-child {
+  background: color-mix(
+    in srgb,
+    var(--group-color, var(--border)) 25%,
+    var(--border)
+  );
+}
+
+.group-display-category-header {
+  background: color-mix(in srgb, var(--group-color) 5%, var(--card));
+}
+
+.group-display-category-header h3 {
+  color: color-mix(in srgb, var(--group-color) 60%, var(--foreground));
 }
 
 .group-display-category-icon {
@@ -179,6 +197,14 @@ For commercial licensing, please contact support@quantumnous.com
   font-weight: 500;
 }
 
+.group-display-name-line {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 5px;
+}
+
 .group-display-description {
   display: block;
   overflow: hidden;
@@ -191,8 +217,7 @@ For commercial licensing, please contact support@quantumnous.com
   white-space: nowrap;
 }
 
-.group-display-tag[data-slot='status-badge'],
-.group-display-featured[data-slot='status-badge'] {
+.group-display-tag[data-slot='status-badge'] {
   height: 16px;
   flex-shrink: 0;
   gap: 2px;
@@ -215,15 +240,104 @@ For commercial licensing, please contact support@quantumnous.com
   line-height: 14px;
 }
 
-.group-display-featured[data-slot='status-badge'] {
-  border-color: transparent;
-  background: linear-gradient(110deg, #9a3412, #9d174d 48%, #6d28d9);
-  color: #fff;
+.group-display-featured {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--group-ink);
+  filter: drop-shadow(
+    0 0 4px color-mix(in srgb, var(--group-color) 40%, transparent)
+  );
 }
 
 .group-display-featured svg {
-  width: 10px;
-  height: 10px;
+  width: 14px;
+  height: 14px;
+}
+
+.group-display-frame[data-featured='true'],
+.group-display-trigger[data-featured='true'] {
+  --group-surface: color-mix(in srgb, var(--group-color) 7%, var(--popover));
+  --group-surface-end: color-mix(
+    in srgb,
+    var(--group-gradient-to) 6%,
+    var(--popover)
+  );
+  --group-border: linear-gradient(
+    115deg,
+    var(--group-color),
+    var(--group-gradient-to),
+    var(--group-color)
+  );
+  border-color: transparent;
+  background:
+    linear-gradient(115deg, var(--group-surface), var(--group-surface-end))
+      padding-box,
+    var(--group-border) border-box;
+  background-size:
+    100% 100%,
+    200% 200%;
+  box-shadow:
+    -3px 0 12px -3px color-mix(in srgb, var(--group-color) 38%, transparent),
+    3px 0 12px -3px
+      color-mix(in srgb, var(--group-gradient-to) 38%, transparent);
+  animation: group-featured-border 6s ease-in-out infinite alternate;
+}
+
+.group-display-name[data-featured='true'] {
+  background: linear-gradient(
+    110deg,
+    var(--group-ink) 15%,
+    color-mix(in srgb, var(--group-gradient-to) 65%, var(--foreground)) 45%,
+    var(--group-ink) 75%
+  );
+  background-size: 240% 100%;
+  background-clip: text;
+  color: transparent;
+  font-weight: 650;
+  filter: drop-shadow(
+    0 0 5px color-mix(in srgb, var(--group-color) 30%, transparent)
+  );
+  animation: group-featured-name 5s ease-in-out infinite alternate;
+}
+
+.group-display-frame[data-featured='true']:focus-visible,
+.group-display-trigger[data-featured='true']:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@keyframes group-featured-border {
+  from {
+    background-position:
+      0 0,
+      0% 50%;
+  }
+  to {
+    background-position:
+      0 0,
+      100% 50%;
+  }
+}
+
+@keyframes group-featured-name {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 100% 50%;
+  }
+}
+
+[data-featured='true'][data-reduced-motion='true'] {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .group-display-frame[data-featured='true'],
+  .group-display-trigger[data-featured='true'],
+  .group-display-name[data-featured='true'] {
+    animation: none;
+  }
 }
 
 .group-display-ratio {

@@ -91,6 +91,8 @@ export function ApiKeyGroupCombobox({
             style={groupAppearanceStyle(selectedOption)}
             data-border={selectedOption?.appearance?.border || undefined}
             data-tinted={selectedOption?.appearance?.background || undefined}
+            data-featured={selectedOption?.appearance?.featured || undefined}
+            data-reduced-motion={shouldReduceMotion || undefined}
             className={cn(
               'group-display-trigger relative h-auto min-h-18 w-full justify-between gap-2 rounded-xl px-3.5 py-3 text-start shadow-none sm:gap-3 sm:px-4',
               isAutoSelected &&
@@ -189,8 +191,11 @@ export function ApiKeyGroupOptions(
                   aria-hidden='true'
                   className='group-display-category-icon'
                 >
-                  {section.category.icon &&
-                    getLobeIcon(section.category.icon, 16)}
+                  {section.category.icon ? (
+                    getLobeIcon(section.category.icon, 16)
+                  ) : (
+                    <span className='size-1.5 rounded-full bg-current' />
+                  )}
                 </span>
                 <span>{section.category.name}</span>
                 <span className='bg-border h-px flex-1' aria-hidden='true' />
@@ -224,6 +229,8 @@ export function ApiKeyGroupOptions(
                     data-checked={props.value === option.value}
                     data-border={option.appearance?.border || undefined}
                     data-tinted={option.appearance?.background || undefined}
+                    data-featured={option.appearance?.featured || undefined}
+                    data-reduced-motion={shouldReduceMotion || undefined}
                     style={groupAppearanceStyle(option)}
                     data-auto-group-effect={isAutoOption ? 'option' : undefined}
                     onSelect={() => {

@@ -16,162 +16,141 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react'
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { Dialog } from '@/components/dialog'
 import { LobeIconField } from '@/components/lobe-icon-field'
 import { Button } from '@/components/ui/button'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
+import { displaySettingsSchema } from './schema'
 import type { GroupCategory } from './types'
 
 export function CategoryEditor(props: {
-  categories: GroupCategory[]
-  onChange: (categories: GroupCategory[]) => void
-  onRemove: (id: string) => void
-  showErrors?: boolean
-  disabled?: boolean
+  initial?: GroupCategory
+  disabled: boolean
+  onSave: (category: GroupCategory) => void
+  onClose: () => void
 }) {
   const { t } = useTranslation()
   const prefix = useId()
-  const move = (index: number, offset: number) => {
-    const categories = [...props.categories]
-    ;[categories[index], categories[index + offset]] = [
-      categories[index + offset],
-      categories[index],
-    ]
-    props.onChange(categories)
-  }
+  const [value, setValue] = useState<GroupCategory>(
+    () =>
+      props.initial ?? {
+        id: crypto.randomUUID(),
+        name: '',
+        color: '#16a34a',
+        icon: '',
+      }
+  )
+  const [invalid, setInvalid] = useState(false)
+  const title = props.initial ? t('Edit category') : t('Add category')
   return (
-    <div className='space-y-3'>
-      <div className='flex flex-wrap items-center justify-between gap-2'>
-        <h3 className='font-medium'>{t('Display categories')}</h3>
-        <Button
-          type='button'
-          size='sm'
-          variant='outline'
-          disabled={props.categories.length >= 64}
-          onClick={() =>
-            props.onChange([
-              ...props.categories,
-              { id: crypto.randomUUID(), name: '', icon: '', color: '' },
-            ])
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !props.disabled) props.onClose()
+      }}
+      title={title}
+      description={t(
+        'Choose a name and color, then add existing system groups to this category.'
+      )}
+      contentClassName='sm:max-w-md'
+      footer={
+        <>
+          <Button
+            type='button'
+            variant='outline'
+            disabled={props.disabled}
+            onClick={props.onClose}
+          >
+            {t('Cancel')}
+          </Button>
+          <Button
+            type='submit'
+            form={`${prefix}-form`}
+            disabled={props.disabled}
+          >
+            {props.initial ? t('Done') : t('Add category')}
+          </Button>
+        </>
+      }
+    >
+      <form
+        id={`${prefix}-form`}
+        className='space-y-5'
+        onSubmit={(event) => {
+          event.preventDefault()
+          const result =
+            displaySettingsSchema.shape.categories.element.safeParse(value)
+          if (!result.success) {
+            setInvalid(true)
+            return
           }
-        >
-          {t('Add category')}
-        </Button>
-      </div>
-      {props.categories.map((category, index) => (
-        <div key={category.id} className='space-y-3 rounded-lg border p-3'>
-          <div className='flex flex-wrap items-end gap-2'>
-            <div className='min-w-32 flex-1 space-y-2'>
-              <Label htmlFor={`${prefix}-${category.id}-name`}>
-                {t('Category name')}
-              </Label>
-              <Input
-                aria-invalid={props.showErrors && !category.name.trim()}
-                id={`${prefix}-${category.id}-name`}
-                value={category.name}
-                maxLength={80}
-                onChange={(event) =>
-                  props.onChange(
-                    props.categories.map((item) =>
-                      item.id === category.id
-                        ? { ...item, name: event.target.value }
-                        : item
-                    )
-                  )
-                }
-              />
-              {props.showErrors && !category.name.trim() && (
-                <p className='text-destructive text-xs'>
-                  {t('Enter a category name.')}
-                </p>
-              )}
-            </div>
-            <div className='w-28 space-y-2'>
-              <Label htmlFor={`${prefix}-${category.id}-color`}>
-                {t('Accent color')}
-              </Label>
-              <Input
-                aria-invalid={
-                  props.showErrors &&
-                  !/^$|^#[0-9a-fA-F]{6}$/.test(category.color)
-                }
-                id={`${prefix}-${category.id}-color`}
-                value={category.color}
-                placeholder='#16a34a'
-                maxLength={7}
-                onChange={(event) =>
-                  props.onChange(
-                    props.categories.map((item) =>
-                      item.id === category.id
-                        ? { ...item, color: event.target.value }
-                        : item
-                    )
-                  )
-                }
-              />
-              {props.showErrors &&
-                !/^$|^#[0-9a-fA-F]{6}$/.test(category.color) && (
-                  <p className='text-destructive text-xs'>
-                    {t('Use a hex color such as #16a34a, or leave it empty.')}
-                  </p>
-                )}
-            </div>
-            <Button
-              type='button'
-              variant='ghost'
-              size='icon'
-              disabled={index === 0}
-              aria-label={t('Move {{name}} up', { name: category.name })}
-              onClick={() => move(index, -1)}
-            >
-              <ArrowUp className='size-4' />
-            </Button>
-            <Button
-              type='button'
-              variant='ghost'
-              size='icon'
-              disabled={index === props.categories.length - 1}
-              aria-label={t('Move {{name}} down', { name: category.name })}
-              onClick={() => move(index, 1)}
-            >
-              <ArrowDown className='size-4' />
-            </Button>
-            <Button
-              type='button'
-              variant='ghost'
-              size='icon'
-              aria-label={t('Remove category {{name}}', {
-                name: category.name,
-              })}
-              onClick={() => props.onRemove(category.id)}
-            >
-              <Trash2 className='size-4' />
-            </Button>
-          </div>
-          <div className='space-y-2'>
-            <Label htmlFor={`${prefix}-${category.id}-icon`}>
-              {t('Category icon')}
-            </Label>
-            <LobeIconField
-              disabled={props.disabled}
-              id={`${prefix}-${category.id}-icon`}
-              value={category.icon}
-              onChange={(icon) =>
-                props.onChange(
-                  props.categories.map((item) =>
-                    item.id === category.id ? { ...item, icon } : item
-                  )
-                )
-              }
-            />
-          </div>
+          props.onSave(result.data)
+        }}
+      >
+        <div className='space-y-2'>
+          <Label htmlFor={`${prefix}-name`}>{t('Category name')}</Label>
+          <Input
+            id={`${prefix}-name`}
+            disabled={props.disabled}
+            aria-invalid={invalid && !value.name.trim()}
+            maxLength={80}
+            value={value.name}
+            onChange={(event) =>
+              setValue({ ...value, name: event.target.value })
+            }
+          />
+          {invalid && !value.name.trim() && (
+            <p className='text-destructive text-xs'>
+              {t('Enter a category name.')}
+            </p>
+          )}
         </div>
-      ))}
-    </div>
+        <div className='space-y-2'>
+          <Label htmlFor={`${prefix}-color`}>{t('Category color')}</Label>
+          <Input
+            id={`${prefix}-color`}
+            type='color'
+            className='h-10 w-20 cursor-pointer p-1'
+            disabled={props.disabled}
+            value={value.color || '#16a34a'}
+            onChange={(event) =>
+              setValue({ ...value, color: event.target.value })
+            }
+          />
+        </div>
+        <Collapsible>
+          <CollapsibleTrigger
+            render={
+              <Button
+                type='button'
+                variant='ghost'
+                size='sm'
+                disabled={props.disabled}
+              />
+            }
+          >
+            {t('Category icon')}
+          </CollapsibleTrigger>
+          <CollapsibleContent className='pt-3'>
+            <LobeIconField
+              id={`${prefix}-icon`}
+              disabled={props.disabled}
+              value={value.icon}
+              onChange={(icon) => setValue({ ...value, icon })}
+            />
+          </CollapsibleContent>
+        </Collapsible>
+      </form>
+    </Dialog>
   )
 }

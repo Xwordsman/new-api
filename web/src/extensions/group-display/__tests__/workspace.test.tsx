@@ -76,177 +76,188 @@ function renderWorkspace(initial = settings, choices = options) {
   return { client, get, put }
 }
 
-it('shows every group in an editable table and hides advanced fields until More is opened', async () => {
+it('creates a colored category, adds existing groups, and expands their tags and featured settings', async () => {
   const user = userEvent.setup()
-  const { client } = renderWorkspace()
-  const table = await screen.findByRole('table', {
-    name: 'API key group appearance',
+  const { client, put } = renderWorkspace({
+    revision: 0,
+    categories: [],
+    groups: {},
   })
-  expect(within(table).getAllByRole('row')).toHaveLength(3)
-  expect(
-    within(table).getAllByRole('textbox', { name: 'Display name' })
-  ).toHaveLength(2)
-  const scrollRegion = screen.getByRole('region', {
-    name: 'API key group appearance',
-  })
-  expect(scrollRegion).toHaveAttribute('tabindex', '0')
-  expect(scrollRegion).toHaveClass('overflow-x-auto')
-  expect(
-    screen.queryByRole('textbox', { name: 'Accent color' })
-  ).not.toBeInTheDocument()
-  expect(
-    screen.queryByRole('textbox', { name: 'Category name' })
-  ).not.toBeInTheDocument()
-  const row = within(table).getAllByRole('row')[1]
-  await user.click(within(row).getByRole('button', { name: 'More' }))
-  const dialog = screen.getByRole('dialog', { name: 'More settings for gpt' })
-  expect(
-    within(dialog).getByRole('textbox', { name: 'Accent color' })
-  ).toBeVisible()
-  expect(
-    within(dialog).queryByRole('textbox', { name: 'Display name' })
-  ).not.toBeInTheDocument()
-  client.clear()
-})
-
-it('edits multiple rows, previews names and tags, and saves using the original routing keys', async () => {
-  const user = userEvent.setup()
-  const { client, put } = renderWorkspace()
-  const table = await screen.findByRole('table', {
-    name: 'API key group appearance',
-  })
-  const rows = within(table).getAllByRole('row').slice(1)
-  fireEvent.change(
-    within(rows[0]).getByRole('textbox', { name: 'Display name' }),
-    { target: { value: 'GPT premium' } }
-  )
-  fireEvent.change(
-    within(rows[1]).getByRole('textbox', { name: 'Display name' }),
-    { target: { value: 'Other premium' } }
-  )
-  await user.click(within(rows[0]).getByRole('switch', { name: 'Featured' }))
+  await user.click(await screen.findByRole('button', { name: 'Add category' }))
+  const categoryDialog = screen.getByRole('dialog', { name: 'Add category' })
   await user.type(
-    within(rows[0]).getByRole('textbox', { name: 'Tags' }),
+    within(categoryDialog).getByRole('textbox', { name: 'Category name' }),
+    'Google'
+  )
+  fireEvent.change(within(categoryDialog).getByLabelText('Category color'), {
+    target: { value: '#4285f4' },
+  })
+  await user.click(
+    within(categoryDialog).getByRole('button', { name: 'Add category' })
+  )
+  const category = screen.getByRole('region', { name: 'Google' })
+  await user.click(
+    within(category).getByRole('button', { name: 'Add system groups' })
+  )
+  const picker = screen.getByRole('dialog', { name: 'Add groups to Google' })
+  await user.click(
+    within(picker).getByRole('combobox', { name: 'System groups' })
+  )
+  await user.click(screen.getByRole('option', { name: 'gpt' }))
+  await user.keyboard('{Escape}')
+  await user.click(
+    within(picker).getByRole('button', { name: 'Add selected groups' })
+  )
+  const toggle = within(category).getByRole('button', {
+    name: 'Configure group gpt',
+  })
+  expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  expect(
+    screen.queryByRole('textbox', { name: 'Tags' })
+  ).not.toBeInTheDocument()
+  await user.click(toggle)
+  fireEvent.change(screen.getByRole('textbox', { name: 'Display name' }), {
+    target: { value: 'GPT premium' },
+  })
+  await user.type(
+    screen.getByRole('textbox', { name: 'Tags' }),
     'Stable{Enter}'
   )
+  await user.click(screen.getByRole('switch', { name: 'Featured' }))
+  await user.click(toggle)
+  expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  expect(
+    screen.queryByRole('textbox', { name: 'Display name' })
+  ).not.toBeInTheDocument()
+  await user.click(toggle)
+  expect(screen.getByRole('textbox', { name: 'Display name' })).toHaveValue(
+    'GPT premium'
+  )
+  expect(screen.getByRole('switch', { name: 'Featured' })).toHaveAttribute(
+    'aria-checked',
+    'true'
+  )
   await user.click(screen.getByRole('button', { name: 'Preview' }))
   const preview = screen.getByRole('dialog', { name: 'Live preview' })
-  expect(
-    within(preview).getByRole('option', { name: /GPT premium/ })
-  ).toHaveTextContent('Stable')
-  expect(
-    within(preview).getByRole('option', { name: /GPT premium/ })
-  ).toHaveTextContent('Featured')
-  expect(
-    within(preview).getByRole('option', { name: /Other premium/ })
-  ).toBeVisible()
-  await user.keyboard('{Escape}')
-  await user.click(screen.getByRole('button', { name: 'Save appearance' }))
-  await waitFor(() => expect(put).toHaveBeenCalledOnce())
-  const payload = put.mock.calls[0][1] as GroupDisplaySettings
-  expect(payload.groups.gpt).toMatchObject({
-    display_name: 'GPT premium',
-    featured: true,
-    tags: [{ label: 'Stable', color: '' }],
-  })
-  expect(payload.groups.other.display_name).toBe('Other premium')
-  expect(payload.revision).toBe(1)
-  expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument()
-  client.clear()
-})
-
-it('selects a ready-made vendor and gradient style without creating categories or entering colors', async () => {
-  const user = userEvent.setup()
-  const { client, put } = renderWorkspace()
-  const table = await screen.findByRole('table', {
-    name: 'API key group appearance',
-  })
-  const row = within(table).getAllByRole('row')[2]
-  const vendor = within(row).getByRole('combobox', { name: 'Vendor' })
-  await user.click(vendor)
-  await user.click(screen.getByRole('option', { name: 'Google' }))
-  expect(vendor).toHaveValue('Google')
-  await user.click(within(row).getByRole('combobox', { name: 'Style' }))
-  await user.click(screen.getByRole('option', { name: 'Gradient highlight' }))
-  await user.click(screen.getByRole('button', { name: 'Preview' }))
-  const preview = screen.getByRole('dialog', { name: 'Live preview' })
-  const entry = within(preview).getByRole('option', { name: /other/ })
-  expect(entry).toHaveAttribute('data-border', 'gradient')
-  expect(entry).toHaveAttribute('data-tinted', 'true')
-  expect(entry.style.getPropertyValue('--group-color')).toBe('#4285f4')
+  const row = within(preview).getByRole('option', { name: /GPT premium/ })
+  expect(row).toHaveAttribute('data-featured', 'true')
+  expect(within(row).getByRole('img', { name: 'Featured' })).toBeVisible()
+  expect(row).toHaveTextContent('Stable')
+  expect(row.style.getPropertyValue('--group-color')).toBe('#4285f4')
   await user.keyboard('{Escape}')
   await user.click(screen.getByRole('button', { name: 'Save appearance' }))
   await waitFor(() => expect(put).toHaveBeenCalledOnce())
   const payload = put.mock.calls[0][1] as GroupDisplaySettings
   expect(payload.categories).toEqual([
-    settings.categories[0],
-    { id: 'google', name: 'Google', icon: 'Gemini.Color', color: '#4285f4' },
+    { id: expect.any(String), name: 'Google', color: '#4285f4', icon: '' },
   ])
-  expect(payload.groups.other).toMatchObject({
-    category: 'google',
-    color: '',
-    icon: '',
-    background: true,
-    border: 'gradient',
+  expect(payload.groups.gpt).toMatchObject({
+    category: payload.categories[0].id,
+    display_name: 'GPT premium',
+    featured: true,
+    tags: [{ label: 'Stable', color: '' }],
   })
-  expect(payload.groups.other.gradient_to).toMatch(/^#[0-9a-f]{6}$/)
+  expect(Object.keys(payload.groups)).toEqual(['gpt'])
   client.clear()
 })
 
-it('keeps saved custom vendors, overrides, tag colors and hidden group metadata when another row is edited', async () => {
+it('only offers unassigned system groups and never creates routing keys from search text', async () => {
   const user = userEvent.setup()
-  const custom = {
+  const { client } = renderWorkspace()
+  const category = await screen.findByRole('region', { name: 'OpenAI' })
+  await user.click(
+    within(category).getByRole('button', { name: 'Add system groups' })
+  )
+  const picker = screen.getByRole('dialog', { name: 'Add groups to OpenAI' })
+  const search = within(picker).getByRole('combobox', { name: 'System groups' })
+  await user.click(search)
+  expect(screen.queryByRole('option', { name: 'gpt' })).not.toBeInTheDocument()
+  expect(screen.getByRole('option', { name: 'other' })).toBeVisible()
+  await user.type(search, 'invented-route{Enter}')
+  expect(
+    screen.queryByRole('option', { name: /invented-route/ })
+  ).not.toBeInTheDocument()
+  expect(
+    within(picker).getByRole('button', { name: 'Add selected groups' })
+  ).toBeDisabled()
+  client.clear()
+})
+
+it('keeps category colors, group overrides, tag colors and hidden metadata while editing a group', async () => {
+  const user = userEvent.setup()
+  const custom: GroupDisplaySettings = {
     ...settings,
-    categories: [
-      { id: 'legacy', name: 'OpenAI', icon: 'OpenAI', color: '#abcdef' },
-    ],
     groups: {
       gpt: {
         ...settings.groups.gpt,
-        category: 'legacy',
         icon: 'Claude',
         color: '#123456',
-        tags: [{ label: 'Stable', color: '#38bdf8' }],
-        border: 'solid' as const,
+        border: 'solid',
         background: true,
         sort_order: 7,
+        tags: [{ label: 'Stable', color: '#38bdf8' }],
       },
       hidden: { ...emptyAppearance, display_name: 'Saved hidden group' },
     },
   }
   const { client, put } = renderWorkspace(custom)
-  const table = await screen.findByRole('table', {
-    name: 'API key group appearance',
+  await user.click(
+    await screen.findByRole('button', { name: 'Configure group gpt' })
+  )
+  fireEvent.change(screen.getByRole('textbox', { name: 'Short description' }), {
+    target: { value: 'Edited' },
   })
-  const rows = within(table).getAllByRole('row').slice(1)
-  expect(within(rows[0]).getByRole('combobox', { name: 'Style' })).toHaveValue(
-    'Custom style'
-  )
-  await user.click(within(rows[0]).getByRole('combobox', { name: 'Vendor' }))
-  expect(screen.getAllByRole('option', { name: 'OpenAI' })).toHaveLength(1)
-  await user.click(screen.getByRole('option', { name: 'OpenAI' }))
-  fireEvent.change(
-    within(rows[1]).getByRole('textbox', { name: 'Display name' }),
-    { target: { value: 'Edited' } }
-  )
   await user.click(screen.getByRole('button', { name: 'Save appearance' }))
   await waitFor(() => expect(put).toHaveBeenCalledOnce())
   const payload = put.mock.calls[0][1] as GroupDisplaySettings
   expect(payload.categories).toEqual(custom.categories)
-  expect(payload.groups.gpt).toEqual(custom.groups.gpt)
+  expect(payload.groups.gpt).toEqual({
+    ...custom.groups.gpt,
+    description: 'Edited',
+  })
   expect(payload.groups.hidden).toEqual(custom.groups.hidden)
+  client.clear()
+})
+
+it('edits category color and removes a group without losing its tags or display name', async () => {
+  const user = userEvent.setup()
+  const { client, put } = renderWorkspace()
+  await user.click(
+    await screen.findByRole('button', { name: 'Edit category OpenAI' })
+  )
+  const dialog = screen.getByRole('dialog', { name: 'Edit category' })
+  fireEvent.change(within(dialog).getByLabelText('Category color'), {
+    target: { value: '#ff0000' },
+  })
+  await user.click(within(dialog).getByRole('button', { name: 'Done' }))
+  await user.click(screen.getByRole('button', { name: 'Configure group gpt' }))
+  await user.type(
+    screen.getByRole('textbox', { name: 'Tags' }),
+    'Stable{Enter}'
+  )
+  await user.click(screen.getByRole('button', { name: 'Remove from category' }))
+  expect(
+    screen.queryByRole('button', { name: 'Configure group gpt' })
+  ).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Save appearance' }))
+  await waitFor(() => expect(put).toHaveBeenCalledOnce())
+  const payload = put.mock.calls[0][1] as GroupDisplaySettings
+  expect(payload.categories[0].color).toBe('#ff0000')
+  expect(payload.groups.gpt).toMatchObject({
+    category: '',
+    display_name: 'GPT route',
+    tags: [{ label: 'Stable', color: '' }],
+  })
   client.clear()
 })
 
 it('loads refreshed saved appearance when the editor has no draft', async () => {
   const user = userEvent.setup()
   const { client, put } = renderWorkspace()
-  const table = await screen.findByRole('table', {
-    name: 'API key group appearance',
-  })
-  const name = within(table).getAllByRole('textbox', {
-    name: 'Display name',
-  })[0]
+  await user.click(
+    await screen.findByRole('button', { name: 'Configure group gpt' })
+  )
+  const name = screen.getByRole('textbox', { name: 'Display name' })
   await act(async () => {
     client.setQueryData(['group-display'], {
       ...settings,
@@ -266,12 +277,10 @@ it('loads refreshed saved appearance when the editor has no draft', async () => 
 it('preserves a draft and its revision when saved appearance refreshes during editing', async () => {
   const user = userEvent.setup()
   const { client, put } = renderWorkspace()
-  const table = await screen.findByRole('table', {
-    name: 'API key group appearance',
-  })
-  const name = within(table).getAllByRole('textbox', {
-    name: 'Display name',
-  })[0]
+  await user.click(
+    await screen.findByRole('button', { name: 'Configure group gpt' })
+  )
+  const name = screen.getByRole('textbox', { name: 'Display name' })
   fireEvent.change(name, { target: { value: 'Keep my draft' } })
   await act(async () => {
     client.setQueryData(['group-display'], {
@@ -292,41 +301,26 @@ it('preserves a draft and its revision when saved appearance refreshes during ed
   client.clear()
 })
 
-it('opens the invalid group advanced settings and prevents invalid colors from being saved', async () => {
+it('rejects an empty category name before adding it', async () => {
   const user = userEvent.setup()
-  const { client, put } = renderWorkspace()
-  const table = await screen.findByRole('table', {
-    name: 'API key group appearance',
-  })
-  await user.click(
-    within(within(table).getAllByRole('row')[2]).getByRole('button', {
-      name: 'More',
-    })
-  )
-  fireEvent.change(screen.getByRole('textbox', { name: 'Accent color' }), {
-    target: { value: 'invalid' },
-  })
-  await user.click(screen.getByRole('button', { name: 'Done' }))
-  await user.click(screen.getByRole('button', { name: 'Save appearance' }))
-  const dialog = await screen.findByRole('dialog', {
-    name: 'More settings for other',
-  })
+  const { client } = renderWorkspace()
+  await user.click(await screen.findByRole('button', { name: 'Add category' }))
+  const dialog = screen.getByRole('dialog', { name: 'Add category' })
+  await user.click(within(dialog).getByRole('button', { name: 'Add category' }))
   expect(
-    within(dialog).getByRole('textbox', { name: 'Accent color' })
+    within(dialog).getByRole('textbox', { name: 'Category name' })
   ).toHaveAttribute('aria-invalid', 'true')
-  expect(put).not.toHaveBeenCalled()
+  expect(dialog).toBeVisible()
   client.clear()
 })
 
 it('retains a failed save draft and only replaces it after confirming reload', async () => {
   const user = userEvent.setup()
   const { client, put, get } = renderWorkspace()
-  const table = await screen.findByRole('table', {
-    name: 'API key group appearance',
-  })
-  const name = within(table).getAllByRole('textbox', {
-    name: 'Display name',
-  })[0]
+  await user.click(
+    await screen.findByRole('button', { name: 'Configure group gpt' })
+  )
+  const name = screen.getByRole('textbox', { name: 'Display name' })
   fireEvent.change(name, { target: { value: 'Keep my draft' } })
   put.mockResolvedValueOnce({
     data: {
@@ -366,24 +360,29 @@ it('retains a failed save draft and only replaces it after confirming reload', a
   client.clear()
 })
 
-it('confirms custom vendor removal and preserves its groups other appearance fields', async () => {
+it('confirms category removal and preserves all affected group appearance fields', async () => {
   const user = userEvent.setup()
-  const { client, put } = renderWorkspace()
-  await screen.findByRole('table', { name: 'API key group appearance' })
-  await user.click(screen.getByRole('button', { name: 'Custom vendors' }))
-  const manager = screen.getByRole('dialog', { name: 'Custom vendors' })
+  const initial = {
+    ...settings,
+    groups: {
+      ...settings.groups,
+      hidden: { ...emptyAppearance, category: 'openai', featured: true },
+    },
+  }
+  const { client, put } = renderWorkspace(initial)
+  const category = await screen.findByRole('region', { name: 'OpenAI' })
   await user.click(
-    within(manager).getByRole('button', { name: 'Remove category OpenAI' })
+    await screen.findByRole('button', { name: 'Remove category OpenAI' })
   )
+  expect(category).toBeInTheDocument()
   await user.click(
     within(screen.getByRole('alertdialog')).getByRole('button', {
       name: 'Continue',
     })
   )
   expect(
-    within(manager).queryByRole('textbox', { name: 'Category name' })
+    screen.queryByRole('region', { name: 'OpenAI' })
   ).not.toBeInTheDocument()
-  await user.click(within(manager).getByRole('button', { name: 'Done' }))
   await user.click(screen.getByRole('button', { name: 'Save appearance' }))
   await waitFor(() => expect(put).toHaveBeenCalledOnce())
   const payload = put.mock.calls[0][1] as GroupDisplaySettings
@@ -392,15 +391,19 @@ it('confirms custom vendor removal and preserves its groups other appearance fie
     category: '',
     display_name: 'GPT route',
   })
+  expect(payload.groups.hidden).toEqual({
+    ...initial.groups.hidden,
+    category: '',
+  })
   client.clear()
 })
 
-it('disables row edits and advanced controls while saving', async () => {
+it('disables category and expanded group edits while saving', async () => {
   const user = userEvent.setup()
   const { client, put } = renderWorkspace()
-  const table = await screen.findByRole('table', {
-    name: 'API key group appearance',
-  })
+  await user.click(
+    await screen.findByRole('button', { name: 'Configure group gpt' })
+  )
   let finish: (value: unknown) => void = () => {}
   put.mockImplementationOnce(
     () =>
@@ -409,14 +412,16 @@ it('disables row edits and advanced controls while saving', async () => {
       })
   )
   await user.click(screen.getByRole('button', { name: 'Save appearance' }))
+  expect(screen.getByRole('textbox', { name: 'Display name' })).toBeDisabled()
+  const featured = screen.getByRole('switch', { name: 'Featured' })
+  expect(featured).toHaveAttribute('aria-disabled', 'true')
+  await user.click(featured)
+  expect(featured).toHaveAttribute('aria-checked', 'false')
   expect(
-    within(table).getAllByRole('textbox', { name: 'Display name' })[0]
+    screen.getByRole('button', { name: 'Edit category OpenAI' })
   ).toBeDisabled()
   expect(
-    within(table).getAllByRole('combobox', { name: 'Vendor' })[0]
-  ).toBeDisabled()
-  expect(
-    within(table).getAllByRole('button', { name: 'More' })[0]
+    screen.getByRole('button', { name: 'Add system groups' })
   ).toBeDisabled()
   finish({ data: { success: true, data: settings } })
   await waitFor(() =>
@@ -427,19 +432,16 @@ it('disables row edits and advanced controls while saving', async () => {
   client.clear()
 })
 
-it('shows an empty table when there are no groups to customize', async () => {
+it('explains how to start when no categories or system groups exist', async () => {
   const { client } = renderWorkspace(
     { revision: 0, categories: [], groups: {} },
     []
   )
-  const table = await screen.findByRole('table', {
-    name: 'API key group appearance',
-  })
+  expect(await screen.findByText('Create your first category')).toBeVisible()
   expect(
-    within(table).getByText('No groups yet. Add a group to get started.')
+    screen.getByText(
+      'No system groups are available yet. Add them in Pricing and access first.'
+    )
   ).toBeVisible()
-  expect(
-    within(table).queryByRole('combobox', { name: 'Vendor' })
-  ).not.toBeInTheDocument()
   client.clear()
 })

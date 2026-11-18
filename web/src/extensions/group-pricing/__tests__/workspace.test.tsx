@@ -29,6 +29,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { afterEach, expect, it, vi } from 'vitest'
 
+import { emptyAppearance } from '@/extensions/group-display/types'
 import { SettingsPageProvider } from '@/features/system-settings/components/settings-page-context'
 import type { GroupFormValues } from '@/features/system-settings/models/group-ratio-form'
 import { api } from '@/lib/api'
@@ -146,15 +147,22 @@ it('opens appearance from a visible tab and preserves drafts in both tabs', asyn
   })
   expect(pricingName).toHaveValue('vip')
   vi.mocked(api.get).mockResolvedValue({
-    data: { success: true, data: { revision: 0, categories: [], groups: {} } },
+    data: {
+      success: true,
+      data: {
+        revision: 0,
+        categories: [
+          { id: 'test', name: 'Test category', icon: '', color: '#16a34a' },
+        ],
+        groups: { vip: { ...emptyAppearance, category: 'test' } },
+      },
+    },
   })
   await user.click(tab)
-  const table = await screen.findByRole('table', {
-    name: 'API key group appearance',
-  })
-  const name = within(table).getAllByRole('textbox', {
-    name: 'Display name',
-  })[1]
+  await user.click(
+    await screen.findByRole('button', { name: 'Configure group vip' })
+  )
+  const name = screen.getByRole('textbox', { name: 'Display name' })
   fireEvent.change(name, { target: { value: 'Appearance draft' } })
   expect(
     screen.queryByRole('button', { name: 'Save group settings' })

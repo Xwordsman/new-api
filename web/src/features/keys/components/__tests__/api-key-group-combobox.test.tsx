@@ -290,7 +290,7 @@ describe('API key group appearance', () => {
     const row = screen.getByRole('option')
     expect(row).toHaveTextContent('GPT standard')
     expect(row).toHaveTextContent('Stable conversations')
-    expect(row).toHaveTextContent('Featured')
+    expect(within(row).getByRole('img', { name: 'Featured' })).toBeVisible()
     expect(row).toHaveAttribute('data-border', 'gradient')
     expect(row).toHaveAttribute('data-tinted', 'true')
     await user.keyboard('{ArrowDown}{Enter}')
@@ -313,6 +313,74 @@ describe('API key group appearance', () => {
     )
     await user.keyboard('{Escape}')
     expect(getTrigger()).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  test('enables featured effects from one switch and preserves them without animation for reduced motion', async () => {
+    setReducedMotion(true)
+    const user = userEvent.setup()
+    render(
+      <I18nextProvider i18n={i18n}>
+        <ApiKeyGroupCombobox
+          options={applyGroupAppearance(options, {
+            ...settings,
+            groups: {
+              default: {
+                ...emptyAppearance,
+                category: '__other',
+                featured: true,
+              },
+            },
+          })}
+          value='default'
+          onValueChange={() => {}}
+        />
+      </I18nextProvider>
+    )
+    const trigger = getTrigger()
+    expect(trigger).toHaveAttribute('data-featured', 'true')
+    expect(trigger).toHaveAttribute('data-reduced-motion', 'true')
+    expect(trigger).not.toHaveAttribute('data-border')
+    expect(within(trigger).getByRole('img', { name: 'Featured' })).toBeVisible()
+    await user.click(trigger)
+    const featured = screen.getByRole('option', { name: /default/ })
+    expect(featured).toHaveAttribute('data-featured', 'true')
+    expect(featured).toHaveAttribute('data-reduced-motion', 'true')
+    expect(within(featured).getByText('default')).toHaveAttribute(
+      'data-featured',
+      'true'
+    )
+    const normal = screen.getByRole('option', { name: /vip/ })
+    expect(normal).not.toHaveAttribute('data-featured')
+    expect(
+      within(normal).queryByRole('img', { name: 'Featured' })
+    ).not.toBeInTheDocument()
+    setReducedMotion(false)
+  })
+
+  test('keeps a categorized auto group inside its configured category', async () => {
+    const user = userEvent.setup()
+    render(
+      <I18nextProvider i18n={i18n}>
+        <ApiKeyGroupCombobox
+          options={applyGroupAppearance(options, {
+            ...settings,
+            groups: {
+              ...settings.groups,
+              auto: { ...emptyAppearance, category: '__other', sort_order: 5 },
+            },
+          })}
+          value='auto'
+          onValueChange={() => {}}
+        />
+      </I18nextProvider>
+    )
+    await user.click(getTrigger())
+    const category = screen.getByRole('group', { name: 'OpenAI' })
+    expect(
+      within(category)
+        .getAllByRole('option')
+        .map((row) => row.getAttribute('data-value'))
+    ).toEqual(['vip', 'auto', 'default'])
   })
 
   test('keeps the chosen group marked while keyboard focus moves to another styled row', async () => {

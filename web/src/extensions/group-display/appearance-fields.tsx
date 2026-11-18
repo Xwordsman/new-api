@@ -19,181 +19,94 @@ For commercial licensing, please contact support@quantumnous.com
 import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { LobeIconField } from '@/components/lobe-icon-field'
-import { Combobox } from '@/components/ui/combobox'
+import { TagInput } from '@/components/tag-input'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 
-import { appearanceSchema } from './schema'
-import type { GroupAppearance, GroupCategory } from './types'
+import type { GroupAppearance } from './types'
 
 export function AppearanceFields(props: {
   value: GroupAppearance
-  category?: GroupCategory
+  placeholder: string
   onChange: (value: GroupAppearance) => void
   disabled?: boolean
-  showErrors?: boolean
 }) {
   const { t } = useTranslation()
   const prefix = useId()
   const value = props.value
-  const patch = (update: Partial<GroupAppearance>) =>
-    props.onChange({ ...value, ...update })
-  const validation = appearanceSchema.safeParse(value)
-  const errors = props.showErrors ? validation.error?.issues : undefined
   return (
-    <div className='space-y-5'>
-      <div className='space-y-2'>
-        <Label htmlFor={`${prefix}-icon`}>{t('Group icon')}</Label>
-        <LobeIconField
-          disabled={props.disabled}
-          id={`${prefix}-icon`}
-          value={value.icon}
-          allowInheritance
-          inheritedIcon={props.category?.icon}
-          inheritedName={props.category?.name}
-          onChange={(icon) => patch({ icon })}
-        />
-        <p className='text-muted-foreground text-xs'>
-          {t('Leave the icon or color empty to inherit from the category.')}
-        </p>
-      </div>
+    <div className='space-y-4'>
       <div className='grid gap-4 sm:grid-cols-2'>
         <div className='space-y-2'>
-          <Label htmlFor={`${prefix}-color`}>{t('Accent color')}</Label>
+          <Label htmlFor={`${prefix}-name`}>{t('Display name')}</Label>
           <Input
-            aria-invalid={errors?.some((issue) => issue.path[0] === 'color')}
-            id={`${prefix}-color`}
-            value={value.color}
-            placeholder='#16a34a'
-            maxLength={7}
-            onChange={(event) => patch({ color: event.target.value })}
+            id={`${prefix}-name`}
+            disabled={props.disabled}
+            placeholder={props.placeholder}
+            value={value.display_name}
+            maxLength={120}
+            onChange={(event) =>
+              props.onChange({ ...value, display_name: event.target.value })
+            }
           />
-          {errors?.some((issue) => issue.path[0] === 'color') && (
-            <p className='text-destructive text-xs'>
-              {t('Use a hex color such as #16a34a, or leave it empty.')}
-            </p>
-          )}
         </div>
         <div className='space-y-2'>
-          <Label htmlFor={`${prefix}-order`}>
-            {t('Order within category')}
+          <Label htmlFor={`${prefix}-description`}>
+            {t('Short description')}
           </Label>
           <Input
-            aria-invalid={errors?.some(
-              (issue) => issue.path[0] === 'sort_order'
-            )}
-            id={`${prefix}-order`}
-            type='number'
-            min={0}
-            max={100000}
-            value={value.sort_order}
+            id={`${prefix}-description`}
+            disabled={props.disabled}
+            value={value.description}
+            maxLength={600}
             onChange={(event) =>
-              patch({ sort_order: Number(event.target.value) })
-            }
-          />
-          {errors?.some((issue) => issue.path[0] === 'sort_order') && (
-            <p className='text-destructive text-xs'>
-              {t('Enter a whole number from 0 to 100000.')}
-            </p>
-          )}
-        </div>
-        <div className='space-y-2'>
-          <Label htmlFor={`${prefix}-border`}>{t('Border style')}</Label>
-          <Combobox
-            disabled={props.disabled}
-            id={`${prefix}-border`}
-            value={value.border}
-            options={[
-              { value: '', label: t('None') },
-              { value: 'solid', label: t('Solid') },
-              { value: 'gradient', label: t('Gradient') },
-            ]}
-            onValueChange={(border) =>
-              patch({ border: (border ?? '') as GroupAppearance['border'] })
+              props.onChange({ ...value, description: event.target.value })
             }
           />
         </div>
-        {value.border === 'gradient' && (
-          <div className='space-y-2'>
-            <Label htmlFor={`${prefix}-gradient`}>
-              {t('Gradient end color')}
-            </Label>
-            <Input
-              aria-invalid={errors?.some(
-                (issue) => issue.path[0] === 'gradient_to'
-              )}
-              id={`${prefix}-gradient`}
-              value={value.gradient_to}
-              placeholder='#38bdf8'
-              maxLength={7}
-              onChange={(event) => patch({ gradient_to: event.target.value })}
-            />
-            {errors?.some((issue) => issue.path[0] === 'gradient_to') && (
-              <p className='text-destructive text-xs'>
-                {t('Use a hex color such as #16a34a, or leave it empty.')}
-              </p>
+      </div>
+      <div className='space-y-2'>
+        <Label htmlFor={`${prefix}-tags`}>{t('Tags')}</Label>
+        <TagInput
+          id={`${prefix}-tags`}
+          disabled={props.disabled}
+          maxTags={6}
+          maxLength={32}
+          value={value.tags.map((tag) => tag.label)}
+          onChange={(labels) =>
+            props.onChange({
+              ...value,
+              tags: labels.map(
+                (label) =>
+                  value.tags.find((tag) => tag.label === label) ?? {
+                    label,
+                    color: '',
+                  }
+              ),
+            })
+          }
+        />
+      </div>
+      <div className='bg-muted/40 flex items-center justify-between gap-4 rounded-lg border p-3'>
+        <div className='space-y-1'>
+          <Label htmlFor={`${prefix}-featured`}>{t('Featured')}</Label>
+          <p
+            id={`${prefix}-featured-help`}
+            className='text-muted-foreground text-xs'
+          >
+            {t(
+              'Automatically adds a featured icon, a glowing gradient border and an animated gradient name.'
             )}
-          </div>
-        )}
-      </div>
-      <div className='flex flex-wrap gap-6'>
-        <Label
-          className='flex items-center gap-2'
-          htmlFor={`${prefix}-background`}
-        >
-          <Switch
-            disabled={props.disabled}
-            id={`${prefix}-background`}
-            checked={value.background}
-            onCheckedChange={(background) => patch({ background })}
-          />
-          {t('Tinted background')}
-        </Label>
-      </div>
-      <div className='space-y-3'>
-        {value.tags.length > 0 && <Label>{t('Tag colors')}</Label>}
-        <div className='grid gap-3 sm:grid-cols-2'>
-          {value.tags.map((tag, index) => (
-            <div key={tag.label} className='space-y-1'>
-              <Label htmlFor={`${prefix}-tag-color-${index}`}>
-                {t('Color for {{tag}}', { tag: tag.label })}
-              </Label>
-              <Input
-                aria-invalid={errors?.some(
-                  (issue) =>
-                    issue.path[0] === 'tags' &&
-                    issue.path[1] === index &&
-                    issue.path[2] === 'color'
-                )}
-                id={`${prefix}-tag-color-${index}`}
-                maxLength={7}
-                value={tag.color}
-                placeholder='#16a34a'
-                onChange={(event) =>
-                  patch({
-                    tags: value.tags.map((item, i) =>
-                      i === index
-                        ? { ...item, color: event.target.value }
-                        : item
-                    ),
-                  })
-                }
-              />
-              {errors?.some(
-                (issue) =>
-                  issue.path[0] === 'tags' &&
-                  issue.path[1] === index &&
-                  issue.path[2] === 'color'
-              ) && (
-                <p className='text-destructive text-xs'>
-                  {t('Use a hex color such as #16a34a, or leave it empty.')}
-                </p>
-              )}
-            </div>
-          ))}
+          </p>
         </div>
+        <Switch
+          id={`${prefix}-featured`}
+          aria-describedby={`${prefix}-featured-help`}
+          disabled={props.disabled}
+          checked={value.featured}
+          onCheckedChange={(featured) => props.onChange({ ...value, featured })}
+        />
       </div>
     </div>
   )

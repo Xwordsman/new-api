@@ -75,7 +75,7 @@ export function groupAppearanceStyle(
   return {
     '--group-color':
       option?.appearance?.color || option?.category?.color || 'var(--primary)',
-    '--group-gradient-to': option?.appearance?.gradient_to || 'var(--primary)',
+    '--group-gradient-to': option?.appearance?.gradient_to || '#a78bfa',
   } as CSSProperties
 }
 
@@ -115,13 +115,13 @@ export function groupOptionSections(options: GroupDisplayOption[]) {
   for (const option of options) {
     let id = '__other'
     if (option.category) id = `category:${option.category.id}`
-    if (option.value === 'auto') id = '__auto'
+    if (option.value === 'auto' && !option.category) id = '__auto'
     let section = sections.get(id)
     if (!section) {
       section = {
-        category: option.value === 'auto' ? undefined : option.category,
+        category: option.category,
         order:
-          option.value === 'auto'
+          id === '__auto'
             ? -1
             : (option.categoryOrder ?? Number.MAX_SAFE_INTEGER),
         options: [],
