@@ -30,6 +30,16 @@ vi.mock('@lobehub/icons/es/Mistral/components/Color.js', () => {
 })
 
 describe('Lobe icons', () => {
+  it.each(['openai', 'cLaUdE', 'gemini'])(
+    'renders the actual SVG for the case-insensitive icon name %s',
+    async (name) => {
+      render(getLobeIcon(`${name}.role="img".aria-label="Provider icon"`, 24))
+      const icon = await screen.findByRole('img', { name: 'Provider icon' })
+      expect(icon.tagName.toLowerCase()).toBe('svg')
+      expect(icon).toHaveAttribute('width', '24')
+    }
+  )
+
   it.each([
     '/build/web/node_modules/@lobehub/icons/es/',
     'D:\\a\\new-api\\web\\node_modules\\@lobehub\\icons\\es\\',

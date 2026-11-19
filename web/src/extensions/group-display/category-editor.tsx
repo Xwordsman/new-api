@@ -51,6 +51,10 @@ export function CategoryEditor(props: {
       }
   )
   const [invalid, setInvalid] = useState(false)
+  const colorValid =
+    displaySettingsSchema.shape.categories.element.shape.color.safeParse(
+      value.color
+    ).success
   const title = props.initial ? t('Edit category') : t('Add category')
   return (
     <Dialog
@@ -117,16 +121,43 @@ export function CategoryEditor(props: {
         </div>
         <div className='space-y-2'>
           <Label htmlFor={`${prefix}-color`}>{t('Category color')}</Label>
-          <Input
-            id={`${prefix}-color`}
-            type='color'
-            className='h-10 w-20 cursor-pointer p-1'
-            disabled={props.disabled}
-            value={value.color || '#16a34a'}
-            onChange={(event) =>
-              setValue({ ...value, color: event.target.value })
-            }
-          />
+          <div className='flex min-w-0 items-center gap-3'>
+            <Input
+              type='color'
+              aria-label={t('Choose category color')}
+              className='h-10 w-16 shrink-0 cursor-pointer p-1'
+              disabled={props.disabled}
+              value={colorValid && value.color ? value.color : '#16a34a'}
+              onChange={(event) =>
+                setValue({ ...value, color: event.target.value })
+              }
+            />
+            <Input
+              id={`${prefix}-color`}
+              className='h-10 font-mono'
+              disabled={props.disabled}
+              aria-invalid={invalid && !colorValid}
+              aria-describedby={
+                invalid && !colorValid ? `${prefix}-color-error` : undefined
+              }
+              maxLength={7}
+              autoComplete='off'
+              spellCheck={false}
+              placeholder='#16a34a'
+              value={value.color}
+              onChange={(event) =>
+                setValue({ ...value, color: event.target.value })
+              }
+            />
+          </div>
+          {invalid && !colorValid && (
+            <p
+              id={`${prefix}-color-error`}
+              className='text-destructive text-xs'
+            >
+              {t('Use a hex color such as #16a34a, or leave it empty.')}
+            </p>
+          )}
         </div>
         <Collapsible>
           <CollapsibleTrigger
@@ -142,6 +173,9 @@ export function CategoryEditor(props: {
             {t('Category icon')}
           </CollapsibleTrigger>
           <CollapsibleContent className='pt-3'>
+            <Label htmlFor={`${prefix}-icon`} className='sr-only'>
+              {t('Category icon')}
+            </Label>
             <LobeIconField
               id={`${prefix}-icon`}
               disabled={props.disabled}

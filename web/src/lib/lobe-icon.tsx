@@ -54,6 +54,12 @@ const CUSTOM_ICONS: Record<string, ComponentType<{ size?: number }>> = {
 }
 
 const ICON_METADATA = new Map(toc.map((icon) => [icon.id, icon]))
+const ICON_NAMES = new Map(
+  [...toc.map((icon) => icon.id), ...Object.keys(CUSTOM_ICONS)].map((name) => [
+    name.toLowerCase(),
+    name,
+  ])
+)
 const ICON_VARIANTS = {
   Avatar: 'hasAvatar',
   Brand: 'hasBrand',
@@ -137,7 +143,7 @@ export function getLobeIcon(
   if (!trimmedName) return fallback
 
   const segments = trimmedName.split('.')
-  const baseKey = segments[0]
+  const baseKey = ICON_NAMES.get(segments[0].toLowerCase()) ?? segments[0]
   const CustomIcon = CUSTOM_ICONS[baseKey]
   if (CustomIcon) return <CustomIcon size={size} />
 

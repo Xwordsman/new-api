@@ -251,6 +251,77 @@ it('edits category color and removes a group without losing its tags or display 
   client.clear()
 })
 
+it('keeps typed hex colors and the color picker in sync and saves the chosen color', async () => {
+  const user = userEvent.setup()
+  const { client, put } = renderWorkspace()
+  await user.click(
+    await screen.findByRole('button', { name: 'Edit category OpenAI' })
+  )
+  const dialog = screen.getByRole('dialog', { name: 'Edit category' })
+  const code = within(dialog).getByRole('textbox', { name: 'Category color' })
+  const picker = within(dialog).getByLabelText('Choose category color')
+  await user.clear(code)
+  await user.type(code, '#D97757')
+  expect(picker).toHaveValue('#d97757')
+  fireEvent.change(picker, { target: { value: '#4285f4' } })
+  expect(code).toHaveValue('#4285f4')
+  await user.click(within(dialog).getByRole('button', { name: 'Done' }))
+  await user.click(screen.getByRole('button', { name: 'Save appearance' }))
+  await waitFor(() => expect(put).toHaveBeenCalledOnce())
+  const payload = put.mock.calls[0][1] as GroupDisplaySettings
+  expect(payload.categories[0].color).toBe('#4285f4')
+  client.clear()
+})
+
+it('shows a field error for an invalid hex color and allows correcting it', async () => {
+  const user = userEvent.setup()
+  const { client } = renderWorkspace()
+  await user.click(
+    await screen.findByRole('button', { name: 'Edit category OpenAI' })
+  )
+  const dialog = screen.getByRole('dialog', { name: 'Edit category' })
+  const code = within(dialog).getByRole('textbox', { name: 'Category color' })
+  await user.clear(code)
+  await user.type(code, '#oops')
+  await user.click(within(dialog).getByRole('button', { name: 'Done' }))
+  expect(code).toHaveAttribute('aria-invalid', 'true')
+  expect(code).toHaveAccessibleDescription(
+    'Use a hex color such as #16a34a, or leave it empty.'
+  )
+  expect(dialog).toBeVisible()
+  await user.clear(code)
+  await user.type(code, '#123456')
+  expect(code).toHaveAttribute('aria-invalid', 'false')
+  await user.click(within(dialog).getByRole('button', { name: 'Done' }))
+  expect(dialog).not.toBeInTheDocument()
+  client.clear()
+})
+
+it('previews the actual icon when typing a lowercase provider name and saves it', async () => {
+  const user = userEvent.setup()
+  const { client, put } = renderWorkspace()
+  await user.click(
+    await screen.findByRole('button', { name: 'Edit category OpenAI' })
+  )
+  const dialog = screen.getByRole('dialog', { name: 'Edit category' })
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Category icon' })
+  )
+  await user.type(
+    within(dialog).getByRole('combobox', { name: 'Category icon' }),
+    'openai'
+  )
+  const preview = within(dialog).getByRole('img', { name: 'Effective icon' })
+  await waitFor(() => expect(preview.querySelector('svg')).toBeVisible())
+  await user.keyboard('{Escape}')
+  await user.click(within(dialog).getByRole('button', { name: 'Done' }))
+  await user.click(screen.getByRole('button', { name: 'Save appearance' }))
+  await waitFor(() => expect(put).toHaveBeenCalledOnce())
+  const payload = put.mock.calls[0][1] as GroupDisplaySettings
+  expect(payload.categories[0].icon).toBe('openai')
+  client.clear()
+})
+
 it('loads refreshed saved appearance when the editor has no draft', async () => {
   const user = userEvent.setup()
   const { client, put } = renderWorkspace()
