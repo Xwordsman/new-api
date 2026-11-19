@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { AutoGroupFlowBorder } from '@/features/keys/components/auto-group-visuals'
 import { useMediaQuery } from '@/hooks'
 import { getLobeIcon } from '@/lib/lobe-icon'
 
@@ -164,6 +165,12 @@ export function CategoryCard(props: {
                 data-border={option.appearance?.border || undefined}
                 data-tinted={option.appearance?.background || undefined}
               >
+                {option.appearance?.featured && (
+                  <AutoGroupFlowBorder
+                    shouldReduceMotion={shouldReduceMotion}
+                    className='group-display-flow-border'
+                  />
+                )}
                 <GroupOptionContents
                   option={option}
                   shouldReduceMotion={shouldReduceMotion}

@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Layers2, Sparkles, Zap } from 'lucide-react'
+import { Layers2, Zap } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -51,14 +51,13 @@ export function GroupOptionContents(props: {
               {option.label}
             </span>
             {option.appearance?.featured && (
-              <span
-                role='img'
-                aria-label={t('Featured')}
-                title={t('Featured')}
+              <StatusBadge
+                label={t('Featured')}
+                copyable={false}
+                type='badge'
+                variant='purple'
                 className='group-display-featured'
-              >
-                <Sparkles aria-hidden='true' />
-              </span>
+              />
             )}
           </span>
           {option.appearance?.tags.map((tag) => (

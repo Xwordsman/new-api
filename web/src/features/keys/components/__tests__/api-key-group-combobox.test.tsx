@@ -290,7 +290,7 @@ describe('API key group appearance', () => {
     const row = screen.getByRole('option')
     expect(row).toHaveTextContent('GPT standard')
     expect(row).toHaveTextContent('Stable conversations')
-    expect(within(row).getByRole('img', { name: 'Featured' })).toBeVisible()
+    expect(within(row).getByText('Featured')).toBeVisible()
     expect(row).toHaveAttribute('data-border', 'gradient')
     expect(row).toHaveAttribute('data-tinted', 'true')
     await user.keyboard('{ArrowDown}{Enter}')
@@ -340,21 +340,60 @@ describe('API key group appearance', () => {
     expect(trigger).toHaveAttribute('data-featured', 'true')
     expect(trigger).toHaveAttribute('data-reduced-motion', 'true')
     expect(trigger).not.toHaveAttribute('data-border')
-    expect(within(trigger).getByRole('img', { name: 'Featured' })).toBeVisible()
+    expect(within(trigger).getByText('Featured')).toBeVisible()
+    expect(trigger.querySelector('[data-auto-group-flow-border]')).toBeNull()
     await user.click(trigger)
     const featured = screen.getByRole('option', { name: /default/ })
     expect(featured).toHaveAttribute('data-featured', 'true')
     expect(featured).toHaveAttribute('data-reduced-motion', 'true')
+    expect(featured.querySelector('[data-auto-group-flow-border]')).toBeNull()
     expect(within(featured).getByText('default')).toHaveAttribute(
       'data-featured',
       'true'
     )
     const normal = screen.getByRole('option', { name: /vip/ })
     expect(normal).not.toHaveAttribute('data-featured')
-    expect(
-      within(normal).queryByRole('img', { name: 'Featured' })
-    ).not.toBeInTheDocument()
+    expect(within(normal).queryByText('Featured')).not.toBeInTheDocument()
     setReducedMotion(false)
+  })
+
+  test('shows a featured text badge and a single moving frame for featured normal and auto groups', async () => {
+    setReducedMotion(false)
+    const user = userEvent.setup()
+    render(
+      <I18nextProvider i18n={i18n}>
+        <ApiKeyGroupCombobox
+          options={applyGroupAppearance(options, {
+            ...settings,
+            groups: {
+              ...settings.groups,
+              auto: { ...emptyAppearance, featured: true },
+            },
+          })}
+          value='default'
+          onValueChange={() => {}}
+        />
+      </I18nextProvider>
+    )
+    const trigger = getTrigger()
+    expect(within(trigger).getByText('Featured')).toBeVisible()
+    expect(
+      within(trigger).queryByRole('img', { name: 'Featured' })
+    ).not.toBeInTheDocument()
+    expect(
+      trigger.querySelector(':scope > [data-auto-group-flow-border]')
+    ).toHaveAttribute('aria-hidden', 'true')
+    await user.click(trigger)
+    for (const name of [/GPT standard/, /Global automatic routing/]) {
+      const row = screen.getByRole('option', { name })
+      expect(within(row).getByText('Featured')).toBeVisible()
+      expect(
+        row.querySelectorAll(':scope > [data-auto-group-flow-border]')
+      ).toHaveLength(1)
+    }
+    const normal = screen.getByRole('option', { name: /GPT priority/ })
+    expect(within(normal).queryByText('Featured')).not.toBeInTheDocument()
+    expect(normal.querySelector('[data-auto-group-flow-border]')).toBeNull()
   })
 
   test('keeps a categorized auto group inside its configured category', async () => {

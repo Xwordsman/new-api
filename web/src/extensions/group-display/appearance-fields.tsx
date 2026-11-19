@@ -96,7 +96,7 @@ export function AppearanceFields(props: {
             className='text-muted-foreground text-xs'
           >
             {t(
-              'Automatically adds a featured icon, a glowing gradient border and an animated gradient name.'
+              'Automatically adds a purple featured badge, a flowing gradient border and an animated gradient name.'
             )}
           </p>
         </div>

@@ -30,6 +30,7 @@ export const AUTO_GROUP_FRAME_CLASS_NAME =
 type AutoGroupFlowBorderProps = {
   shouldReduceMotion: boolean
   appearance?: 'default' | 'subtle'
+  className?: string
 }
 
 export function AutoGroupFlowBorder(props: AutoGroupFlowBorderProps) {
@@ -41,7 +42,8 @@ export function AutoGroupFlowBorder(props: AutoGroupFlowBorderProps) {
       data-auto-group-flow-border='true'
       className={cn(
         'auto-group-flow-border pointer-events-none absolute -inset-px',
-        props.appearance === 'subtle' && 'auto-group-flow-border-subtle'
+        props.appearance === 'subtle' && 'auto-group-flow-border-subtle',
+        props.className
       )}
     />
   )

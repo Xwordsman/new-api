@@ -88,6 +88,7 @@ For commercial licensing, please contact support@quantumnous.com
   --group-surface: var(--popover);
   --group-surface-end: var(--popover);
   --group-border: transparent;
+  position: relative;
   border: 1px solid transparent;
   background:
     linear-gradient(115deg, var(--group-surface), var(--group-surface-end))
@@ -240,18 +241,30 @@ For commercial licensing, please contact support@quantumnous.com
   line-height: 14px;
 }
 
-.group-display-featured {
-  display: inline-flex;
+.group-display-featured[data-slot='status-badge'] {
+  height: 18px;
   flex-shrink: 0;
-  color: var(--group-ink);
-  filter: drop-shadow(
-    0 0 4px color-mix(in srgb, var(--group-color) 40%, transparent)
-  );
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--color-violet-500) 28%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-violet-500) 12%, var(--popover));
+  color: color-mix(in srgb, var(--color-violet-500) 72%, var(--foreground));
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 16px;
 }
 
-.group-display-featured svg {
-  width: 14px;
-  height: 14px;
+.auto-group-flow-border.group-display-flow-border {
+  padding: 2px;
+  background: conic-gradient(
+    from var(--auto-group-flow-angle),
+    transparent 0deg 200deg,
+    color-mix(in srgb, var(--group-color) 65%, transparent) 265deg,
+    var(--group-gradient-to) 310deg,
+    color-mix(in srgb, var(--group-gradient-to) 35%, white) 340deg,
+    transparent 360deg
+  );
+  animation-duration: 2.8s;
 }
 
 .group-display-frame[data-featured='true'],
@@ -273,14 +286,10 @@ For commercial licensing, please contact support@quantumnous.com
     linear-gradient(115deg, var(--group-surface), var(--group-surface-end))
       padding-box,
     var(--group-border) border-box;
-  background-size:
-    100% 100%,
-    200% 200%;
   box-shadow:
     -3px 0 12px -3px color-mix(in srgb, var(--group-color) 38%, transparent),
     3px 0 12px -3px
       color-mix(in srgb, var(--group-gradient-to) 38%, transparent);
-  animation: group-featured-border 6s ease-in-out infinite alternate;
 }
 
 .group-display-name[data-featured='true'] {
@@ -304,19 +313,6 @@ For commercial licensing, please contact support@quantumnous.com
 .group-display-trigger[data-featured='true']:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
-}
-
-@keyframes group-featured-border {
-  from {
-    background-position:
-      0 0,
-      0% 50%;
-  }
-  to {
-    background-position:
-      0 0,
-      100% 50%;
-  }
 }
 
 @keyframes group-featured-name {

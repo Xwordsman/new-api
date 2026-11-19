@@ -104,8 +104,15 @@ export function ApiKeyGroupCombobox({
           />
         }
       >
-        {isAutoSelected && (
-          <AutoGroupFlowBorder shouldReduceMotion={shouldReduceMotion} />
+        {(isAutoSelected || selectedOption?.appearance?.featured) && (
+          <AutoGroupFlowBorder
+            shouldReduceMotion={shouldReduceMotion}
+            className={
+              selectedOption?.appearance?.featured
+                ? 'group-display-flow-border'
+                : undefined
+            }
+          />
         )}
         <span className='flex min-w-0 flex-1 items-center gap-2.5'>
           {selectedOption ? (
@@ -246,9 +253,14 @@ export function ApiKeyGroupOptions(
                         )
                     )}
                   >
-                    {isAutoOption && (
+                    {(isAutoOption || option.appearance?.featured) && (
                       <AutoGroupFlowBorder
                         shouldReduceMotion={shouldReduceMotion}
+                        className={
+                          option.appearance?.featured
+                            ? 'group-display-flow-border'
+                            : undefined
+                        }
                       />
                     )}
                     <Check
