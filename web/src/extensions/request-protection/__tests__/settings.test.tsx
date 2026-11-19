@@ -38,6 +38,8 @@ const settings: ProtectionSettings = {
   max_body_bytes: 2097152,
   max_text_bytes: 262144,
   uninspected_action: 'observe',
+  require_complete_text: false,
+  upstream_action: 'observe',
   fail_closed: true,
   rules: [
     {
@@ -98,6 +100,8 @@ it('rejects invalid limits and saves the configured scope, restriction threshold
     mode: 'enforce',
     groups: ['gpt', 'premium'],
     key_threshold: 5,
+    require_complete_text: true,
+    upstream_action: 'hold_group',
   } as const
   const put = vi
     .spyOn(api, 'put')
@@ -120,6 +124,13 @@ it('rejects invalid limits and saves the configured scope, restriction threshold
   await user.selectOptions(
     screen.getByRole('combobox', { name: 'Protection mode' }),
     'enforce'
+  )
+  await user.click(
+    screen.getByRole('switch', { name: 'Block incomplete text inspection' })
+  )
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Upstream safety response' }),
+    'hold_group'
   )
   vi.mocked(api.get).mockResolvedValue({ data: { success: true, data: saved } })
   await user.click(screen.getAllByRole('button', { name: 'Save' })[0])

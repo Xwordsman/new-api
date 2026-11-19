@@ -146,6 +146,9 @@ export function EventsPanel() {
               {t('Record only')}
             </NativeSelectOption>
             <NativeSelectOption value='block'>{t('Block')}</NativeSelectOption>
+            <NativeSelectOption value='hold'>
+              {t('Safety hold pending review')}
+            </NativeSelectOption>
           </NativeSelect>
         </div>
         <div className='space-y-2'>

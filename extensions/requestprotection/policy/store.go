@@ -84,6 +84,74 @@ type Result struct {
 	RestrictedUntil int64 `json:"restricted_until"`
 }
 
+// This sentinel is never shown as a calendar date. Only explicit admin release
+// clears a safety hold; ordinary score expiry and false-positive scoring do not.
+const ManualHoldUntil int64 = 253402300799
+
+func GroupSubjectID(group string) string {
+	return "group:" + Digest("", "request-protection-group", group)[:58]
+}
+
+func ActiveGroupRestriction(db *gorm.DB, groups []string, now int64) (int64, error) {
+	if len(groups) == 0 {
+		return 0, nil
+	}
+	ids := make([]string, 0, len(groups))
+	for _, group := range groups {
+		ids = append(ids, GroupSubjectID(group))
+	}
+	var until int64
+	err := db.Model(&Subject{}).Where("id IN ? AND expires_at > ?", ids, now).Select("COALESCE(MAX(expires_at),0)").Scan(&until).Error
+	return until, err
+}
+
+// RecordSafety atomically records provider evidence and protective holds. A hold
+// is not a finding of user misconduct and never increments violation scores.
+func RecordSafety(db *gorm.DB, s Settings, in Input, code, secret string, now int64) (Result, error) {
+	v := Verdict{Decision: "observe", Digest: Digest(secret, "upstream-code", fmt.Sprintf("%d:%s:%s", in.UserID, in.RequestID, code)), Hits: []Hit{{RuleID: "upstream_safety", Name: code, Source: "upstream", Action: "observe"}}}
+	hold := s.Mode == "enforce" && (s.UpstreamAction == "hold_user" || s.UpstreamAction == "hold_group")
+	if hold {
+		v.Decision = "hold"
+	}
+	var result Result
+	err := db.Transaction(func(tx *gorm.DB) error {
+		// Group state uses the existing account zero lock. Always
+		// acquire it before the user's lock to avoid cross-user lock inversion.
+		if err := LockAccount(tx, 0); err != nil {
+			return err
+		}
+		var err error
+		result, err = Record(tx, s, in, v, secret, now)
+		if err != nil {
+			return err
+		}
+		if err = tx.Model(&Event{}).Where("id = ?", result.EventID).Update("upstream", "responded").Error; err != nil || !hold {
+			return err
+		}
+		states := []Subject{{ID: fmt.Sprintf("user:%d", in.UserID), UserID: in.UserID}}
+		if s.UpstreamAction == "hold_group" && in.Group != "" {
+			states = append(states, Subject{ID: GroupSubjectID(in.Group)})
+		}
+		for _, state := range states {
+			if err = tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&state).Error; err != nil {
+				return err
+			}
+			changed := tx.Model(&Subject{}).Where("id = ? AND watermark < ? AND expires_at <> ?", state.ID, result.EventID, ManualHoldUntil).
+				Updates(map[string]any{"expires_at": ManualHoldUntil, "started_at": now, "cause_event_id": result.EventID, "threshold": 0, "window_minutes": 0})
+			if changed.Error != nil {
+				return changed.Error
+			}
+			if changed.RowsAffected > 0 {
+				if err = tx.Create(&Audit{CreatedAt: now, Action: "safety_hold", EventID: result.EventID, SubjectID: state.ID, Revision: s.Revision}).Error; err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+	return result, err
+}
+
 func Migrate(db *gorm.DB) error { return db.AutoMigrate(&Event{}, &Subject{}, &Audit{}, &Alert{}) }
 
 func ActiveRestriction(db *gorm.DB, userID, tokenID int, now int64) (int64, error) {
@@ -237,8 +305,22 @@ func Release(db *gorm.DB, id string, actor int, note string, now int64) error {
 		if err := LockAccount(tx, initial.UserID); err != nil {
 			return err
 		}
+		if err := tx.Where("id = ?", id).Take(&initial).Error; err != nil {
+			return err
+		}
+		if initial.Until == 0 && initial.CauseEventID == 0 {
+			return nil
+		}
 		var watermark int64
-		if err := tx.Model(&Event{}).Where("user_id = ?", initial.UserID).Select("COALESCE(MAX(id),0)").Scan(&watermark).Error; err != nil {
+		q := tx.Model(&Event{}).Where("user_id = ?", initial.UserID)
+		if strings.HasPrefix(id, "group:") {
+			var cause Event
+			if err := tx.Where("id = ?", initial.CauseEventID).Take(&cause).Error; err != nil {
+				return err
+			}
+			q = tx.Model(&Event{}).Where("group_name = ?", cause.GroupName)
+		}
+		if err := q.Select("COALESCE(MAX(id),0)").Scan(&watermark).Error; err != nil {
 			return err
 		}
 		if err := tx.Model(&Subject{}).Where("id = ? AND user_id = ?", id, initial.UserID).Updates(map[string]any{"expires_at": 0, "watermark": watermark, "cause_event_id": 0}).Error; err != nil {
@@ -282,6 +364,9 @@ func Review(db *gorm.DB, id int64, actor int, verdict, note string, now int64) e
 				return err
 			}
 			for _, state := range states {
+				if state.Until == ManualHoldUntil {
+					continue
+				}
 				var cause Event
 				if err := tx.Where("id = ?", state.CauseEventID).Take(&cause).Error; errors.Is(err, gorm.ErrRecordNotFound) {
 					continue

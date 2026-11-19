@@ -25,6 +25,7 @@ import { api } from '@/lib/api'
 import { createAppQueryClient } from '@/lib/query-client'
 
 import { EventsPanel } from '../components/events-panel'
+import { RestrictionsPanel } from '../components/restrictions-panel'
 import { ProtectionReviewDialog } from '../components/review-dialog'
 
 let client: QueryClient
@@ -38,6 +39,52 @@ beforeEach(() => {
 afterEach(() => {
   client.clear()
   vi.restoreAllMocks()
+})
+
+it('shows group safety holds as manual release and opens the selected group release dialog', async () => {
+  const user = userEvent.setup()
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: {
+      success: true,
+      data: {
+        items: [
+          {
+            id: 'group:test',
+            group: 'premium',
+            user_id: 0,
+            token_id: 0,
+            until: 253402300799,
+            manual_review: true,
+            cause_event_id: 9,
+          },
+        ],
+        total: 1,
+        page: 1,
+      },
+    },
+  })
+  const post = vi
+    .spyOn(api, 'post')
+    .mockResolvedValue({ data: { success: true } })
+  render(
+    <QueryClientProvider client={client}>
+      <RestrictionsPanel />
+    </QueryClientProvider>
+  )
+  expect(await screen.findByText('Until manual release')).toBeVisible()
+  expect(screen.getByText('premium')).toBeVisible()
+  await user.click(screen.getByRole('button', { name: 'Release restriction' }))
+  await user.type(
+    screen.getByRole('textbox', { name: 'Review reason' }),
+    'Group reviewed with upstream'
+  )
+  await user.click(screen.getByRole('button', { name: 'Confirm' }))
+  await waitFor(() =>
+    expect(post).toHaveBeenCalledWith(
+      '/api/extensions/request-protection/admin/release',
+      { subject_id: 'group:test', note: 'Group reviewed with upstream' }
+    )
+  )
 })
 
 it('requires a review reason and preserves it when the server rejects the review', async () => {

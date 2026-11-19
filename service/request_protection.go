@@ -1,8 +1,8 @@
 package service
 
 import (
+	"context"
 	"errors"
-	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -24,6 +25,17 @@ import (
 
 var requestProtectionInstalled atomic.Bool
 
+// Retain uncommitted provider evidence across client disconnects and transient
+// storage failures. A process with pending evidence cannot forward new calls.
+var pendingProtectionSafety sync.Map
+
+type pendingSafety struct {
+	settings     policy.Settings
+	input        policy.Input
+	code, secret string
+	now          int64
+}
+
 func InstallRequestProtection() { requestProtectionInstalled.Store(true) }
 
 // CheckRequestProtection never changes billing or credential state. The marker
@@ -33,16 +45,26 @@ func CheckRequestProtection(c *gin.Context, info *relaycommon.RelayInfo) *types.
 		return nil
 	}
 	marker := "request-protection:" + info.RequestId + ":" + info.OriginModelName + ":" + info.UsingGroup
-	if done, _ := c.Get(marker); done == true {
-		return nil
-	}
 	db := model.DB.WithContext(c.Request.Context())
 	s, err := policy.GetSettings(db)
 	if err != nil {
 		return requestProtectionUnavailable(c, true, err)
 	}
+	c.Set("request-protection-settings", s)
 	if !s.Enabled {
 		return nil
+	}
+	var pendingErr error
+	pendingProtectionSafety.Range(func(key, value any) bool {
+		item := value.(pendingSafety)
+		_, pendingErr = policy.RecordSafety(db, item.settings, item.input, item.code, item.secret, item.now)
+		if pendingErr == nil {
+			pendingProtectionSafety.Delete(key)
+		}
+		return pendingErr == nil
+	})
+	if pendingErr != nil {
+		return requestProtectionUnavailable(c, true, pendingErr)
 	}
 	now := time.Now().Unix()
 	in := policy.Input{UserID: info.UserId, TokenID: info.TokenId, RequestID: info.RequestId, Group: info.UsingGroup, Model: info.OriginModelName, Protocol: string(info.RelayFormat)}
@@ -54,10 +76,26 @@ func CheckRequestProtection(c *gin.Context, info *relaycommon.RelayInfo) *types.
 		if e != nil {
 			return requestProtectionUnavailable(c, s.FailClosed, e)
 		}
+		groups := []string{in.Group}
+		if in.Group == "auto" {
+			groups = append(groups, GetUserAutoGroup(info.UserGroup)...)
+		}
+		groupUntil, e := policy.ActiveGroupRestriction(db, groups, now)
+		if e != nil {
+			return requestProtectionUnavailable(c, s.FailClosed, e)
+		}
+		until = max(until, groupUntil)
 		if until > now {
-			c.Header("Retry-After", strconv.FormatInt(until-now, 10))
+			if until != policy.ManualHoldUntil {
+				c.Header("Retry-After", strconv.FormatInt(until-now, 10))
+			}
 			return types.NewErrorWithStatusCode(errors.New(i18n.T(c, "request_protection.restricted")), types.ErrorCode("request_protection_restricted"), http.StatusForbidden, types.ErrOptionWithSkipRetry())
 		}
+	}
+	// Restrictions are deliberately checked again even after this request's
+	// content was inspected: another in-flight call may have created a hold.
+	if done, _ := c.Get(marker); done == true {
+		return nil
 	}
 	// Auto routing is checked conservatively against any selectable scoped
 	// group before a channel can be selected or any credit can be reserved.
@@ -103,7 +141,9 @@ func CheckRequestProtection(c *gin.Context, info *relaycommon.RelayInfo) *types.
 						break
 					}
 					if part.FileName() != "" {
-						in.Uninspected = "binary_media"
+						if in.Uninspected == "" {
+							in.Uninspected = "binary_media"
+						}
 						part.Close()
 						continue
 					}
@@ -174,47 +214,107 @@ func MarkRequestProtectionForwarded(c *gin.Context, info *relaycommon.RelayInfo)
 	}
 }
 
-// Structured upstream codes are review evidence only. Refusal prose, generic
-// HTTP statuses and client-supplied safety fields never increment penalties.
+// Structured upstream codes may trigger a protective manual hold. Refusal
+// prose, generic statuses and client-supplied safety fields are not evidence.
 func RecordRequestProtectionSafety(c *gin.Context, info *relaycommon.RelayInfo, code string) {
 	if !requestProtectionInstalled.Load() || model.DB == nil || info == nil || info.UserId <= 0 || info.IsChannelTest {
 		return
 	}
-	s, err := policy.GetSettings(model.DB)
-	if err != nil || !s.Enabled || !slices.Contains(s.UpstreamCodes, code) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(c.Request.Context()), 5*time.Second)
+	defer cancel()
+	db := model.DB.WithContext(ctx)
+	// Preserve the policy that admitted the request, including when storage
+	// becomes unavailable before its upstream response arrives.
+	value, _ := c.Get("request-protection-settings")
+	s, ok := value.(policy.Settings)
+	var err error
+	if !ok {
+		s, err = policy.GetSettings(db)
+	}
+	if err != nil {
+		common.SysError("request protection upstream policy unavailable: " + err.Error())
+		return
+	}
+	if !s.Enabled {
+		return
+	}
+	code = policy.SafetyCode(s, code)
+	if code == "" {
 		return
 	}
 	in := policy.Input{UserID: info.UserId, TokenID: info.TokenId, RequestID: info.RequestId + ":upstream:" + code, Model: info.OriginModelName, Group: info.UsingGroup, Protocol: string(info.RelayFormat)}
 	if !policy.InScope(s, in) {
 		return
 	}
-	v := policy.Verdict{Decision: "observe", Digest: policy.Digest(common.SessionSecret, "upstream-code", fmt.Sprintf("%d:%s:%s", in.UserID, info.RequestId, code)), Hits: []policy.Hit{{RuleID: "upstream_safety", Name: code, Source: "upstream", Action: "observe"}}}
-	result, err := policy.Record(model.DB.WithContext(c.Request.Context()), s, in, v, common.SessionSecret, time.Now().Unix())
-	if err == nil && result.EventID > 0 {
-		err = model.DB.Model(&policy.Event{}).Where("id = ?", result.EventID).Update("upstream", "responded").Error
-	}
+	item := pendingSafety{settings: s, input: in, code: code, secret: common.SessionSecret, now: time.Now().Unix()}
+	key := policy.Digest(item.secret, "pending-upstream", in.RequestID+":"+strconv.Itoa(in.UserID))
+	pendingProtectionSafety.Store(key, item)
+	_, err = policy.RecordSafety(db, s, in, code, item.secret, item.now)
 	if err != nil {
 		common.SysError("request protection upstream audit failed: " + err.Error())
+	} else {
+		pendingProtectionSafety.Delete(key)
 	}
+}
+
+func requestProtectionErrorCode(err *types.NewAPIError) string {
+	if err == nil || RelayErrorSource(err) != "upstream" {
+		return ""
+	}
+	codes := []string{string(err.GetErrorCode())}
+	switch upstream := err.RelayError.(type) {
+	case types.OpenAIError:
+		code, _ := upstream.Code.(string)
+		codes = append(codes, code, upstream.Type)
+	case types.ClaudeError:
+		codes = append(codes, upstream.Type)
+	}
+	s := policy.Defaults()
+	if requestProtectionInstalled.Load() && model.DB != nil {
+		if saved, e := policy.GetSettings(model.DB); e == nil {
+			s = saved
+		}
+	}
+	return policy.SafetyCode(s, codes...)
 }
 
 func ObserveRequestProtectionSafety(c *gin.Context, info *relaycommon.RelayInfo, data string) {
 	// The fast path avoids decoding every normal streaming token.
-	if !requestProtectionInstalled.Load() || (!strings.Contains(data, `"error"`) && !strings.Contains(data, `"content_filter_results"`)) {
+	if !requestProtectionInstalled.Load() || (!strings.Contains(data, `"error"`) && !strings.Contains(data, `"finish_reason"`)) {
 		return
+	}
+	type upstreamError struct {
+		Code string `json:"code"`
+		Type string `json:"type"`
 	}
 	var event struct {
-		Error *struct {
-			Code string `json:"code"`
-			Type string `json:"type"`
-		} `json:"error"`
+		Type     string         `json:"type"`
+		Code     string         `json:"code"`
+		Error    *upstreamError `json:"error"`
+		Response *struct {
+			Error *upstreamError `json:"error"`
+		} `json:"response"`
+		Choices []struct {
+			FinishReason string `json:"finish_reason"`
+		} `json:"choices"`
 	}
-	if common.UnmarshalJsonStr(data, &event) != nil || event.Error == nil {
+	if common.UnmarshalJsonStr(data, &event) != nil {
 		return
 	}
-	if event.Error.Code != "" {
+	if event.Error != nil {
 		RecordRequestProtectionSafety(c, info, event.Error.Code)
-	} else {
 		RecordRequestProtectionSafety(c, info, event.Error.Type)
+	}
+	if event.Response != nil && event.Response.Error != nil {
+		RecordRequestProtectionSafety(c, info, event.Response.Error.Code)
+		RecordRequestProtectionSafety(c, info, event.Response.Error.Type)
+	}
+	if event.Type == "error" {
+		RecordRequestProtectionSafety(c, info, event.Code)
+	}
+	for _, choice := range event.Choices {
+		if choice.FinishReason == "content_filter" {
+			RecordRequestProtectionSafety(c, info, "content_filter")
+		}
 	}
 }

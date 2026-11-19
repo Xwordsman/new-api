@@ -139,7 +139,35 @@ func restrictions(c *gin.Context) {
 	}
 	rows := []policy.Subject{}
 	err := q.Order("expires_at DESC").Offset((page - 1) * 20).Limit(20).Find(&rows).Error
-	respond(c, gin.H{"items": rows, "total": total, "page": page}, err)
+	if err != nil {
+		respond(c, nil, err)
+		return
+	}
+	type restrictionView struct {
+		policy.Subject
+		Group        string `json:"group"`
+		ManualReview bool   `json:"manual_review"`
+	}
+	ids := make([]int64, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.CauseEventID)
+	}
+	causes := []policy.Event{}
+	if len(ids) > 0 {
+		if err = model.DB.WithContext(c.Request.Context()).Select("id", "group_name").Where("id IN ?", ids).Find(&causes).Error; err != nil {
+			respond(c, nil, err)
+			return
+		}
+	}
+	groups := map[int64]string{}
+	for _, cause := range causes {
+		groups[cause.ID] = cause.GroupName
+	}
+	items := make([]restrictionView, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, restrictionView{Subject: row, Group: groups[row.CauseEventID], ManualReview: row.Until == policy.ManualHoldUntil})
+	}
+	respond(c, gin.H{"items": items, "total": total, "page": page}, nil)
 }
 func audit(c *gin.Context) {
 	page, _ := strconv.Atoi(c.Query("page"))

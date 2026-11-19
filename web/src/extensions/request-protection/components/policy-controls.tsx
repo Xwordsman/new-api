@@ -82,7 +82,7 @@ export function PolicyControls(props: { disabled: boolean }) {
           label={t('Maximum inspected body (bytes)')}
           kind='number'
           min={1024}
-          max={8388608}
+          max={33554432}
           disabled={props.disabled}
         />
         <PolicyField
@@ -90,7 +90,7 @@ export function PolicyControls(props: { disabled: boolean }) {
           label={t('Maximum inspected text (bytes)')}
           kind='number'
           min={256}
-          max={524288}
+          max={8388608}
           disabled={props.disabled}
         />
         <PolicyField
@@ -104,6 +104,15 @@ export function PolicyControls(props: { disabled: boolean }) {
             { value: 'observe', label: t('Record only') },
             { value: 'block', label: t('Block') },
           ]}
+          disabled={props.disabled}
+        />
+        <PolicyField
+          name='require_complete_text'
+          label={t('Block incomplete text inspection')}
+          kind='switch'
+          description={t(
+            'Reject text or body limits, malformed structures and uninspectable realtime sessions without adding penalties. Media follows the incomplete inspection action.'
+          )}
           disabled={props.disabled}
         />
         <PolicyField
@@ -185,6 +194,22 @@ export function PenaltyControls(props: { disabled: boolean }) {
       </div>
       <h3 className='font-semibold'>{t('Audit and alerts')}</h3>
       <div className='grid gap-5 sm:grid-cols-2'>
+        <PolicyField
+          name='upstream_action'
+          label={t('Upstream safety response')}
+          description={t(
+            'In enforce mode, pause access until manual release after a structured safety signal. Group pause affects all users in that local group. Holds do not add violation penalties.'
+          )}
+          options={[
+            { value: 'observe', label: t('Record only') },
+            { value: 'hold_user', label: t('Pause user until review') },
+            {
+              value: 'hold_group',
+              label: t('Pause user and group until review'),
+            },
+          ]}
+          disabled={props.disabled}
+        />
         <PolicyField
           name='retention_days'
           label={t('Event retention (days)')}

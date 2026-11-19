@@ -37,30 +37,32 @@ type Rule struct {
 }
 
 type Settings struct {
-	Revision           int64    `json:"revision"`
-	Enabled            bool     `json:"enabled"`
-	Mode               string   `json:"mode"`
-	Groups             []string `json:"groups"`
-	Models             []string `json:"models"`
-	Protocols          []string `json:"protocols"`
-	ExemptUserIDs      []int    `json:"exempt_user_ids"`
-	MaxBodyBytes       int      `json:"max_body_bytes"`
-	MaxTextBytes       int      `json:"max_text_bytes"`
-	UninspectedAction  string   `json:"uninspected_action"`
-	FailClosed         bool     `json:"fail_closed"`
-	Rules              []Rule   `json:"rules"`
-	WindowMinutes      int      `json:"window_minutes"`
-	KeyThreshold       int      `json:"key_threshold"`
-	KeySuspendMinutes  int      `json:"key_suspend_minutes"`
-	UserThreshold      int      `json:"user_threshold"`
-	UserSuspendMinutes int      `json:"user_suspend_minutes"`
-	DuplicateSeconds   int      `json:"duplicate_seconds"`
-	RetentionDays      int      `json:"retention_days"`
-	UpstreamCodes      []string `json:"upstream_codes"`
-	AlertEnabled       bool     `json:"alert_enabled"`
-	AlertEmails        []string `json:"alert_emails"`
-	AlertMinutes       int      `json:"alert_minutes"`
-	AlertThreshold     int      `json:"alert_threshold"`
+	Revision            int64    `json:"revision"`
+	Enabled             bool     `json:"enabled"`
+	Mode                string   `json:"mode"`
+	Groups              []string `json:"groups"`
+	Models              []string `json:"models"`
+	Protocols           []string `json:"protocols"`
+	ExemptUserIDs       []int    `json:"exempt_user_ids"`
+	MaxBodyBytes        int      `json:"max_body_bytes"`
+	MaxTextBytes        int      `json:"max_text_bytes"`
+	UninspectedAction   string   `json:"uninspected_action"`
+	RequireCompleteText bool     `json:"require_complete_text"`
+	UpstreamAction      string   `json:"upstream_action"`
+	FailClosed          bool     `json:"fail_closed"`
+	Rules               []Rule   `json:"rules"`
+	WindowMinutes       int      `json:"window_minutes"`
+	KeyThreshold        int      `json:"key_threshold"`
+	KeySuspendMinutes   int      `json:"key_suspend_minutes"`
+	UserThreshold       int      `json:"user_threshold"`
+	UserSuspendMinutes  int      `json:"user_suspend_minutes"`
+	DuplicateSeconds    int      `json:"duplicate_seconds"`
+	RetentionDays       int      `json:"retention_days"`
+	UpstreamCodes       []string `json:"upstream_codes"`
+	AlertEnabled        bool     `json:"alert_enabled"`
+	AlertEmails         []string `json:"alert_emails"`
+	AlertMinutes        int      `json:"alert_minutes"`
+	AlertThreshold      int      `json:"alert_threshold"`
 }
 
 type option struct {
@@ -72,10 +74,10 @@ func (option) TableName() string { return "options" }
 
 func Defaults() Settings {
 	return Settings{Mode: "observe", Groups: []string{}, Models: []string{}, Protocols: []string{}, ExemptUserIDs: []int{},
-		MaxBodyBytes: 2 * 1024 * 1024, MaxTextBytes: 256 * 1024, UninspectedAction: "observe", FailClosed: true,
+		MaxBodyBytes: 2 * 1024 * 1024, MaxTextBytes: 256 * 1024, UninspectedAction: "observe", UpstreamAction: "observe", FailClosed: true,
 		WindowMinutes: 10, KeyThreshold: 3, KeySuspendMinutes: 30, UserThreshold: 10, UserSuspendMinutes: 60,
 		DuplicateSeconds: 60, RetentionDays: 30, AlertMinutes: 15, AlertThreshold: 10, AlertEmails: []string{},
-		UpstreamCodes: []string{"content_policy_violation", "content_filter", "safety_violation"},
+		UpstreamCodes: []string{"content_policy_violation", "content_filter", "safety_violation", "session_blocked_by_cyber_policy"},
 		Rules: []Rule{
 			{ID: "instruction-override", Name: "Instruction override", Enabled: true, Kind: "all", Patterns: []string{"ignore all previous instructions", "without restrictions"}, Sources: []string{"current", "system"}, Action: "observe"},
 			{ID: "cn-instruction-override", Name: "Chinese instruction override", Enabled: true, Kind: "all", Patterns: []string{"忽略之前的所有指令", "不受任何限制"}, Sources: []string{"current", "system"}, Action: "observe"},
@@ -86,8 +88,9 @@ func Defaults() Settings {
 
 func Validate(s Settings) error {
 	if s.Revision < 0 || s.Revision == math.MaxInt64 || !slices.Contains([]string{"observe", "enforce"}, s.Mode) ||
-		!slices.Contains([]string{"allow", "observe", "block"}, s.UninspectedAction) || s.MaxBodyBytes < 1024 || s.MaxBodyBytes > 8*1024*1024 ||
-		s.MaxTextBytes < 256 || s.MaxTextBytes > 512*1024 || s.MaxTextBytes > s.MaxBodyBytes || len(s.Rules) > 100 ||
+		!slices.Contains([]string{"", "observe", "hold_user", "hold_group"}, s.UpstreamAction) ||
+		!slices.Contains([]string{"allow", "observe", "block"}, s.UninspectedAction) || s.MaxBodyBytes < 1024 || s.MaxBodyBytes > 32*1024*1024 ||
+		s.MaxTextBytes < 256 || s.MaxTextBytes > 8*1024*1024 || s.MaxTextBytes > s.MaxBodyBytes || len(s.Rules) > 100 ||
 		s.WindowMinutes < 1 || s.WindowMinutes > 1440 || s.KeyThreshold < 0 || s.KeyThreshold > 10000 || s.UserThreshold < 0 || s.UserThreshold > 10000 ||
 		s.KeySuspendMinutes < 1 || s.KeySuspendMinutes > 43200 || s.UserSuspendMinutes < 1 || s.UserSuspendMinutes > 43200 ||
 		s.DuplicateSeconds < 1 || s.DuplicateSeconds > 86400 || s.RetentionDays < 2 || s.RetentionDays > 365 ||
@@ -157,6 +160,23 @@ func Validate(s Settings) error {
 	return nil
 }
 
+// Known cyber-session blocks are always recognized, including on older saved
+// policies. Configured codes extend the list; prose and status codes do not.
+func SafetyCode(s Settings, codes ...string) string {
+	for _, code := range codes {
+		code = strings.ToLower(strings.TrimSpace(code))
+		if code == "session_blocked_by_cyber_policy" {
+			return code
+		}
+		for _, configured := range s.UpstreamCodes {
+			if code != "" && strings.EqualFold(code, configured) {
+				return code
+			}
+		}
+	}
+	return ""
+}
+
 func GetSettings(db *gorm.DB) (Settings, error) {
 	s := Defaults()
 	var row option
@@ -170,10 +190,16 @@ func GetSettings(db *gorm.DB) (Settings, error) {
 	if err = common.UnmarshalJsonStr(row.Value, &s); err != nil {
 		return s, err
 	}
+	if s.UpstreamAction == "" {
+		s.UpstreamAction = "observe"
+	}
 	return s, Validate(s)
 }
 
 func SaveSettings(db *gorm.DB, s Settings, actor int, now int64) (Settings, error) {
+	if s.UpstreamAction == "" {
+		s.UpstreamAction = "observe"
+	}
 	if err := Validate(s); err != nil {
 		return s, err
 	}

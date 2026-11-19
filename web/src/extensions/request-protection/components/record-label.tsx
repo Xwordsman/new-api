@@ -24,6 +24,8 @@ export function ProtectionLabel(props: { value: string }) {
     allow: t('Allow'),
     observe: t('Record only'),
     block: t('Block'),
+    hold: t('Safety hold pending review'),
+    safety_hold: t('Safety hold pending review'),
     pending: t('Pending review'),
     confirmed: t('Confirmed violation'),
     false_positive: t('False positive'),

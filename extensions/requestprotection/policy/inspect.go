@@ -103,7 +103,14 @@ func Inspect(s Settings, in Input, secret string) Verdict {
 	texts := map[string]string{}
 	var canonical strings.Builder
 	remaining := s.MaxTextBytes
-	for i, segment := range in.Segments {
+	// Check current input first even when history precedes it in the protocol.
+	segments := slices.Clone(in.Segments)
+	slices.SortStableFunc(segments, func(a, b Segment) int {
+		order := []string{"current", "system", "history", "tool"}
+		return slices.Index(order, a.Source) - slices.Index(order, b.Source)
+	})
+	builders := map[string]*strings.Builder{}
+	for i, segment := range segments {
 		text := segment.Text
 		if len(text) > remaining {
 			text = bounded(text, remaining)
@@ -111,17 +118,23 @@ func Inspect(s Settings, in Input, secret string) Verdict {
 		}
 		remaining -= len(text)
 		if text != "" {
-			texts[segment.Source] += "\n" + text
+			if builders[segment.Source] == nil {
+				builders[segment.Source] = &strings.Builder{}
+			}
+			builders[segment.Source].WriteByte('\n')
+			builders[segment.Source].WriteString(text)
 		}
 		if remaining == 0 {
-			if i+1 < len(in.Segments) {
+			if i+1 < len(segments) {
 				v.Uninspected = "text_limit"
 			}
 			break
 		}
 	}
 	for _, source := range []string{"current", "system", "history", "tool"} {
-		texts[source] = Normalize(texts[source])
+		if builders[source] != nil {
+			texts[source] = Normalize(builders[source].String())
+		}
 		canonical.WriteString(source)
 		canonical.WriteByte(0)
 		canonical.WriteString(texts[source])
@@ -178,6 +191,11 @@ func Inspect(s Settings, in Input, secret string) Verdict {
 		if s.Mode == "enforce" && s.UninspectedAction == "block" {
 			v.Decision = "block"
 		}
+	}
+	if s.Mode == "enforce" && s.RequireCompleteText && slices.Contains([]string{"body_limit", "text_limit", "nested_content_limit", "unsupported_payload", "realtime_uninspected"}, v.Uninspected) {
+		v.Decision = "block"
+		// Incomplete inspection is a protective rejection, never a penalty.
+		v.Eligible = false
 	}
 	return v
 }
@@ -255,7 +273,7 @@ func Extract(body []byte, protocol string) ([]Segment, string) {
 			segments, partial = appendContent(segments, source, parts, partial, 0)
 		}
 		if output, ok := message["output"]; ok {
-			segments, partial = appendContent(segments, "tool", output, partial, 0)
+			segments, partial = appendToolData(segments, "tool", output, partial, 0)
 		}
 		if text, ok := message["text"]; ok {
 			segments, partial = appendContent(segments, source, text, partial, 0)
@@ -267,7 +285,7 @@ func Extract(body []byte, protocol string) ([]Segment, string) {
 			segments, partial = appendContent(segments, "tool", call, partial, 0)
 		}
 		if kind == "function_call" {
-			segments, partial = appendContent(segments, "tool", message["arguments"], partial, 0)
+			segments, partial = appendToolData(segments, "tool", message["arguments"], partial, 0)
 		}
 	}
 	for _, key := range []string{"tools", "functions"} {
@@ -289,7 +307,9 @@ func Extract(body []byte, protocol string) ([]Segment, string) {
 	}
 	for _, key := range []string{"image", "images", "audio", "file", "files", "image_url", "image_urls", "base64", "base64Array", "maskBase64"} {
 		if _, ok := root[key]; ok {
-			partial = "binary_media"
+			if partial == "" {
+				partial = "binary_media"
+			}
 		}
 	}
 	if len(segments) == 0 && partial == "" {
@@ -320,9 +340,17 @@ func appendContent(out []Segment, source string, content any, partial string, de
 			source = "tool"
 		}
 		textFound := false
+		if kind == "tool_use" {
+			out, partial = appendToolData(out, "tool", v["input"], partial, depth+1)
+			textFound = true
+		}
 		for _, key := range []string{"text", "content", "output", "description", "arguments"} {
 			if value, ok := v[key]; ok {
-				out, partial = appendContent(out, source, value, partial, depth+1)
+				if key == "arguments" || key == "output" {
+					out, partial = appendToolData(out, source, value, partial, depth+1)
+				} else {
+					out, partial = appendContent(out, source, value, partial, depth+1)
+				}
 				textFound = true
 			}
 		}
@@ -332,19 +360,58 @@ func appendContent(out []Segment, source string, content any, partial string, de
 				textFound = true
 			}
 		}
-		// Schemas and binary parts can affect a model even when they appear
-		// beside ordinary text. Do not label these as fully inspected.
-		for _, key := range []string{"parameters", "input_schema", "args", "response", "image_url", "input_audio", "inline_data", "inlineData", "file_data", "fileData", "source", "file_id", "file_url"} {
-			if _, ok := v[key]; ok {
-				partial = "binary_or_unknown_content"
+		for _, key := range []string{"parameters", "input_schema", "args", "response"} {
+			if value, ok := v[key]; ok {
+				out, partial = appendToolData(out, "tool", value, partial, depth+1)
+				textFound = true
 			}
 		}
-		if !textFound {
+		for _, key := range []string{"image_url", "input_audio", "inline_data", "inlineData", "file_data", "fileData", "source", "file_id", "file_url"} {
+			if _, ok := v[key]; ok {
+				if partial == "" {
+					partial = "binary_or_unknown_content"
+				}
+			}
+		}
+		if !textFound && partial == "" {
 			partial = "binary_or_unknown_content"
 		}
 	case nil:
 	default:
 		partial = "unsupported_payload"
+	}
+	return out, partial
+}
+
+// Tool arguments, output and JSON schemas contain arbitrary keys. Inspect
+// their string leaves deterministically without decoding binary attachments.
+func appendToolData(out []Segment, source string, value any, partial string, depth int) ([]Segment, string) {
+	if depth > 32 {
+		return out, "nested_content_limit"
+	}
+	switch v := value.(type) {
+	case map[string]any:
+		keys := make([]string, 0, len(v))
+		for key := range v {
+			keys = append(keys, key)
+		}
+		slices.Sort(keys)
+		for _, key := range keys {
+			if slices.Contains([]string{"image_url", "input_audio", "inline_data", "inlineData", "file_data", "fileData", "base64"}, key) {
+				if partial == "" {
+					partial = "binary_media"
+				}
+				continue
+			}
+			out = append(out, Segment{Source: source, Text: key})
+			out, partial = appendToolData(out, source, v[key], partial, depth+1)
+		}
+	case []any:
+		for _, item := range v {
+			out, partial = appendToolData(out, source, item, partial, depth+1)
+		}
+	case string:
+		out = append(out, Segment{Source: source, Text: v})
 	}
 	return out, partial
 }

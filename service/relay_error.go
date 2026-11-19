@@ -22,6 +22,9 @@ func DecideRelayRetry(c *gin.Context, err *types.NewAPIError, retryTimes int) Po
 	if err == nil {
 		return PolicyDecision{Action: "stop", Reason: "request_completed", Source: "system"}
 	}
+	if requestProtectionErrorCode(err) != "" {
+		return PolicyDecision{Action: "stop", Reason: "upstream_safety", Source: "request_protection"}
+	}
 	if ShouldSkipRetryAfterChannelAffinityFailure(c) {
 		source := RequestPolicy(c).SessionModeSource
 		if source == "" {
@@ -65,10 +68,12 @@ func ProcessChannelError(c *gin.Context, channelError types.ChannelError, err *t
 	if err == nil {
 		return
 	}
+	if code := requestProtectionErrorCode(err); code != "" {
+		RecordRequestProtectionSafety(c, relayInfo, code)
+	}
 	if err.GetErrorType() == types.ErrorTypeOpenAIError {
 		if upstream, ok := err.RelayError.(types.OpenAIError); ok {
 			code, _ := upstream.Code.(string)
-			RecordRequestProtectionSafety(c, relayInfo, code)
 			requestID := c.GetString(common.RequestIdKey)
 			if relayInfo != nil && relayInfo.RequestId != "" {
 				requestID = relayInfo.RequestId

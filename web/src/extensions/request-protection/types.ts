@@ -38,6 +38,8 @@ export type ProtectionSettings = {
   max_body_bytes: number
   max_text_bytes: number
   uninspected_action: 'allow' | 'observe' | 'block'
+  require_complete_text: boolean
+  upstream_action: 'observe' | 'hold_user' | 'hold_group'
   fail_closed: boolean
   rules: ProtectionRule[]
   window_minutes: number
@@ -88,6 +90,8 @@ export type ProtectionEvent = {
 }
 export type ProtectionRestriction = {
   id: string
+  group: string
+  manual_review: boolean
   user_id: number
   token_id: number
   until: number

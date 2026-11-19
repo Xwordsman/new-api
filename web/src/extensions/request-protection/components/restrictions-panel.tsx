@@ -46,13 +46,21 @@ export function RestrictionsPanel() {
     refetchInterval: 60000,
   })
   const columns: StaticDataTableColumn<ProtectionRestriction>[] = [
-    { id: 'subject', header: t('Restricted subject'), cell: (row) => row.id },
-    { id: 'user', header: t('User ID'), cell: (row) => row.user_id },
+    {
+      id: 'subject',
+      header: t('Restricted subject'),
+      cell: (row) => (row.id.startsWith('group:') ? t('Group') : row.id),
+    },
+    { id: 'group', header: t('Group'), cell: (row) => row.group || '—' },
+    { id: 'user', header: t('User ID'), cell: (row) => row.user_id || '—' },
     { id: 'key', header: t('Key ID'), cell: (row) => row.token_id || '—' },
     {
       id: 'time',
       header: t('Restricted until'),
-      cell: (row) => formatTimestamp(row.until),
+      cell: (row) =>
+        row.manual_review
+          ? t('Until manual release')
+          : formatTimestamp(row.until),
     },
     {
       id: 'cause',
@@ -73,7 +81,7 @@ export function RestrictionsPanel() {
     <div className='space-y-5'>
       <p className='text-muted-foreground text-sm'>
         {t(
-          'Restrictions expire automatically. Manual release resets only the selected plugin restriction; an account restriction can still block its Keys.'
+          'Safety holds require manual release. Release user and group holds separately after review. Timed restrictions expire automatically.'
         )}
       </p>
       {query.isPending && <LoadingState />}

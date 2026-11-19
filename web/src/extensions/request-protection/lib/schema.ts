@@ -50,9 +50,11 @@ export const protectionSchema = z
         (line) => /^[1-9]\d*$/.test(line) && Number.isSafeInteger(Number(line))
       )
     ),
-    max_body_bytes: integer(1024, 8388608),
-    max_text_bytes: integer(256, 524288),
+    max_body_bytes: integer(1024, 33554432),
+    max_text_bytes: integer(256, 8388608),
     uninspected_action: z.enum(['allow', 'observe', 'block']),
+    require_complete_text: z.boolean(),
+    upstream_action: z.enum(['observe', 'hold_user', 'hold_group']),
     fail_closed: z.boolean(),
     rules: z
       .array(
