@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	checkinpolicy "github.com/QuantumNous/new-api/extensions/checkin/policy"
 	"github.com/QuantumNous/new-api/extensions/invitation"
+	luckypolicy "github.com/QuantumNous/new-api/extensions/luckydraw/policy"
 	"github.com/QuantumNous/new-api/extensions/referral/ledger"
 	"github.com/QuantumNous/new-api/extensions/registrationrisk/guard"
 	"github.com/QuantumNous/new-api/model"
@@ -54,7 +55,7 @@ func TestGetStatusExtensionFeaturesWithoutDatabase(t *testing.T) {
 	model.DB = nil
 	t.Cleanup(func() { model.DB = previousDB })
 	assert.Equal(t, map[string]bool{
-		"channel_monitor": false, "benchmark": false, "referrals": false, "checkin": false, "leaderboard": false, "documentation": false,
+		"channel_monitor": false, "benchmark": false, "referrals": false, "checkin": false, "lucky_draw": false, "leaderboard": false, "documentation": false,
 	}, extensionStatusResponse(t))
 }
 
@@ -90,7 +91,7 @@ func TestGetStatusExtensionFeaturesFromPersistedSettings(t *testing.T) {
 			}
 			require.NoError(t, database.Raw(query).Scan(&version).Error)
 			t.Logf("database version: %s", version)
-			require.NoError(t, database.AutoMigrate(&model.Option{}, &ledger.Settings{}, &invitation.Settings{}, &guard.Secret{}, &checkinpolicy.Settings{}))
+			require.NoError(t, database.AutoMigrate(&model.Option{}, &ledger.Settings{}, &invitation.Settings{}, &guard.Secret{}, &checkinpolicy.Settings{}, &luckypolicy.Settings{}))
 
 			// All fixture writes roll back; the DSNs point to dedicated test databases.
 			tx := database.Begin()
@@ -107,13 +108,13 @@ func TestGetStatusExtensionFeaturesFromPersistedSettings(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, tx.Create(&checkinSettings).Error)
 			assert.Equal(t, map[string]bool{
-				"channel_monitor": false, "benchmark": false, "referrals": true, "checkin": false, "leaderboard": true, "documentation": true,
+				"channel_monitor": false, "benchmark": false, "referrals": true, "checkin": false, "lucky_draw": false, "leaderboard": true, "documentation": true,
 			}, extensionStatusResponse(t))
 
 			for _, enabled := range []bool{true, false, true} {
 				value, err := common.Marshal(map[string]any{"enabled": enabled, "title": "private-documentation-draft"})
 				require.NoError(t, err)
-				for _, key := range []string{groupdiscount.OptionKey, "BenchmarkExtensionSettings", "LeaderboardExtensionSettings", "DocumentationCenterSettings"} {
+				for _, key := range []string{groupdiscount.LegacyOptionKey, "BenchmarkExtensionSettings", "LeaderboardExtensionSettings", "DocumentationCenterSettings"} {
 					require.NoError(t, tx.Clauses(clause.OnConflict{
 						Columns: []clause.Column{{Name: "key"}}, DoUpdates: clause.AssignmentColumns([]string{"value"}),
 					}).Create(&model.Option{Key: key, Value: string(value)}).Error)
@@ -121,7 +122,7 @@ func TestGetStatusExtensionFeaturesFromPersistedSettings(t *testing.T) {
 				require.NoError(t, tx.Model(&ledger.Settings{}).Where("id = ?", 1).Update("enabled", enabled).Error)
 				require.NoError(t, tx.Model(&checkinpolicy.Settings{}).Where("id = ?", 1).Update("enabled", enabled).Error)
 				assert.Equal(t, map[string]bool{
-					"channel_monitor": enabled, "benchmark": enabled, "referrals": enabled, "checkin": enabled, "leaderboard": enabled, "documentation": enabled,
+					"channel_monitor": enabled, "benchmark": enabled, "referrals": enabled, "checkin": enabled, "lucky_draw": false, "leaderboard": enabled, "documentation": enabled,
 				}, extensionStatusResponse(t))
 			}
 
@@ -129,7 +130,7 @@ func TestGetStatusExtensionFeaturesFromPersistedSettings(t *testing.T) {
 			require.NoError(t, tx.Model(&model.Option{}).Where(clause.Eq{Column: "key", Value: "BenchmarkExtensionSettings"}).Update("value", `{"enabled":`).Error)
 			require.NoError(t, tx.Delete(&ledger.Settings{}, 1).Error)
 			assert.Equal(t, map[string]bool{
-				"channel_monitor": true, "benchmark": false, "referrals": false, "checkin": true, "leaderboard": true, "documentation": true,
+				"channel_monitor": true, "benchmark": false, "referrals": false, "checkin": true, "lucky_draw": false, "leaderboard": true, "documentation": true,
 			}, extensionStatusResponse(t))
 		})
 	}
@@ -139,7 +140,7 @@ func TestGetOptionsExcludesDocumentationDrafts(t *testing.T) {
 	previousOptions := common.OptionMap
 	common.OptionMap = map[string]string{
 		"DocumentationCenterSettings": `{"articles":[{"content":"private-documentation-draft"}]}`,
-		"SystemName": "new-api",
+		"SystemName":                  "new-api",
 	}
 	t.Cleanup(func() { common.OptionMap = previousOptions })
 	response := httptest.NewRecorder()

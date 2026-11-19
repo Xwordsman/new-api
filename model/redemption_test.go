@@ -396,11 +396,16 @@ func TestRedemptionRechargeMigrationPreservesLegacyGifts(t *testing.T) {
 func TestRedemptionRechargeQualifiesBothPluginsAndRefunds(t *testing.T) {
 	db := openRedemptionRechargeDB(t)
 	require.NoError(t, db.AutoMigrate(&Redemption{}))
+	s, err := payments.GetSettings(db)
+	require.NoError(t, err)
+	s.CNYPerUSD = "7.2"
+	_, err = payments.UpdateSettings(db, s, 1)
+	require.NoError(t, err)
 	user := rechargeUser(t, db, "buyer")
 	gift := rechargeCode(t, "gift", "999", "USD", true, 500)
 	assert.Empty(t, gift.RechargeAmount)
 	assert.False(t, gift.ReferralEnabled)
-	_, err := Redeem(gift.Key, user.Id)
+	_, err = Redeem(gift.Key, user.Id)
 	require.NoError(t, err)
 	sale := rechargeCode(t, "sale", "100.00", "CNY", false, 9000000)
 	_, err = Redeem(sale.Key, user.Id)
@@ -426,7 +431,7 @@ func TestRedemptionRechargeQualifiesBothPluginsAndRefunds(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, draw.Drawable)
 	assert.Equal(t, "109", draw.QualifiedAmount)
-	s, err := payments.GetSettings(db)
+	s, err = payments.GetSettings(db)
 	require.NoError(t, err)
 	s.Enabled, s.ThresholdAmount = true, "100"
 	_, err = payments.UpdateSettings(db, s, 1)

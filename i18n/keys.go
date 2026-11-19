@@ -48,12 +48,16 @@ const (
 	MsgRelayModelPriceNotConfiguredAdmin = "relay.model_price_not_configured_admin"
 	MsgRelayTaskUsagePriceUnsupported    = "relay.task_usage_price_unsupported"
 	MsgRelaySharedTaskPriceNeedsOverride = "relay.shared_task_price_needs_override"
+	MsgRelayTaskPriceNotConfigured       = "relay.task_price_not_configured"
 	MsgRelayTaskChannelDisabled          = "relay.task_channel_disabled"
 	MsgRelayGroupSaturated               = "relay.group_saturated"
 	MsgRelayGroupUpstreamSaturated       = "relay.group_upstream_saturated"
 	MsgRelayRetryGetChannelFailed        = "relay.retry_get_channel_failed"
 	MsgRelayRetryNoAvailableChannel      = "relay.retry_no_available_channel"
 	MsgRelayAccessTokenUnsupported       = "relay.access_token_unsupported"
+	MsgRelayRequestRejected              = "relay.request_rejected"
+	MsgRelayRequestPluginFailed          = "relay.request_plugin_failed"
+	MsgRelayResponseRejected             = "relay.response_rejected"
 )
 
 // Invitation registration extension messages.
@@ -118,13 +122,14 @@ const (
 // Channel notices sent to administrators who receive them and to model update
 // watchers
 const (
-	MsgChannelNotifyDisabledSubject = "channel.notify_disabled_subject"
-	MsgChannelNotifyDisabledContent = "channel.notify_disabled_content"
-	MsgChannelNotifyEnabledSubject  = "channel.notify_enabled_subject"
-	MsgChannelNotifyEnabledContent  = "channel.notify_enabled_content"
-	MsgChannelTestCompletedSubject  = "channel.test_completed_subject"
-	MsgChannelTestCompletedContent  = "channel.test_completed_content"
-	MsgChannelResponseTimeExceeded  = "channel.response_time_exceeded"
+	MsgChannelNotifyDisabledSubject  = "channel.notify_disabled_subject"
+	MsgChannelNotifyDisabledContent  = "channel.notify_disabled_content"
+	MsgChannelNotifyEnabledSubject   = "channel.notify_enabled_subject"
+	MsgChannelNotifyEnabledContent   = "channel.notify_enabled_content"
+	MsgChannelNotifyScheduledSubject = "channel.notify_scheduled_subject"
+	MsgChannelTestCompletedSubject   = "channel.test_completed_subject"
+	MsgChannelTestCompletedContent   = "channel.test_completed_content"
+	MsgChannelResponseTimeExceeded   = "channel.response_time_exceeded"
 
 	MsgChannelUpstreamUpdateNotifySubject   = "channel.upstream_update_notify_subject"
 	MsgChannelUpstreamUpdateSummary         = "channel.upstream_update_summary"
@@ -158,9 +163,10 @@ const (
 // values stable for stored alerts and API responses; the backend translates
 // them for relay errors and alert emails.
 const (
-	MsgKeyPriceProtectionPaused      = "API key paused by group price protection. Review and accept current multipliers in the console."
-	MsgKeyPriceProtectionUnavailable = "Key price protection is temporarily unavailable"
-	MsgRegistrationRiskVolume        = "{{count}} risky attempts in {{minutes}} minutes"
-	MsgRegistrationRiskConversion    = "{{emails}} verification attempts; {{registrations}} registrations in {{minutes}} minutes"
-	MsgRegistrationRiskBudget        = "{{issued}} / {{budget}} promotional quota issued today (UTC)"
+	MsgKeyPriceProtectionPaused       = "API key paused by group price protection. Review and accept current multipliers in the console."
+	MsgKeyPriceProtectionUnavailable  = "Key price protection is temporarily unavailable"
+	MsgRegistrationRiskVolume         = "{{count}} risky attempts in {{minutes}} minutes"
+	MsgRegistrationRiskConversion     = "{{emails}} verification attempts; {{registrations}} registrations in {{minutes}} minutes"
+	MsgRegistrationRiskBudget         = "{{issued}} / {{budget}} promotional quota issued today (UTC)"
+	MsgRegistrationRiskMemberAnalysis = "Member analysis found {{count}} accounts requiring review"
 )

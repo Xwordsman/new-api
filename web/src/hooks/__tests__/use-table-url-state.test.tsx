@@ -18,28 +18,11 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import assert from 'node:assert/strict'
 
-import { Window } from 'happy-dom'
-import { useEffect } from 'react'
-import { afterAll, describe, test } from 'vitest'
+import { act, useEffect } from 'react'
+import { createRoot } from 'react-dom/client'
+import { describe, test } from 'vitest'
 
-const domWindow = new Window()
-const domGlobals = [
-  'window',
-  'document',
-  'localStorage',
-  'HTMLElement',
-] as const
-
-for (const key of domGlobals) {
-  Object.defineProperty(globalThis, key, {
-    configurable: true,
-    value: domWindow[key],
-  })
-}
-
-const { act } = await import('react')
-const { createRoot } = await import('react-dom/client')
-const { useTableUrlState } = await import('../use-table-url-state')
+import { useTableUrlState } from '../use-table-url-state'
 
 const reactTestGlobals = globalThis as typeof globalThis & {
   IS_REACT_ACT_ENVIRONMENT?: boolean
@@ -49,10 +32,6 @@ reactTestGlobals.IS_REACT_ACT_ENVIRONMENT = true
 type TableState = ReturnType<typeof useTableUrlState>
 
 describe('local table state', () => {
-  afterAll(() => {
-    domWindow.close()
-  })
-
   test('updates filters and pagination without navigating', async () => {
     const navigateCalls: unknown[] = []
     let state: TableState | undefined

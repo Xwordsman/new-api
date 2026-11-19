@@ -33,13 +33,22 @@ describe('invitation extension navigation', () => {
   test('lists invitation management without the removed homepage settings entry', () => {
     const invitationItems = getExtensionNavItems(translate)
 
-    assert.deepEqual(invitationItems, [
-      {
-        title: 'Invitation Management',
-        url: '/system-settings/invitation/settings',
-        activeUrls: ['/system-settings/invitation/codes'],
-      },
-    ])
+    assert.deepEqual(
+      invitationItems.filter((item) =>
+        item.url.startsWith('/system-settings/invitation/')
+      ),
+      [
+        {
+          title: 'Invitation Management',
+          url: '/system-settings/invitation/settings',
+          activeUrls: ['/system-settings/invitation/codes'],
+        },
+      ]
+    )
+    assert.equal(
+      invitationItems.some((item) => item.url.includes('homepage')),
+      false
+    )
   })
 
   test('keeps settings and code management available inside the entry', () => {

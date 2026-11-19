@@ -296,7 +296,7 @@ func TestPasswordResetEmailTemplatePreservesPlusAddressAndIssuedChallenge(t *tes
 	SendPasswordResetEmail(context)
 	require.Equal(t, http.StatusOK, response.Code)
 	assert.Contains(t, response.Body.String(), `"success":true`)
-	assert.Contains(t, deliveredHTML, "Powered by new-api")
+	assert.Contains(t, deliveredHTML, "Powered by New API")
 	assert.Contains(t, deliveredHTML, "Valid for 7 minutes")
 	document, err := xhtml.Parse(strings.NewReader(deliveredHTML))
 	require.NoError(t, err)

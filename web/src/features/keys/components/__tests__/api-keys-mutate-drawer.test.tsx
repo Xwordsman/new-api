@@ -427,7 +427,7 @@ describe('API keys mutate drawer user quota query switch', () => {
   })
 })
 
-test('shows selectable groups in the admin display order while preserving global Auto priority', async () => {
+test('shows Auto before the categorized groups while preserving global Auto priority', async () => {
   installApiFixtures([])
   await renderCreateDrawer()
   fireEvent.click(getControlByLabel('Group'))
@@ -436,7 +436,7 @@ test('shows selectable groups in the admin display order while preserving global
     options.map(
       (option) => option.textContent?.match(/^(vip|default|auto)/)?.[1]
     )
-  ).toEqual(['vip', 'default', 'auto'])
+  ).toEqual(['auto', 'vip', 'default'])
   expect(
     [...document.querySelectorAll('[data-slot="global-auto-order-name"]')].map(
       (item) => item.textContent

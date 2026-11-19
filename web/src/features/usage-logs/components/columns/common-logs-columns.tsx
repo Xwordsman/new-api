@@ -45,6 +45,16 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { updateChannelStatus } from '@/features/channels/api'
+import {
+  CHANNEL_STATUS,
+  ERROR_MESSAGES as CHANNEL_ERROR_MESSAGES,
+  SUCCESS_MESSAGES as CHANNEL_SUCCESS_MESSAGES,
+} from '@/features/channels/constants'
+import {
+  channelsQueryKeys,
+  resolveChannelWebsiteUrl,
+} from '@/features/channels/lib'
 import { usePricingData } from '@/features/pricing/hooks/use-pricing-data'
 import {
   normalizeTierLabel,
@@ -57,16 +67,6 @@ import {
 import { pluginUsageSchema } from '@/features/pricing/lib/plugin-pricing'
 import { taskUsageUnitLabel } from '@/features/pricing/lib/task-price-display'
 import type { BillingUsageSchema } from '@/features/pricing/types'
-import { updateChannelStatus } from '@/features/channels/api'
-import {
-  CHANNEL_STATUS,
-  ERROR_MESSAGES as CHANNEL_ERROR_MESSAGES,
-  SUCCESS_MESSAGES as CHANNEL_SUCCESS_MESSAGES,
-} from '@/features/channels/constants'
-import {
-  channelsQueryKeys,
-  resolveChannelWebsiteUrl,
-} from '@/features/channels/lib'
 import {
   ADMIN_PERMISSION_ACTIONS,
   ADMIN_PERMISSION_RESOURCES,
@@ -81,6 +81,7 @@ import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { LOG_TYPE_ALL_VALUE } from '../../constants'
 import type { UsageLog } from '../../data/schema'
+import { getChannelStatusActionAvailability } from '../../lib/channel-status-actions'
 import {
   formatModelName,
   decodeBillingExprB64,
@@ -99,10 +100,10 @@ import {
   isPerCallBilling,
 } from '../../lib/utils'
 import type { LogOtherData } from '../../types'
-import { getChannelStatusActionAvailability } from '../../lib/channel-status-actions'
 import { DetailsDialog } from '../dialogs/details-dialog'
 import { LogCostDisplay } from '../log-cost-display'
 import { ModelBadge } from '../model-badge'
+import { RequestPluginLogMarker } from '../request-plugin-record'
 import { TimingMetricsCell, StreamTpsCell } from '../timing-metrics-cell'
 import { useUsageLogsContext } from '../usage-logs-provider'
 
@@ -207,7 +208,7 @@ function buildTypeDetailSegments(
     return showUnit ? `${text}/M` : text
   }
   const isTieredExpr = other.billing_mode === 'tiered_expr'
-  const tieredSummary = getTieredBillingSummary(other)
+  const tieredSummary = getTieredBillingSummary(other, log.model_name)
   if (isTieredExpr && other.is_task) {
     const tiers = parseTaskTiersFromExpr(
       decodeBillingExprB64(other.expr_b64),
@@ -263,11 +264,11 @@ function buildTypeDetailSegments(
           ].includes(entry.field)
         )
         .map((entry) => {
-          return formatPriceCompact(entry.price)
+          return `${t(entry.shortLabel)} ${formatPrice(entry.price)}`
         })
       if (cacheEntries.length > 0) {
         segments.push({
-          text: `${t('Cache')} ${formatPriceList(cacheEntries, false)}`,
+          text: cacheEntries.join(' · '),
           muted: true,
         })
       }
@@ -845,6 +846,7 @@ export function useCommonLogsColumns(
           if (!isDisplayableLogType(log.type)) return null
 
           const modelInfo = formatModelName(log)
+          const requestPlugins = parseLogOther(log.other)?.request_plugins
 
           return (
             <div className='flex w-fit flex-col gap-0.5'>
@@ -853,6 +855,9 @@ export function useCommonLogsColumns(
                 actualModel={modelInfo.actualModel}
                 responseModel={modelInfo.responseModel}
               />
+              {requestPlugins?.length ? (
+                <RequestPluginLogMarker items={requestPlugins} />
+              ) : null}
             </div>
           )
         },
