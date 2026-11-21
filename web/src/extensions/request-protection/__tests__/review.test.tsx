@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
@@ -197,53 +197,63 @@ it('recovers an event query after a server failure through the shared retry acti
 
 it('lists named users and channels in columns and pauses only the user selected from event details', async () => {
   const user = userEvent.setup()
-  vi.spyOn(api, 'get').mockResolvedValue({
+  vi.spyOn(api, 'get').mockImplementation(async (url) => ({
     data: {
       success: true,
-      data: {
-        items: [
-          {
-            id: 71,
-            user_id: 42,
-            token_id: 8,
-            username: 'member42',
-            token_name: 'Personal key',
-            channel_id: 5,
-            channel_name: 'Business provider',
-            ip: '192.0.2.10',
-            created_at: 1795200000,
-            group: 'premium',
-            model: 'gpt-4.1',
-            protocol: 'openai',
-            decision: 'block',
-            finding: 'violation',
-            reason: 'harmful_attack',
-            review: 'confirmed',
-            upstream: 'not_sent',
-            request_id: 'request-71',
-            counted: true,
-            revision: 5,
-            digest: 'digest',
-            uninspected: '',
-            matches: [
+      data: url.endsWith('/events/71')
+        ? {
+            request_content: '[current]\nActual request text',
+            content_truncated: true,
+            content_redacted: true,
+            audits: [],
+          }
+        : {
+            items: [
               {
-                rule_id: 'semantic_review',
-                name: 'Semantic review',
-                category: 'attack',
-                source: 'current',
-                action: 'block',
-                evidence: 'test evidence excerpt',
-                high_confidence: true,
-                count_penalty: true,
+                preview: 'Actual request text',
+                restrictions: [],
+                violation_count: 1,
+                id: 71,
+                user_id: 42,
+                token_id: 8,
+                username: 'member42',
+                token_name: 'Personal key',
+                channel_id: 5,
+                channel_name: 'Business provider',
+                ip: '192.0.2.10',
+                created_at: 1795200000,
+                group: 'premium',
+                model: 'gpt-4.1',
+                protocol: 'openai',
+                decision: 'block',
+                finding: 'violation',
+                reason: 'harmful_attack',
+                review: 'confirmed',
+                upstream: 'not_sent',
+                request_id: 'request-71',
+                counted: true,
+                revision: 5,
+                digest: 'digest',
+                uninspected: '',
+                matches: [
+                  {
+                    rule_id: 'semantic_review',
+                    name: 'Semantic review',
+                    category: 'attack',
+                    source: 'current',
+                    action: 'block',
+                    evidence: 'test evidence excerpt',
+                    high_confidence: true,
+                    count_penalty: true,
+                  },
+                ],
               },
             ],
+            total: 1,
+            page: 1,
           },
-        ],
-        total: 1,
-        page: 1,
-      },
     },
-  })
+  }))
   const post = vi
     .spyOn(api, 'post')
     .mockResolvedValue({ data: { success: true } })
@@ -258,9 +268,23 @@ it('lists named users and channels in columns and pauses only the user selected 
     screen.getByRole('columnheader', { name: 'Inspection result' })
   ).toBeVisible()
   await user.click(screen.getByRole('button', { name: 'View details' }))
-  expect(await screen.findByText('192.0.2.10')).toBeVisible()
-  expect(screen.getByText('test evidence excerpt')).toBeVisible()
-  await user.click(screen.getByRole('button', { name: 'Pause this user' }))
+  const details = await screen.findByRole('dialog')
+  expect(within(details).getByText('192.0.2.10')).toBeVisible()
+  expect(within(details).getByText('test evidence excerpt')).toBeVisible()
+  expect(
+    await within(details).findByText('[current] Actual request text')
+  ).toBeVisible()
+  expect(
+    within(details).getByText('Recognizable credentials have been redacted.')
+  ).toBeVisible()
+  expect(
+    within(details).getByText(
+      'Content was truncated or could not be fully extracted. Attachments are not stored.'
+    )
+  ).toBeVisible()
+  await user.click(
+    within(details).getByRole('button', { name: 'Pause this user' })
+  )
   await user.click(await screen.findByRole('button', { name: 'Confirm' }))
   expect(post).not.toHaveBeenCalled()
   await user.type(

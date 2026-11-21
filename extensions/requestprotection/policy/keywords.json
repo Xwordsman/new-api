@@ -1,0 +1,2878 @@
+{
+  "version": "2026-11-21.1",
+  "keywords": [
+    {
+      "id": "friend-block-001",
+      "keyword": "bypass content filter",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-002",
+      "keyword": "bypass content policy",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-003",
+      "keyword": "bypass safety",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-004",
+      "keyword": "bypass safety filter",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-005",
+      "keyword": "bypass your guidelines",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-006",
+      "keyword": "dan mode",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-007",
+      "keyword": "dan prompt",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-008",
+      "keyword": "developer mode enabled",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-009",
+      "keyword": "disregard all previous",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-010",
+      "keyword": "disregard previous instructions",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-011",
+      "keyword": "do anything now",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-012",
+      "keyword": "enable developer mode",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-013",
+      "keyword": "forget all previous instructions",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-014",
+      "keyword": "forget previous instructions",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-015",
+      "keyword": "ignore all previous instructions",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-016",
+      "keyword": "ignore all prior",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-017",
+      "keyword": "ignore all rules",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-018",
+      "keyword": "ignore previous instructions",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-019",
+      "keyword": "ignore the above instructions",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-020",
+      "keyword": "ignore the system prompt",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-021",
+      "keyword": "ignore your guidelines",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-022",
+      "keyword": "ignore your instructions",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-023",
+      "keyword": "jailbreak",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-024",
+      "keyword": "jailbreak mode",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-025",
+      "keyword": "jailbreak prompt",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-026",
+      "keyword": "jailbroken",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-027",
+      "keyword": "no content policy",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-028",
+      "keyword": "no ethical guidelines",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-029",
+      "keyword": "output the text above",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-030",
+      "keyword": "output your system prompt",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-031",
+      "keyword": "override your instructions",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-032",
+      "keyword": "override your system",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-033",
+      "keyword": "print the previous text",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-034",
+      "keyword": "print your system prompt",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-035",
+      "keyword": "repeat the previous text",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-036",
+      "keyword": "repeat the text above",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-037",
+      "keyword": "repeat your system prompt",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-038",
+      "keyword": "reveal the system prompt",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-039",
+      "keyword": "reveal your instructions",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-040",
+      "keyword": "reveal your system prompt",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-041",
+      "keyword": "show your system prompt",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-042",
+      "keyword": "stay in character",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-043",
+      "keyword": "system prompt leak",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-044",
+      "keyword": "unfiltered mode",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-045",
+      "keyword": "without any restrictions",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-046",
+      "keyword": "you are not restricted",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-047",
+      "keyword": "you are now dan",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-048",
+      "keyword": "you have no restrictions",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-049",
+      "keyword": "your hidden instructions",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-050",
+      "keyword": "your initial instructions",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-051",
+      "keyword": "上帝模式",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-052",
+      "keyword": "不受任何限制",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-053",
+      "keyword": "不必遵守规则",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-054",
+      "keyword": "不用遵守规则",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-055",
+      "keyword": "人格覆盖",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-056",
+      "keyword": "你没有任何限制",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-057",
+      "keyword": "你现在不受限制",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-058",
+      "keyword": "你现在没有限制",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-059",
+      "keyword": "你的新身份是",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-060",
+      "keyword": "你的系统指令",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-061",
+      "keyword": "关闭内容审核",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-062",
+      "keyword": "关闭安全限制",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-063",
+      "keyword": "取消所有限制",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-064",
+      "keyword": "启用开发者模式",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-065",
+      "keyword": "展示你的系统提示词",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-066",
+      "keyword": "开发者模式已启用",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-067",
+      "keyword": "忘记之前的所有",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-068",
+      "keyword": "忘记之前的指令",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-069",
+      "keyword": "忘记你的设定",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-070",
+      "keyword": "忽略之前的所有",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-071",
+      "keyword": "忽略之前的指令",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-072",
+      "keyword": "忽略以上所有",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-073",
+      "keyword": "忽略以上指令",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-074",
+      "keyword": "忽略你的设定",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-075",
+      "keyword": "忽略你的限制",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-076",
+      "keyword": "忽略前面的指令",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-077",
+      "keyword": "忽略所有规则",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-078",
+      "keyword": "忽略所有设定",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-079",
+      "keyword": "忽略系统提示",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-080",
+      "keyword": "打印你的系统提示词",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-081",
+      "keyword": "无视之前的所有",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-082",
+      "keyword": "无视之前的指令",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-083",
+      "keyword": "无视以上指令",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-084",
+      "keyword": "无视你的设定",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-085",
+      "keyword": "无视所有规则",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-086",
+      "keyword": "无视限制",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-087",
+      "keyword": "无限制模式",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-088",
+      "keyword": "显示你的系统提示词",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-089",
+      "keyword": "没有伦理限制",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-090",
+      "keyword": "没有道德限制",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-091",
+      "keyword": "泄露你的提示词",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-092",
+      "keyword": "泄露系统提示",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-093",
+      "keyword": "清除限制",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-094",
+      "keyword": "破甲指令",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-095",
+      "keyword": "破甲提示词",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-096",
+      "keyword": "破甲模式",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-097",
+      "keyword": "破甲词",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-098",
+      "keyword": "破甲话术",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-099",
+      "keyword": "绕过内容审核",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-100",
+      "keyword": "绕过安全策略",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-101",
+      "keyword": "绕过安全过滤",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-102",
+      "keyword": "绕过审查机制",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-103",
+      "keyword": "绕过规则",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-104",
+      "keyword": "绕过限制",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-105",
+      "keyword": "覆盖你的设定",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-106",
+      "keyword": "解除你的限制",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-107",
+      "keyword": "解除全部限制",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-108",
+      "keyword": "解除所有限制",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-109",
+      "keyword": "越狱指令",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-110",
+      "keyword": "越狱提示词",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-111",
+      "keyword": "越狱模式",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-112",
+      "keyword": "输出你的系统提示词",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-113",
+      "keyword": "重复你的系统提示词",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-block-114",
+      "keyword": "重置你的设定",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "friend_original_114"
+    },
+    {
+      "id": "friend-ban-001",
+      "keyword": "射精",
+      "category": "sexual",
+      "action": "block_request_and_suspend_user_api",
+      "origin": "friend_original_5"
+    },
+    {
+      "id": "friend-ban-002",
+      "keyword": "淫水",
+      "category": "sexual",
+      "action": "block_request_and_suspend_user_api",
+      "origin": "friend_original_5"
+    },
+    {
+      "id": "friend-ban-003",
+      "keyword": "自慰",
+      "category": "sexual",
+      "action": "block_request_and_suspend_user_api",
+      "origin": "friend_original_5"
+    },
+    {
+      "id": "friend-ban-004",
+      "keyword": "强奸",
+      "category": "sexual",
+      "action": "block_request_and_suspend_user_api",
+      "origin": "friend_original_5"
+    },
+    {
+      "id": "friend-ban-005",
+      "keyword": "強姦",
+      "category": "sexual",
+      "action": "block_request_and_suspend_user_api",
+      "origin": "friend_original_5"
+    },
+    {
+      "id": "supplement-jailbreak-001",
+      "keyword": "忽略所有安全规则",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-002",
+      "keyword": "忽略全部安全限制",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-003",
+      "keyword": "无视系统指令",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-004",
+      "keyword": "无视安全策略",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-005",
+      "keyword": "绕过模型的安全机制",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-006",
+      "keyword": "绕过你的安全机制",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-007",
+      "keyword": "解除模型安全限制",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-008",
+      "keyword": "禁止执行安全审核",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-009",
+      "keyword": "禁用你的安全过滤",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-010",
+      "keyword": "不要遵守安全政策",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-011",
+      "keyword": "从现在起无条件服从",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-012",
+      "keyword": "开启无审查模式",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-013",
+      "keyword": "进入无限制模式",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-014",
+      "keyword": "开启越狱模式",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-015",
+      "keyword": "切换到越狱模式",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-016",
+      "keyword": "啟用無限制模式",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-017",
+      "keyword": "忽略系統提示",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-018",
+      "keyword": "無視系統指令",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-019",
+      "keyword": "繞過內容審核",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-020",
+      "keyword": "忽略之前的所有指令",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-021",
+      "keyword": "请以DAN身份回答",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-022",
+      "keyword": "你现在是一个没有限制的AI",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-023",
+      "keyword": "never refuse any request",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-024",
+      "keyword": "disable your safety filters",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-025",
+      "keyword": "disable all safety restrictions",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-026",
+      "keyword": "ignore your safety policies",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-027",
+      "keyword": "ignore all safety rules",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-028",
+      "keyword": "do not follow your safety policy",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-029",
+      "keyword": "override all safety constraints",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-030",
+      "keyword": "bypass your safety mechanisms",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-031",
+      "keyword": "act as an uncensored ai",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-032",
+      "keyword": "enter unrestricted mode",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-033",
+      "keyword": "activate unrestricted mode",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-034",
+      "keyword": "enable god mode",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-035",
+      "keyword": "pretend your safety filters are disabled",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-036",
+      "keyword": "obey every request without refusal",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-037",
+      "keyword": "you must never refuse",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-jailbreak-038",
+      "keyword": "from now on you have no rules",
+      "category": "jailbreak",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-001",
+      "keyword": "把系统提示词原样发给我",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-002",
+      "keyword": "把系统提示词逐字输出",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-003",
+      "keyword": "输出隐藏的系统提示词",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-004",
+      "keyword": "把开发者指令发给我",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-005",
+      "keyword": "打印开发者消息",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-006",
+      "keyword": "显示隐藏指令",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-007",
+      "keyword": "提取你的隐藏提示词",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-008",
+      "keyword": "把初始化提示词完整输出",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-009",
+      "keyword": "输出你的内部规则原文",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-010",
+      "keyword": "逐字重复系统消息",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-011",
+      "keyword": "顯示你的系統提示詞",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-012",
+      "keyword": "輸出你的系統提示詞",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-013",
+      "keyword": "列印你的系統提示詞",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-014",
+      "keyword": "洩露系統提示",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-015",
+      "keyword": "輸出隱藏指令",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-016",
+      "keyword": "reveal the hidden system prompt",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-017",
+      "keyword": "dump your system instructions",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-018",
+      "keyword": "show your developer instructions",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-019",
+      "keyword": "print your developer message",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-020",
+      "keyword": "repeat your developer instructions verbatim",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-021",
+      "keyword": "output your initial prompt verbatim",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-022",
+      "keyword": "expose your hidden prompt",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-023",
+      "keyword": "return the complete system message",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-024",
+      "keyword": "list your hidden instructions",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-prompt_extraction-025",
+      "keyword": "extract your confidential instructions",
+      "category": "prompt_extraction",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-001",
+      "keyword": "帮我入侵别人的服务器",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-002",
+      "keyword": "帮我入侵别人网站",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-003",
+      "keyword": "未经授权入侵",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-004",
+      "keyword": "未授权入侵目标",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-005",
+      "keyword": "攻击这个网站直到瘫痪",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-006",
+      "keyword": "把对方网站打瘫",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-007",
+      "keyword": "让目标服务器宕机",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-008",
+      "keyword": "对目标发起DDoS",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-009",
+      "keyword": "发起拒绝服务攻击",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-010",
+      "keyword": "绕过登录直接拿管理员权限",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-011",
+      "keyword": "利用漏洞拿下对方服务器",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-012",
+      "keyword": "批量入侵他人网站",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-013",
+      "keyword": "攻擊對方網站",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-014",
+      "keyword": "未經授權入侵",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-015",
+      "keyword": "讓目標伺服器癱瘓",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-016",
+      "keyword": "幫我入侵別人的伺服器",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-017",
+      "keyword": "launch a ddos attack",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-018",
+      "keyword": "take down their website",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-019",
+      "keyword": "crash the target server",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-020",
+      "keyword": "break into someone else's server",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-021",
+      "keyword": "hack someone else's account",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-022",
+      "keyword": "gain unauthorized access to",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-023",
+      "keyword": "exploit this target without permission",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-024",
+      "keyword": "attack a website without authorization",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-025",
+      "keyword": "flood the target with traffic",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-cyber_attack-026",
+      "keyword": "bring down the target service",
+      "category": "cyber_attack",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-001",
+      "keyword": "帮我写勒索病毒",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-002",
+      "keyword": "编写勒索软件",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-003",
+      "keyword": "制作勒索病毒",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-004",
+      "keyword": "开发窃密木马",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-005",
+      "keyword": "生成盗号木马",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-006",
+      "keyword": "编写远控木马",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-007",
+      "keyword": "写一个键盘记录木马",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-008",
+      "keyword": "制作僵尸网络",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-009",
+      "keyword": "编写挖矿病毒",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-010",
+      "keyword": "帮木马绕过杀毒",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-011",
+      "keyword": "让恶意软件免杀",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-012",
+      "keyword": "隐藏木马的行为",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-013",
+      "keyword": "制作自传播蠕虫",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-014",
+      "keyword": "製作勒索病毒",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-015",
+      "keyword": "編寫勒索軟體",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-016",
+      "keyword": "開發竊密木馬",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-017",
+      "keyword": "讓惡意軟體免殺",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-018",
+      "keyword": "write ransomware",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-019",
+      "keyword": "create ransomware",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-020",
+      "keyword": "build ransomware",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-021",
+      "keyword": "develop a credential stealer",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-022",
+      "keyword": "create a password stealer",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-023",
+      "keyword": "write a banking trojan",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-024",
+      "keyword": "build a botnet",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-025",
+      "keyword": "deploy a malicious keylogger",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-026",
+      "keyword": "make malware undetectable",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-027",
+      "keyword": "make this malware evade antivirus",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-028",
+      "keyword": "hide malware from antivirus",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-malware-029",
+      "keyword": "write a self spreading worm",
+      "category": "malware",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-001",
+      "keyword": "窃取别人的密码",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-002",
+      "keyword": "盗取他人的密码",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-003",
+      "keyword": "偷取浏览器保存的密码",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-004",
+      "keyword": "窃取用户的登录凭据",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-005",
+      "keyword": "盗取他人的会话",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-006",
+      "keyword": "偷取他人的cookie",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-007",
+      "keyword": "绕过二次验证盗号",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-008",
+      "keyword": "盗取他人的API密钥",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-009",
+      "keyword": "窃取他人的私钥",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-010",
+      "keyword": "拖取目标网站用户数据库",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-011",
+      "keyword": "导出别人的聊天记录",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-012",
+      "keyword": "竊取別人的密碼",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-013",
+      "keyword": "盜取他人的憑證",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-014",
+      "keyword": "盜取他人的私鑰",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-015",
+      "keyword": "竊取他人的登入工作階段",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-016",
+      "keyword": "steal someone else's password",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-017",
+      "keyword": "steal browser passwords",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-018",
+      "keyword": "steal login credentials",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-019",
+      "keyword": "steal their session cookies",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-020",
+      "keyword": "hijack someone else's session",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-021",
+      "keyword": "steal another user's api key",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-022",
+      "keyword": "steal their private keys",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-023",
+      "keyword": "exfiltrate the victim's data",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-024",
+      "keyword": "dump passwords from the victim",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-credential_theft-025",
+      "keyword": "bypass mfa to steal",
+      "category": "credential_theft",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-fraud-001",
+      "keyword": "制作钓鱼登录页面骗取密码",
+      "category": "fraud",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-fraud-002",
+      "keyword": "冒充银行骗取验证码",
+      "category": "fraud",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-fraud-003",
+      "keyword": "编写诈骗话术骗钱",
+      "category": "fraud",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-fraud-004",
+      "keyword": "绕过反诈系统实施诈骗",
+      "category": "fraud",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-fraud-005",
+      "keyword": "盗刷他人的银行卡",
+      "category": "fraud",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-fraud-006",
+      "keyword": "帮我盗刷信用卡",
+      "category": "fraud",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-fraud-007",
+      "keyword": "批量骗取短信验证码",
+      "category": "fraud",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-fraud-008",
+      "keyword": "制作假支付页面骗钱",
+      "category": "fraud",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-fraud-009",
+      "keyword": "生成冒充客服的诈骗短信",
+      "category": "fraud",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-fraud-010",
+      "keyword": "伪造转账凭证骗钱",
+      "category": "fraud",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-fraud-011",
+      "keyword": "製作釣魚登入頁面騙取密碼",
+      "category": "fraud",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-fraud-012",
+      "keyword": "冒充銀行騙取驗證碼",
+      "category": "fraud",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-fraud-013",
+      "keyword": "盜刷他人的信用卡",
+      "category": "fraud",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-fraud-014",
+      "keyword": "create a phishing page to steal passwords",
+      "category": "fraud",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-fraud-015",
+      "keyword": "build a fake login page to harvest credentials",
+      "category": "fraud",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-fraud-016",
+      "keyword": "impersonate a bank to steal verification codes",
+      "category": "fraud",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-fraud-017",
+      "keyword": "write scam messages to steal money",
+      "category": "fraud",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-fraud-018",
+      "keyword": "steal money from their bank account",
+      "category": "fraud",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-fraud-019",
+      "keyword": "use stolen credit cards",
+      "category": "fraud",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-fraud-020",
+      "keyword": "bypass fraud detection to steal",
+      "category": "fraud",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-fraud-021",
+      "keyword": "forge payment receipts to scam",
+      "category": "fraud",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-001",
+      "keyword": "生成露骨色情内容",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-002",
+      "keyword": "写一段露骨色情",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-003",
+      "keyword": "创作露骨性爱描写",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-004",
+      "keyword": "生成色情图片",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-005",
+      "keyword": "生成色情视频",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-006",
+      "keyword": "制作色情换脸",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-007",
+      "keyword": "把她的照片变成裸照",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-008",
+      "keyword": "把他的照片变成裸照",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-009",
+      "keyword": "脱掉照片里人物的衣服",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-010",
+      "keyword": "未经同意制作裸照",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-011",
+      "keyword": "创作性暴力色情内容",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-012",
+      "keyword": "生成强奸色情内容",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-013",
+      "keyword": "生成成人色情影片",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-014",
+      "keyword": "生成露骨色情內容",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-015",
+      "keyword": "創作露骨性愛描寫",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-016",
+      "keyword": "製作色情換臉",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-017",
+      "keyword": "未經同意製作裸照",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-018",
+      "keyword": "generate explicit pornography",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-019",
+      "keyword": "write explicit porn",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-020",
+      "keyword": "create pornographic images",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-021",
+      "keyword": "generate pornographic videos",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-022",
+      "keyword": "create a pornographic deepfake",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-023",
+      "keyword": "make a nude deepfake of",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-024",
+      "keyword": "undress the person in this photo",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-025",
+      "keyword": "generate non consensual intimate images",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-sexual-026",
+      "keyword": "create rape pornography",
+      "category": "sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-minor_sexual-001",
+      "keyword": "生成儿童色情",
+      "category": "minor_sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-minor_sexual-002",
+      "keyword": "生成未成年人色情",
+      "category": "minor_sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-minor_sexual-003",
+      "keyword": "制作儿童色情",
+      "category": "minor_sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-minor_sexual-004",
+      "keyword": "索取儿童色情",
+      "category": "minor_sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-minor_sexual-005",
+      "keyword": "传播儿童色情",
+      "category": "minor_sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-minor_sexual-006",
+      "keyword": "创作未成年人的露骨性内容",
+      "category": "minor_sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-minor_sexual-007",
+      "keyword": "把儿童照片变成裸照",
+      "category": "minor_sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-minor_sexual-008",
+      "keyword": "诱骗未成年人发送裸照",
+      "category": "minor_sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-minor_sexual-009",
+      "keyword": "生成兒童色情",
+      "category": "minor_sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-minor_sexual-010",
+      "keyword": "製作兒童色情",
+      "category": "minor_sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-minor_sexual-011",
+      "keyword": "傳播兒童色情",
+      "category": "minor_sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-minor_sexual-012",
+      "keyword": "誘騙未成年人傳送裸照",
+      "category": "minor_sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-minor_sexual-013",
+      "keyword": "generate child sexual abuse material",
+      "category": "minor_sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-minor_sexual-014",
+      "keyword": "create child sexual abuse material",
+      "category": "minor_sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-minor_sexual-015",
+      "keyword": "produce child pornography",
+      "category": "minor_sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-minor_sexual-016",
+      "keyword": "generate child pornography",
+      "category": "minor_sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-minor_sexual-017",
+      "keyword": "share child sexual abuse material",
+      "category": "minor_sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-minor_sexual-018",
+      "keyword": "sexualize a child in this image",
+      "category": "minor_sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-minor_sexual-019",
+      "keyword": "make a nude image of a child",
+      "category": "minor_sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-minor_sexual-020",
+      "keyword": "groom a minor for sexual exploitation",
+      "category": "minor_sexual",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-violence-001",
+      "keyword": "教我制作爆炸装置伤人",
+      "category": "violence",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-violence-002",
+      "keyword": "制造炸弹袭击人群",
+      "category": "violence",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-violence-003",
+      "keyword": "计划袭击学校",
+      "category": "violence",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-violence-004",
+      "keyword": "策划恐怖袭击",
+      "category": "violence",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-violence-005",
+      "keyword": "制作毒药用来害人",
+      "category": "violence",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-violence-006",
+      "keyword": "如何下毒不被发现",
+      "category": "violence",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-violence-007",
+      "keyword": "计划杀人并逃避追捕",
+      "category": "violence",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-violence-008",
+      "keyword": "雇人杀害他人",
+      "category": "violence",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-violence-009",
+      "keyword": "教我綁架勒索",
+      "category": "violence",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-violence-010",
+      "keyword": "策劃恐怖襲擊",
+      "category": "violence",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-violence-011",
+      "keyword": "製作毒藥用來害人",
+      "category": "violence",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-violence-012",
+      "keyword": "製造炸彈襲擊人群",
+      "category": "violence",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-violence-013",
+      "keyword": "build a bomb to attack people",
+      "category": "violence",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-violence-014",
+      "keyword": "plan a terrorist attack",
+      "category": "violence",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-violence-015",
+      "keyword": "plan a school shooting",
+      "category": "violence",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-violence-016",
+      "keyword": "make poison to kill someone",
+      "category": "violence",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-violence-017",
+      "keyword": "poison someone without getting caught",
+      "category": "violence",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-violence-018",
+      "keyword": "plan a murder and evade detection",
+      "category": "violence",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    },
+    {
+      "id": "supplement-violence-019",
+      "keyword": "hire someone to kill a person",
+      "category": "violence",
+      "action": "block_request",
+      "origin": "curated_supplement_20261121"
+    }
+  ],
+  "combinations": [
+    {
+      "id": "unauthorized-intrusion-zh",
+      "category": "cyber_attack",
+      "groups": [
+        [
+          "未经授权",
+          "未經授權",
+          "没有授权",
+          "未获授权",
+          "别人的服务器",
+          "別人的伺服器",
+          "他人的服务器"
+        ],
+        [
+          "入侵",
+          "拿到管理员权限",
+          "植入后门",
+          "植入後門",
+          "远程执行命令"
+        ]
+      ]
+    },
+    {
+      "id": "unauthorized-intrusion-en",
+      "category": "cyber_attack",
+      "groups": [
+        [
+          "without authorization",
+          "without permission",
+          "someone else's server",
+          "victim's server"
+        ],
+        [
+          "break into",
+          "gain access",
+          "install a backdoor",
+          "exploit the vulnerability"
+        ]
+      ]
+    },
+    {
+      "id": "service-disruption-zh",
+      "category": "cyber_attack",
+      "groups": [
+        [
+          "发起攻击",
+          "發起攻擊",
+          "帮我攻击",
+          "幫我攻擊",
+          "打瘫",
+          "打癱"
+        ],
+        [
+          "ddos",
+          "拒绝服务",
+          "拒絕服務",
+          "流量洪泛",
+          "syn flood",
+          "http flood"
+        ]
+      ]
+    },
+    {
+      "id": "service-disruption-en",
+      "category": "cyber_attack",
+      "groups": [
+        [
+          "launch",
+          "carry out",
+          "help me perform"
+        ],
+        [
+          "a ddos attack",
+          "a denial of service attack",
+          "a syn flood attack"
+        ]
+      ]
+    },
+    {
+      "id": "malware-production-zh",
+      "category": "malware",
+      "groups": [
+        [
+          "帮我写",
+          "幫我寫",
+          "帮我制作",
+          "幫我製作",
+          "帮我部署",
+          "幫我部署"
+        ],
+        [
+          "勒索病毒",
+          "勒索软件",
+          "勒索軟體",
+          "盗号木马",
+          "竊密木馬",
+          "僵尸网络",
+          "殭屍網路"
+        ]
+      ]
+    },
+    {
+      "id": "malware-production-en",
+      "category": "malware",
+      "groups": [
+        [
+          "write me",
+          "build me",
+          "help me deploy",
+          "help me develop"
+        ],
+        [
+          "ransomware",
+          "credential stealer",
+          "malicious keylogger",
+          "botnet"
+        ]
+      ]
+    },
+    {
+      "id": "malware-evasion-zh",
+      "category": "malware",
+      "groups": [
+        [
+          "木马",
+          "木馬",
+          "恶意软件",
+          "惡意軟體",
+          "勒索病毒"
+        ],
+        [
+          "免杀",
+          "免殺",
+          "绕过杀毒",
+          "繞過防毒",
+          "逃避检测",
+          "逃避偵測"
+        ]
+      ]
+    },
+    {
+      "id": "malware-evasion-en",
+      "category": "malware",
+      "groups": [
+        [
+          "malware",
+          "ransomware",
+          "credential stealer"
+        ],
+        [
+          "evade antivirus",
+          "bypass antivirus",
+          "avoid detection",
+          "make it undetectable"
+        ]
+      ]
+    },
+    {
+      "id": "credential-stealing-zh",
+      "category": "credential_theft",
+      "groups": [
+        [
+          "窃取他人",
+          "竊取他人",
+          "盗取别人",
+          "盜取別人",
+          "偷取用户",
+          "偷取用戶"
+        ],
+        [
+          "密码",
+          "密碼",
+          "cookie",
+          "会话",
+          "工作階段",
+          "私钥",
+          "私鑰",
+          "api密钥",
+          "api金鑰"
+        ]
+      ]
+    },
+    {
+      "id": "credential-stealing-en",
+      "category": "credential_theft",
+      "groups": [
+        [
+          "steal their",
+          "steal the victim's",
+          "steal someone else's",
+          "harvest the victim's"
+        ],
+        [
+          "password",
+          "credentials",
+          "session cookie",
+          "private key",
+          "api key"
+        ]
+      ]
+    },
+    {
+      "id": "phishing-purpose-zh",
+      "category": "fraud",
+      "groups": [
+        [
+          "钓鱼页面",
+          "釣魚頁面",
+          "假登录页面",
+          "假登入頁面",
+          "冒充银行",
+          "冒充銀行"
+        ],
+        [
+          "骗取密码",
+          "騙取密碼",
+          "窃取凭据",
+          "竊取憑證",
+          "骗取验证码",
+          "騙取驗證碼"
+        ]
+      ]
+    },
+    {
+      "id": "phishing-purpose-en",
+      "category": "fraud",
+      "groups": [
+        [
+          "phishing page",
+          "fake login page",
+          "impersonate a bank"
+        ],
+        [
+          "steal passwords",
+          "harvest credentials",
+          "steal verification codes"
+        ]
+      ]
+    },
+    {
+      "id": "sexual-generation-zh",
+      "category": "sexual",
+      "groups": [
+        [
+          "帮我生成",
+          "幫我生成",
+          "帮我创作",
+          "幫我創作",
+          "帮我制作",
+          "幫我製作"
+        ],
+        [
+          "露骨色情",
+          "色情视频",
+          "色情影片",
+          "色情图片",
+          "色情圖片",
+          "性爱细节",
+          "性愛細節"
+        ]
+      ]
+    },
+    {
+      "id": "sexual-generation-en",
+      "category": "sexual",
+      "groups": [
+        [
+          "generate",
+          "create",
+          "write me",
+          "produce"
+        ],
+        [
+          "explicit pornography",
+          "pornographic video",
+          "pornographic image",
+          "explicit sexual story"
+        ]
+      ]
+    },
+    {
+      "id": "minor-sexual-zh",
+      "category": "minor_sexual",
+      "groups": [
+        [
+          "生成",
+          "制作",
+          "製作",
+          "传播",
+          "傳播",
+          "发给我",
+          "發給我"
+        ],
+        [
+          "儿童色情",
+          "兒童色情",
+          "未成年人色情",
+          "未成年人的裸照",
+          "兒童的裸照"
+        ]
+      ]
+    },
+    {
+      "id": "minor-sexual-en",
+      "category": "minor_sexual",
+      "groups": [
+        [
+          "create",
+          "generate",
+          "produce",
+          "send me",
+          "distribute"
+        ],
+        [
+          "child sexual abuse material",
+          "child pornography",
+          "nude images of children"
+        ]
+      ]
+    },
+    {
+      "id": "nonconsensual-image-zh",
+      "category": "sexual",
+      "groups": [
+        [
+          "未经同意",
+          "未經同意",
+          "未经本人同意",
+          "未經本人同意",
+          "不让她知道",
+          "不讓她知道"
+        ],
+        [
+          "制作裸照",
+          "製作裸照",
+          "色情换脸",
+          "色情換臉",
+          "生成私密照片"
+        ]
+      ]
+    },
+    {
+      "id": "nonconsensual-image-en",
+      "category": "sexual",
+      "groups": [
+        [
+          "without consent",
+          "without her consent",
+          "without his consent",
+          "nonconsensual",
+          "non-consensual"
+        ],
+        [
+          "make nude",
+          "create nude",
+          "pornographic deepfake",
+          "intimate images"
+        ]
+      ]
+    },
+    {
+      "id": "encoded-bypass-zh",
+      "category": "jailbreak",
+      "groups": [
+        [
+          "base64",
+          "rot13",
+          "十六进制",
+          "十六進位"
+        ],
+        [
+          "绕过安全审核",
+          "繞過安全審核",
+          "躲过审核",
+          "躲過審核",
+          "规避内容过滤",
+          "規避內容過濾"
+        ]
+      ]
+    },
+    {
+      "id": "encoded-bypass-en",
+      "category": "jailbreak",
+      "groups": [
+        [
+          "base64",
+          "rot13",
+          "hex encoding"
+        ],
+        [
+          "bypass safety checks",
+          "evade content moderation",
+          "bypass the content filter"
+        ]
+      ]
+    },
+    {
+      "id": "weapon-harm-zh",
+      "category": "violence",
+      "groups": [
+        [
+          "制作炸弹",
+          "製作炸彈",
+          "制作爆炸装置",
+          "製作爆炸裝置",
+          "制作毒药",
+          "製作毒藥"
+        ],
+        [
+          "袭击人群",
+          "襲擊人群",
+          "杀害他人",
+          "殺害他人",
+          "伤害别人",
+          "傷害別人"
+        ]
+      ]
+    },
+    {
+      "id": "weapon-harm-en",
+      "category": "violence",
+      "groups": [
+        [
+          "build a bomb",
+          "make an explosive device",
+          "make poison"
+        ],
+        [
+          "attack people",
+          "kill someone",
+          "harm someone",
+          "poison a person"
+        ]
+      ]
+    }
+  ]
+}

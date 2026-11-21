@@ -28,6 +28,13 @@ export type ProtectionRule = {
   count_penalty: boolean
 }
 export type ProtectionSettings = {
+  keywords: {
+    enabled: boolean
+    combinations: boolean
+    block: string[]
+    suspend: string[]
+  }
+  suspend_until_review: boolean
   channel_ids: number[]
   categories: {
     jailbreak: boolean
@@ -72,6 +79,7 @@ export type ProtectionSettings = {
   alert_threshold: number
 }
 export type ProtectionHit = {
+  matched?: string
   category?: string
   evidence?: string
   rule_id: string
@@ -91,6 +99,11 @@ export type ProtectionVerdict = {
   uninspected: string
 }
 export type ProtectionEvent = {
+  preview: string
+  content_truncated: boolean
+  content_redacted: boolean
+  restrictions: ProtectionRestriction[]
+  violation_count: number
   channel_id: number
   channel_name: string
   username: string
@@ -145,8 +158,15 @@ export type ProtectionAudit = {
 }
 export type ProtectionPage<T> = { items: T[]; total: number; page: number }
 export type EventFilters = {
+  suspended?: string
   user_id: string
   token_id: string
   decision: string
   review: string
+}
+export type ProtectionEventDetails = {
+  request_content: string
+  content_truncated: boolean
+  content_redacted: boolean
+  audits: ProtectionAudit[]
 }

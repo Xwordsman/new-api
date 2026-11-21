@@ -39,6 +39,13 @@ const list = (max: number, length = 191) =>
 const integer = (min: number, max: number) => z.number().int().min(min).max(max)
 export const protectionSchema = z
   .object({
+    keywords: z.object({
+      enabled: z.boolean(),
+      combinations: z.boolean(),
+      block: list(2000, 1000),
+      suspend: list(2000, 1000),
+    }),
+    suspend_until_review: z.boolean(),
     revision: integer(0, Number.MAX_SAFE_INTEGER),
     enabled: z.boolean(),
     channel_ids: z.array(integer(1, Number.MAX_SAFE_INTEGER)).max(100),
@@ -118,6 +125,31 @@ export const protectionSchema = z
     alert_threshold: integer(1, 100000),
   })
   .superRefine((value, ctx) => {
+    const keywords = [
+      ...lines(value.keywords.block),
+      ...lines(value.keywords.suspend),
+    ]
+    const normalized = keywords.map((word) =>
+      word
+        .normalize('NFKC')
+        .replaceAll(/\p{Cf}/gu, '')
+        .toLowerCase()
+        .replaceAll(/\s+/gu, ' ')
+        .trim()
+    )
+    if (
+      keywords.length > 2000 ||
+      encoder.encode(keywords.join('')).length > 128000 ||
+      normalized.some((word) => !word) ||
+      new Set(normalized).size !== normalized.length
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['keywords', 'block'],
+        message:
+          'Use unique keywords, at most 2000 entries and 128000 bytes in total',
+      })
+    }
     if (
       value.reviewer.enabled &&
       (value.reviewer.channel_id === 0 ||
@@ -180,6 +212,11 @@ export type ProtectionForm = z.infer<typeof protectionSchema>
 export function toForm(settings: ProtectionSettings): ProtectionForm {
   return {
     ...settings,
+    keywords: {
+      ...settings.keywords,
+      block: settings.keywords.block.join('\n'),
+      suspend: settings.keywords.suspend.join('\n'),
+    },
     groups: settings.groups.join('\n'),
     models: settings.models.join('\n'),
     protocols: settings.protocols.join('\n'),
@@ -196,6 +233,11 @@ export function toForm(settings: ProtectionSettings): ProtectionForm {
 export function toSettings(form: ProtectionForm): ProtectionSettings {
   return {
     ...form,
+    keywords: {
+      ...form.keywords,
+      block: lines(form.keywords.block),
+      suspend: lines(form.keywords.suspend),
+    },
     groups: lines(form.groups),
     models: lines(form.models),
     protocols: lines(form.protocols),

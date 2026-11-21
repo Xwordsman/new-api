@@ -32,7 +32,7 @@ import { formatTimestamp } from '@/lib/format'
 
 import { getAudit, getRestrictions } from '../api'
 import type { ProtectionAudit, ProtectionRestriction } from '../types'
-import { ProtectionPagination } from './events-panel'
+import { ProtectionPagination } from './protection-pagination'
 import { ProtectionLabel } from './record-label'
 import { ProtectionReviewDialog } from './review-dialog'
 

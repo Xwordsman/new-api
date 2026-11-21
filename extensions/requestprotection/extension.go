@@ -19,6 +19,8 @@ func RegisterRoutes(api *gin.RouterGroup) {
 	admin := api.Group("/extensions/request-protection/admin", middleware.RootAuth(), middleware.DisableCache())
 	admin.GET("/settings", getSettings)
 	admin.GET("/events", events)
+	admin.GET("/events/:id", eventDetails)
+	admin.GET("/keywords", func(c *gin.Context) { respond(c, policy.DefaultKeywords(), nil) })
 	admin.GET("/restrictions", restrictions)
 	admin.GET("/audit", audit)
 	admin.GET("/channels", channels)
@@ -114,14 +116,19 @@ func filteredQuery(c *gin.Context, table any) (*gorm.DB, int) {
 
 type eventView struct {
 	policy.Event
-	Matches     []policy.Hit `json:"matches"`
-	Username    string       `json:"username"`
-	TokenName   string       `json:"token_name"`
-	ChannelName string       `json:"channel_name"`
+	Matches        []policy.Hit     `json:"matches"`
+	Username       string           `json:"username"`
+	TokenName      string           `json:"token_name"`
+	ChannelName    string           `json:"channel_name"`
+	Restrictions   []policy.Subject `json:"restrictions"`
+	ViolationCount int64            `json:"violation_count"`
 }
 
 func events(c *gin.Context) {
 	q, page := filteredQuery(c, &policy.Event{})
+	if c.Query("suspended") == "true" {
+		q = q.Where("user_id IN (?)", model.DB.Model(&policy.Subject{}).Select("user_id").Where("expires_at > ? AND user_id > ?", time.Now().Unix(), 0))
+	}
 	if value := c.Query("decision"); value != "" {
 		q = q.Where("decision = ?", value)
 	}
@@ -134,7 +141,7 @@ func events(c *gin.Context) {
 		return
 	}
 	rows := []policy.Event{}
-	if err := q.Order("id DESC").Offset((page - 1) * 20).Limit(20).Find(&rows).Error; err != nil {
+	if err := q.Omit("request_content").Order("id DESC").Offset((page - 1) * 20).Limit(20).Find(&rows).Error; err != nil {
 		respond(c, nil, err)
 		return
 	}
@@ -160,6 +167,22 @@ func events(c *gin.Context) {
 		}
 	}
 	userNames, tokenNames, channelNames := map[int]string{}, map[int]string{}, map[int]string{}
+	states := []policy.Subject{}
+	counts := []struct {
+		UserID int
+		Total  int64
+	}{}
+	if len(userIDs) > 0 {
+		db := model.DB.WithContext(c.Request.Context())
+		if err := db.Where("user_id IN ? AND expires_at > ?", userIDs, time.Now().Unix()).Find(&states).Error; err != nil {
+			respond(c, nil, err)
+			return
+		}
+		if err := db.Model(&policy.Event{}).Select("user_id, COUNT(*) AS total").Where("user_id IN ? AND counted = ? AND review <> ?", userIDs, true, "false_positive").Group("user_id").Scan(&counts).Error; err != nil {
+			respond(c, nil, err)
+			return
+		}
+	}
 	for _, row := range users {
 		userNames[row.Id] = row.Username
 	}
@@ -175,9 +198,37 @@ func events(c *gin.Context) {
 			respond(c, nil, err)
 			return
 		}
-		items = append(items, eventView{Event: row, Matches: matches, Username: userNames[row.UserID], TokenName: tokenNames[row.TokenID], ChannelName: channelNames[row.ChannelID]})
+		view := eventView{Event: row, Matches: matches, Username: userNames[row.UserID], TokenName: tokenNames[row.TokenID], ChannelName: channelNames[row.ChannelID], Restrictions: []policy.Subject{}}
+		for _, state := range states {
+			if state.UserID == row.UserID {
+				view.Restrictions = append(view.Restrictions, state)
+			}
+		}
+		for _, count := range counts {
+			if count.UserID == row.UserID {
+				view.ViolationCount = count.Total
+			}
+		}
+		items = append(items, view)
 	}
 	respond(c, gin.H{"items": items, "total": total, "page": page}, nil)
+}
+
+func eventDetails(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		respond(c, nil, policy.ErrInvalid)
+		return
+	}
+	db := model.DB.WithContext(c.Request.Context())
+	var event policy.Event
+	if err = db.Where("id = ?", id).Take(&event).Error; err != nil {
+		respond(c, nil, err)
+		return
+	}
+	rows := []policy.Audit{}
+	err = db.Where("event_id = ? OR subject_id IN ?", id, []string{"user:" + strconv.Itoa(event.UserID), "key:" + strconv.Itoa(event.TokenID)}).Order("id DESC").Limit(50).Find(&rows).Error
+	respond(c, gin.H{"request_content": event.RequestContent, "content_truncated": event.ContentTruncated, "content_redacted": event.ContentRedacted, "audits": rows}, err)
 }
 
 func channels(c *gin.Context) {

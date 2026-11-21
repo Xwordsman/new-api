@@ -53,23 +53,6 @@ export function ProtectionControls(props: { disabled: boolean }) {
   }
   return (
     <div className='space-y-6'>
-      <div className='grid gap-5 sm:grid-cols-2'>
-        <PolicyField
-          name='enabled'
-          label={t('Enable request protection')}
-          kind='switch'
-          disabled={props.disabled}
-        />
-        <PolicyField
-          name='mode'
-          label={t('Protection mode')}
-          options={[
-            { value: 'observe', label: t('Observe only') },
-            { value: 'enforce', label: t('Enforce rules') },
-          ]}
-          disabled={props.disabled}
-        />
-      </div>
       {query.isError && <ErrorState onRetry={() => void query.refetch()} />}
       <FormField
         control={form.control}
@@ -182,15 +165,6 @@ export function ProtectionControls(props: { disabled: boolean }) {
             { value: 'block', label: t('Reject this request for review') },
             { value: 'observe', label: t('Record and allow this request') },
           ]}
-          disabled={props.disabled}
-        />
-        <PolicyField
-          name='automatic_suspend'
-          label={t('Automatically suspend repeat violators')}
-          kind='switch'
-          description={t(
-            'Off by default. You can pause a specific user from an event. Automatic thresholds are in advanced settings.'
-          )}
           disabled={props.disabled}
         />
       </section>

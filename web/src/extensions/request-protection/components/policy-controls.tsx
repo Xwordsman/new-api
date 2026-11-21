@@ -61,15 +61,6 @@ export function PolicyControls(props: { disabled: boolean }) {
         />
       </div>
       <PolicyField
-        name='store_evidence'
-        label={t('Store short evidence excerpts')}
-        kind='switch'
-        disabled={props.disabled}
-        description={t(
-          'Optional: store up to 240 bytes of matching text for review. Excerpts may contain sensitive content; full prompts and channel keys are not stored.'
-        )}
-      />
-      <PolicyField
         name='reviewer.timeout_seconds'
         label={t('Review timeout (seconds)')}
         kind='number'
@@ -136,20 +127,7 @@ export function PenaltyControls(props: { disabled: boolean }) {
   return (
     <div className='space-y-5'>
       <h3 className='font-semibold'>{t('Temporary restrictions')}</h3>
-      <p className='text-muted-foreground text-sm'>
-        {t(
-          'Only explicitly marked high-confidence blocking rules on current input or system instructions count. History, tool output and upstream safety codes never add penalties. Use a threshold of 0 to disable that restriction.'
-        )}
-      </p>
       <div className='grid gap-5 sm:grid-cols-2'>
-        <PolicyField
-          name='window_minutes'
-          label={t('Violation window (minutes)')}
-          kind='number'
-          min={1}
-          max={1440}
-          disabled={props.disabled}
-        />
         <PolicyField
           name='duplicate_seconds'
           label={t('Identical content cooldown (seconds)')}
@@ -172,22 +150,6 @@ export function PenaltyControls(props: { disabled: boolean }) {
         <PolicyField
           name='key_suspend_minutes'
           label={t('Key restriction duration (minutes)')}
-          kind='number'
-          min={1}
-          max={43200}
-          disabled={props.disabled}
-        />
-        <PolicyField
-          name='user_threshold'
-          label={t('Account violation threshold')}
-          kind='number'
-          min={0}
-          max={10000}
-          disabled={props.disabled}
-        />
-        <PolicyField
-          name='user_suspend_minutes'
-          label={t('Account restriction duration (minutes)')}
           kind='number'
           min={1}
           max={43200}

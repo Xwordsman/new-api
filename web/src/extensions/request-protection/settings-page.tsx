@@ -27,7 +27,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import { getSettings } from './api'
 import { EventsPanel } from './components/events-panel'
-import { AuditPanel, RestrictionsPanel } from './components/restrictions-panel'
 import { ProtectionSettingsForm } from './components/settings-form'
 
 export function RequestProtectionSettingsPage() {
@@ -57,11 +56,7 @@ export function RequestProtectionSettingsPage() {
           <Tabs defaultValue='settings' className='gap-6'>
             <TabsList className='h-auto max-w-full flex-wrap justify-start'>
               <TabsTrigger value='settings'>{t('Settings')}</TabsTrigger>
-              <TabsTrigger value='events'>{t('Protection events')}</TabsTrigger>
-              <TabsTrigger value='restrictions'>
-                {t('Active restrictions')}
-              </TabsTrigger>
-              <TabsTrigger value='audit'>{t('Audit log')}</TabsTrigger>
+              <TabsTrigger value='events'>{t('Protection logs')}</TabsTrigger>
             </TabsList>
             <TabsContent value='settings'>
               {settings.isPending && <LoadingState />}
@@ -74,12 +69,6 @@ export function RequestProtectionSettingsPage() {
             </TabsContent>
             <TabsContent value='events'>
               <EventsPanel />
-            </TabsContent>
-            <TabsContent value='restrictions'>
-              <RestrictionsPanel />
-            </TabsContent>
-            <TabsContent value='audit'>
-              <AuditPanel />
             </TabsContent>
           </Tabs>
         </div>

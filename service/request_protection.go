@@ -177,6 +177,7 @@ func CheckRequestProtection(c *gin.Context, info *relaycommon.RelayInfo) *types.
 		}
 	}
 	v := policy.Inspect(s, in, common.SessionSecret)
+	c.Set("request-protection-input", in)
 	if in.ChannelID > 0 {
 		v = ReviewRequestProtection(c.Request.Context(), s, in, v, businessBase)
 	}
@@ -253,6 +254,11 @@ func RecordRequestProtectionSafety(c *gin.Context, info *relaycommon.RelayInfo, 
 		return
 	}
 	in := policy.Input{ChannelID: info.GetChannelID(), IP: c.ClientIP(), UserID: info.UserId, TokenID: info.TokenId, RequestID: info.RequestId + ":upstream:" + code, Model: info.OriginModelName, Group: info.UsingGroup, Protocol: string(info.RelayFormat)}
+	if value, exists := c.Get("request-protection-input"); exists {
+		if inspected, valid := value.(policy.Input); valid {
+			in.Segments, in.Uninspected = inspected.Segments, inspected.Uninspected
+		}
+	}
 	if !policy.InScope(s, in) {
 		return
 	}

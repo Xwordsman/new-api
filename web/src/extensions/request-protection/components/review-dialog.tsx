@@ -80,7 +80,7 @@ export function ProtectionReviewDialog(props: {
         ? t('Confirm violation')
         : t('Mark false positive')
     description = t(
-      'False positives stop counting toward restrictions. Related active restrictions are recalculated using their original thresholds.'
+      'False positives stop counting toward restrictions. Timed restrictions are recalculated. Holds pending manual release still require an explicit release.'
     )
   }
   return (

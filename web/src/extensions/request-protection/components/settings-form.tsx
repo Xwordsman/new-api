@@ -40,7 +40,9 @@ import {
 } from '../lib/schema'
 import type { ProtectionSettings } from '../types'
 import { DryRunPanel } from './dry-run-panel'
+import { KeywordControls } from './keyword-controls'
 import { PenaltyControls, PolicyControls } from './policy-controls'
+import { PolicyField } from './policy-field'
 import { ProtectionControls } from './protection-controls'
 import { RulesEditor } from './rules-editor'
 
@@ -97,7 +99,7 @@ export function ProtectionSettingsForm(props: {
           <Alert>
             <AlertDescription>
               {t(
-                'Start with observation, check events, then enforce. Semantic review uses a separate provider; inspection failures are not proof of user misconduct.'
+                'Keywords inspect the latest user input before forwarding. Matches show suspected intent, not a confirmed conclusion. Identical retries count once.'
               )}
             </AlertDescription>
           </Alert>
@@ -118,7 +120,71 @@ export function ProtectionSettingsForm(props: {
               </AlertDescription>
             </Alert>
           )}
-          <ProtectionControls disabled={save.isPending} />
+          <div className='grid gap-5 sm:grid-cols-2'>
+            <PolicyField
+              name='enabled'
+              label={t('Enable request protection')}
+              kind='switch'
+              disabled={save.isPending}
+            />
+            <PolicyField
+              name='mode'
+              label={t('Protection mode')}
+              options={[
+                { value: 'observe', label: t('Observe only') },
+                { value: 'enforce', label: t('Enforce rules') },
+              ]}
+              disabled={save.isPending}
+            />
+          </div>
+          <KeywordControls disabled={save.isPending} />
+          <section className='space-y-4 border-t pt-5'>
+            <PolicyField
+              name='automatic_suspend'
+              label={t('Automatically suspend violating users')}
+              kind='switch'
+              disabled={save.isPending}
+              description={t(
+                'When enabled, immediate-suspension keywords pause this user on the first match. Other counted matches use the threshold below. All of this user’s API keys are affected.'
+              )}
+            />
+            <div className='grid gap-5 sm:grid-cols-2'>
+              <PolicyField
+                name='window_minutes'
+                label={t('Violation window (minutes)')}
+                kind='number'
+                min={1}
+                max={1440}
+                disabled={save.isPending}
+              />
+              <PolicyField
+                name='user_threshold'
+                label={t('Account violation threshold')}
+                kind='number'
+                min={0}
+                max={10000}
+                disabled={save.isPending}
+                description={t(
+                  'Use 0 to disable repeat-match suspension. Immediate-suspension keywords still apply when automatic suspension is enabled.'
+                )}
+              />
+              <PolicyField
+                name='suspend_until_review'
+                label={t('Keep suspended until manual release')}
+                kind='switch'
+                disabled={save.isPending}
+              />
+              <PolicyField
+                name='user_suspend_minutes'
+                label={t('Account restriction duration (minutes)')}
+                kind='number'
+                min={1}
+                max={43200}
+                disabled={save.isPending}
+                description={t('Used when manual release is turned off.')}
+              />
+            </div>
+          </section>
           <Collapsible>
             <CollapsibleTrigger
               render={<Button type='button' variant='outline' />}
@@ -126,9 +192,11 @@ export function ProtectionSettingsForm(props: {
               {t('Advanced protection settings')}
             </CollapsibleTrigger>
             <CollapsibleContent className='space-y-6 pt-5'>
+              <ProtectionControls disabled={save.isPending} />
               <PolicyControls disabled={save.isPending} />
               <RulesEditor disabled={save.isPending} />
               <PenaltyControls disabled={save.isPending} />
+              <DryRunPanel disabled={save.isPending} />
             </CollapsibleContent>
           </Collapsible>
           {form.formState.isSubmitted && !form.formState.isValid && (
@@ -160,7 +228,6 @@ export function ProtectionSettingsForm(props: {
             </Button>
           </div>
         </form>
-        <DryRunPanel disabled={save.isPending} />
       </div>
     </Form>
   )

@@ -28,6 +28,13 @@ import { RequestProtectionSettingsPage } from '../settings-page'
 import type { ProtectionSettings } from '../types'
 
 const settings: ProtectionSettings = {
+  keywords: {
+    enabled: true,
+    combinations: true,
+    block: ['custom marker'],
+    suspend: ['suspend marker'],
+  },
+  suspend_until_review: false,
   channel_ids: [],
   categories: { jailbreak: true, theft: true, attack: true, sexual: true },
   reviewer: {
@@ -266,13 +273,17 @@ it('keeps advanced rules hidden by default and opens them with the keyboard', as
   const advanced = await screen.findByRole('button', {
     name: 'Advanced protection settings',
   })
+  expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+    'Settings',
+    'Protection logs',
+  ])
   expect(advanced).toHaveAttribute('aria-expanded', 'false')
   expect(
     screen.queryByRole('spinbutton', { name: 'Key violation threshold' })
   ).not.toBeInTheDocument()
   expect(
     screen.getByRole('switch', {
-      name: 'Automatically suspend repeat violators',
+      name: 'Automatically suspend violating users',
     })
   ).not.toBeChecked()
   advanced.focus()
@@ -281,6 +292,69 @@ it('keeps advanced rules hidden by default and opens them with the keyboard', as
   expect(
     screen.getByRole('spinbutton', { name: 'Key violation threshold' })
   ).toBeVisible()
+})
+
+it('restores keywords as an unsaved change and saves manual-release suspension with them', async () => {
+  const user = userEvent.setup()
+  const defaults = {
+    enabled: true,
+    combinations: true,
+    block: ['built-in marker'],
+    suspend: ['immediate marker'],
+  }
+  vi.mocked(api.get).mockImplementation(async (url) => ({
+    data: {
+      success: true,
+      data: url.endsWith('/keywords') ? defaults : settings,
+    },
+  }))
+  const put = vi.spyOn(api, 'put').mockResolvedValue({
+    data: {
+      success: true,
+      data: { ...settings, keywords: defaults, suspend_until_review: true },
+    },
+  })
+  renderSettings()
+  await user.click(
+    await screen.findByRole('button', { name: 'Restore built-in keywords' })
+  )
+  await waitFor(() =>
+    expect(
+      screen.getByRole('textbox', { name: 'Blocking keywords' })
+    ).toHaveValue('built-in marker')
+  )
+  expect(
+    screen.getByRole('textbox', { name: 'Immediate-suspension keywords' })
+  ).toHaveValue('immediate marker')
+  expect(put).not.toHaveBeenCalled()
+  await user.click(
+    screen.getByRole('switch', { name: 'Keep suspended until manual release' })
+  )
+  await user.click(screen.getAllByRole('button', { name: 'Save' })[0])
+  await waitFor(() =>
+    expect(put).toHaveBeenCalledExactlyOnceWith(
+      '/api/extensions/request-protection/admin/settings',
+      { ...settings, keywords: defaults, suspend_until_review: true }
+    )
+  )
+})
+
+it('rejects keywords duplicated across the blocking and immediate-suspension lists', async () => {
+  const user = userEvent.setup()
+  const put = vi.spyOn(api, 'put')
+  renderSettings()
+  const suspend = await screen.findByRole('textbox', {
+    name: 'Immediate-suspension keywords',
+  })
+  await user.clear(suspend)
+  await user.type(suspend, 'custom marker')
+  await user.click(screen.getAllByRole('button', { name: 'Save' })[0])
+  await waitFor(() =>
+    expect(
+      screen.getByRole('textbox', { name: 'Blocking keywords' })
+    ).toHaveAttribute('aria-invalid', 'true')
+  )
+  expect(put).not.toHaveBeenCalled()
 })
 
 it('requires a review channel and model and calls semantic testing only after an explicit click', async () => {
@@ -302,7 +376,10 @@ it('requires a review channel and model and calls semantic testing only after an
   const put = vi.spyOn(api, 'put')
   renderSettings()
   await user.click(
-    await screen.findByRole('switch', { name: 'Enable semantic review' })
+    await screen.findByRole('button', { name: 'Advanced protection settings' })
+  )
+  await user.click(
+    screen.getByRole('switch', { name: 'Enable semantic review' })
   )
   await user.click(screen.getAllByRole('button', { name: 'Save' })[0])
   expect(

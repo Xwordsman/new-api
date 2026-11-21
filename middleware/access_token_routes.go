@@ -52,6 +52,8 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"GET /api/extensions/request-protection/admin/settings":        accessTokenSessionRule,
 	"PUT /api/extensions/request-protection/admin/settings":        accessTokenSessionRule,
 	"GET /api/extensions/request-protection/admin/events":          accessTokenSessionRule,
+	"GET /api/extensions/request-protection/admin/events/:id":      accessTokenSessionRule,
+	"GET /api/extensions/request-protection/admin/keywords":        accessTokenSessionRule,
 	"GET /api/extensions/request-protection/admin/channels":        accessTokenSessionRule,
 	"GET /api/extensions/request-protection/admin/restrictions":    accessTokenSessionRule,
 	"GET /api/extensions/request-protection/admin/audit":           accessTokenSessionRule,

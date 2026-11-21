@@ -31,6 +31,7 @@ type Input struct {
 	Uninspected string    `json:"uninspected"`
 }
 type Hit struct {
+	Matched        string `json:"matched,omitempty"`
 	Category       string `json:"category,omitempty"`
 	Evidence       string `json:"evidence,omitempty"`
 	RuleID         string `json:"rule_id"`
@@ -41,13 +42,14 @@ type Hit struct {
 	CountPenalty   bool   `json:"count_penalty"`
 }
 type Verdict struct {
-	Finding     string `json:"finding"`
-	Reason      string `json:"reason"`
-	Hits        []Hit  `json:"hits"`
-	Decision    string `json:"decision"`
-	Eligible    bool   `json:"eligible"`
-	Digest      string `json:"digest"`
-	Uninspected string `json:"uninspected"`
+	ImmediateSuspend bool   `json:"immediate_suspend"`
+	Finding          string `json:"finding"`
+	Reason           string `json:"reason"`
+	Hits             []Hit  `json:"hits"`
+	Decision         string `json:"decision"`
+	Eligible         bool   `json:"eligible"`
+	Digest           string `json:"digest"`
+	Uninspected      string `json:"uninspected"`
 }
 
 // Normalize deliberately does not decode base64 or execute client content.
@@ -156,6 +158,9 @@ func Inspect(s Settings, in Input, secret string) Verdict {
 	if !s.Enabled || !InScope(s, in) {
 		return v
 	}
+	if s.Keywords.Enabled && builders["current"] != nil {
+		inspectKeywords(s, builders["current"].String(), &v)
+	}
 	for _, r := range s.Rules {
 		if !r.Enabled {
 			continue
@@ -166,13 +171,20 @@ func Inspect(s Settings, in Input, secret string) Verdict {
 				continue
 			}
 			matched := r.Kind == "all"
+			matchedText := []string{}
 			for _, p := range r.Patterns {
 				found := false
 				if r.Kind == "regex" {
 					re, err := regexp.Compile(p)
 					found = err == nil && re.MatchString(text)
+					if found {
+						matchedText = append(matchedText, re.FindString(text))
+					}
 				} else {
 					found = strings.Contains(text, Normalize(p))
+					if found {
+						matchedText = append(matchedText, Normalize(p))
+					}
 				}
 				if r.Kind == "all" {
 					matched = matched && found
@@ -183,7 +195,7 @@ func Inspect(s Settings, in Input, secret string) Verdict {
 			if !matched {
 				continue
 			}
-			h := Hit{RuleID: r.ID, Name: r.Name, Source: source, Action: r.Action, HighConfidence: r.HighConfidence, CountPenalty: r.CountPenalty}
+			h := Hit{RuleID: r.ID, Name: r.Name, Source: source, Action: r.Action, HighConfidence: r.HighConfidence, CountPenalty: r.CountPenalty, Matched: bounded(Redact(strings.Join(matchedText, " · ")), 1200)}
 			v.Hits = append(v.Hits, h)
 			v.Finding, v.Reason = "rule_match", "custom_rule"
 			if v.Decision == "allow" {
@@ -210,6 +222,10 @@ func Inspect(s Settings, in Input, secret string) Verdict {
 		// Incomplete inspection is a protective rejection, never a penalty.
 		v.Eligible = false
 		v.Finding, v.Reason = "check_failed", "incomplete_input"
+	}
+	// Bound persisted matching evidence independently of the request text.
+	if len(v.Hits) > 40 {
+		v.Hits = append(v.Hits[:40], Hit{RuleID: "more-matches", Name: "Additional matches omitted", Source: "current", Action: "observe"})
 	}
 	return v
 }

@@ -18,6 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import type { ProtectionEvent } from '../types'
+
 export function ProtectionLabel(props: { value: string }) {
   const { t } = useTranslation()
   const labels: Record<string, string> = {
@@ -28,6 +30,9 @@ export function ProtectionLabel(props: { value: string }) {
     clear: t('No risk detected'),
     violation: t('Clear violation'),
     rule_match: t('Custom rule match'),
+    keyword_match: t('Keyword match'),
+    keyword_suspend: t('Immediate keyword suspension'),
+    custom_keyword: t('Custom keyword'),
     review_needed: t('Needs manual review'),
     check_failed: t('Inspection failed'),
     upstream_refusal: t('Upstream refusal'),
@@ -78,4 +83,42 @@ export function ProtectionLabel(props: { value: string }) {
     realtime_uninspected: t('Realtime frames are not inspected'),
   }
   return <span>{labels[props.value] || props.value || '—'}</span>
+}
+
+export function SuspectedIntent(props: { event: ProtectionEvent }) {
+  const { t } = useTranslation()
+  const labels: Record<string, string> = {
+    jailbreak: t('Safety bypass'),
+    prompt_extraction: t('System prompt extraction'),
+    cyber_attack: t('Malicious cyberattacks'),
+    attack: t('Malicious cyberattacks'),
+    malware: t('Malware creation'),
+    credential_theft: t('Credential theft'),
+    theft: t('Credential theft'),
+    fraud: t('Fraud'),
+    sexual: t('Explicit sexual content'),
+    minor_sexual: t('Sexual exploitation of minors'),
+    violence: t('Violent harm'),
+    custom_keyword: t('Custom keyword'),
+  }
+  const categories = [
+    ...new Set(
+      props.event.matches
+        .map((hit) => hit.category)
+        .filter((category): category is string => Boolean(category))
+    ),
+  ]
+  const description = categories
+    .map((category) => labels[category] || category)
+    .join(' · ')
+  if (!description) {
+    return <ProtectionLabel value={props.event.reason || props.event.finding} />
+  }
+  return (
+    <span>
+      {props.event.matches.some((hit) => hit.rule_id === 'semantic_review')
+        ? t('Suspected: {{intent}} (semantic review)', { intent: description })
+        : t('Suspected: {{intent}} (rule inference)', { intent: description })}
+    </span>
+  )
 }

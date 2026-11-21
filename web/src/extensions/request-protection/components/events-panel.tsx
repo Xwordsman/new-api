@@ -17,32 +17,40 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
-import { getCoreRowModel, useReactTable } from '@tanstack/react-table'
 import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
-  DataTablePagination,
   StaticDataTable,
   type StaticDataTableColumn,
 } from '@/components/data-table'
-import { Dialog } from '@/components/dialog'
 import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
 import { LoadingState } from '@/components/loading-state'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
-import { formatTimestamp } from '@/lib/format'
+import { toIntlLocale } from '@/i18n/languages'
+import { formatNumber, formatTimestamp } from '@/lib/format'
 
 import { getEvents } from '../api'
 import type { EventFilters, ProtectionEvent } from '../types'
-import { ProtectionLabel } from './record-label'
+import { EventDetailsDialog } from './event-details-dialog'
+import { ProtectionPagination } from './protection-pagination'
+import { ProtectionLabel, SuspectedIntent } from './record-label'
+import { RestrictionsPanel } from './restrictions-panel'
 import { ProtectionReviewDialog, type ReviewAction } from './review-dialog'
 
 export function EventsPanel() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
   const id = useId()
   const [page, setPage] = useState(1)
   const [filters, setFilters] = useState<EventFilters>({
@@ -50,6 +58,7 @@ export function EventsPanel() {
     token_id: '',
     decision: '',
     review: '',
+    suspended: '',
   })
   const [applied, setApplied] = useState(filters)
   const [detail, setDetail] = useState<ProtectionEvent | null>(null)
@@ -62,7 +71,13 @@ export function EventsPanel() {
     {
       id: 'time',
       header: t('Time'),
-      cell: (event) => formatTimestamp(event.created_at),
+      cell: (event) => (
+        <span>
+          {formatTimestamp(event.created_at)}
+          <br />
+          <span className='text-muted-foreground'>#{event.id}</span>
+        </span>
+      ),
     },
     {
       id: 'user',
@@ -74,85 +89,88 @@ export function EventsPanel() {
         </span>
       ),
     },
+    { id: 'ip', header: t('IP address'), cell: (event) => event.ip || '—' },
     {
-      id: 'key',
-      header: t('API Key'),
+      id: 'content',
+      header: t('Request content'),
       cell: (event) => (
-        <span>
-          {event.token_name || '—'}
-          <br />#{event.token_id}
+        <Button
+          type='button'
+          variant='ghost'
+          className='h-auto w-64 justify-start p-0 text-start font-normal whitespace-normal'
+          onClick={() => setDetail(event)}
+        >
+          <span className='line-clamp-2 break-all'>
+            {event.preview || t('Content unavailable for this older event')}
+          </span>
+        </Button>
+      ),
+    },
+    {
+      id: 'intent',
+      header: t('Suspected intent'),
+      cell: (event) => (
+        <div className='w-52 whitespace-normal'>
+          <SuspectedIntent event={event} />
+        </div>
+      ),
+    },
+    {
+      id: 'matches',
+      header: t('Matched keywords'),
+      cell: (event) => (
+        <span className='line-clamp-2 w-48 break-all whitespace-normal'>
+          {event.matches
+            .map((hit) => hit.matched || hit.evidence || hit.name)
+            .join(' · ') || '—'}
         </span>
       ),
     },
     {
-      id: 'category',
-      header: t('Risk categories'),
+      id: 'model',
+      header: t('Model / Channel'),
       cell: (event) => (
         <span>
-          {event.matches.some((hit) => hit.category)
-            ? [
-                ...new Set(
-                  event.matches.map((hit) => hit.category).filter(Boolean)
-                ),
-              ].map((category) => (
-                <span key={category} className='block'>
-                  <ProtectionLabel value={category ?? ''} />
-                </span>
-              ))
-            : '—'}
-        </span>
-      ),
-    },
-    {
-      id: 'finding',
-      header: t('Inspection result'),
-      cell: (event) => (
-        <ProtectionLabel value={event.finding || 'legacy_event'} />
-      ),
-    },
-    {
-      id: 'reason',
-      header: t('Reason'),
-      cell: (event) => (
-        <span className='block max-w-64 whitespace-normal'>
-          <ProtectionLabel
-            value={event.reason || event.uninspected || 'legacy_event'}
-          />
-        </span>
-      ),
-    },
-    {
-      id: 'source',
-      header: t('Source'),
-      cell: (event) => (
-        <span>
-          {[...new Set(event.matches.map((hit) => hit.source))].map(
-            (source) => (
-              <span key={source} className='block'>
-                <ProtectionLabel value={source} />
-              </span>
-            )
-          )}
-        </span>
-      ),
-    },
-    { id: 'model', header: t('Model'), cell: (event) => event.model },
-    {
-      id: 'channel',
-      header: t('Channel / Group'),
-      cell: (event) => (
-        <span>
-          {event.channel_name || '—'}{' '}
-          {event.channel_id > 0 && `#${event.channel_id}`}
+          {event.model}
           <br />
-          {event.group}
+          <span className='text-muted-foreground'>
+            {event.channel_name || t('Not forwarded')}{' '}
+            {event.channel_id > 0 && `#${event.channel_id}`}
+          </span>
         </span>
       ),
     },
     {
       id: 'decision',
-      header: t('Decision'),
-      cell: (event) => <ProtectionLabel value={event.decision} />,
+      header: t('Inspection result'),
+      cell: (event) => (
+        <div className='space-y-1'>
+          <Badge
+            variant={event.decision === 'block' ? 'destructive' : 'secondary'}
+          >
+            <ProtectionLabel value={event.decision} />
+          </Badge>
+          <div className='text-muted-foreground text-xs'>
+            <ProtectionLabel value={event.upstream} />
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: 'count',
+      header: t('Recorded violations'),
+      cell: (event) => formatNumber(event.violation_count || 0, locale),
+    },
+    {
+      id: 'state',
+      header: t('User status'),
+      cell: (event) => (
+        <Badge variant={event.restrictions?.length ? 'destructive' : 'outline'}>
+          {event.restrictions?.length
+            ? t('API access paused')
+            : t('Not suspended')}
+        </Badge>
+      ),
     },
     {
       id: 'review',
@@ -160,34 +178,42 @@ export function EventsPanel() {
       cell: (event) => <ProtectionLabel value={event.review} />,
     },
     {
-      id: 'forwarded',
-      header: t('Forwarding'),
-      cell: (event) => <ProtectionLabel value={event.upstream} />,
-    },
-    {
       id: 'actions',
       header: t('Actions'),
       cell: (event) => (
-        <Button variant='outline' size='sm' onClick={() => setDetail(event)}>
-          {t('View details')}
-        </Button>
+        <div className='flex gap-2'>
+          <Button variant='outline' size='sm' onClick={() => setDetail(event)}>
+            {t('View details')}
+          </Button>
+          {!event.restrictions?.length && (
+            <Button
+              variant='ghost'
+              size='sm'
+              onClick={() => setAction({ kind: 'hold', event: event.id })}
+            >
+              {t('Pause this user')}
+            </Button>
+          )}
+        </div>
       ),
     },
   ]
   return (
     <div className='space-y-5'>
       <form
-        className='grid items-end gap-4 sm:grid-cols-2 lg:grid-cols-5'
+        className='grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-6'
         onSubmit={(event) => {
           event.preventDefault()
           setApplied({ ...filters })
           setPage(1)
         }}
       >
-        {[
-          { name: 'user_id', label: t('User ID') },
-          { name: 'token_id', label: t('Key ID') },
-        ].map((field) => (
+        {(
+          [
+            { name: 'user_id', label: t('User ID') },
+            { name: 'token_id', label: t('Key ID') },
+          ] as const
+        ).map((field) => (
           <div key={field.name} className='space-y-2'>
             <Label htmlFor={`${id}-${field.name}`}>{field.label}</Label>
             <Input
@@ -195,7 +221,7 @@ export function EventsPanel() {
               type='number'
               min={1}
               step={1}
-              value={filters[field.name as 'user_id' | 'token_id']}
+              value={filters[field.name]}
               onChange={(event) =>
                 setFilters({ ...filters, [field.name]: event.target.value })
               }
@@ -244,6 +270,22 @@ export function EventsPanel() {
             </NativeSelectOption>
           </NativeSelect>
         </div>
+        <div className='space-y-2'>
+          <Label htmlFor={`${id}-state`}>{t('User status')}</Label>
+          <NativeSelect
+            id={`${id}-state`}
+            className='w-full'
+            value={filters.suspended}
+            onChange={(event) =>
+              setFilters({ ...filters, suspended: event.target.value })
+            }
+          >
+            <NativeSelectOption value=''>{t('All')}</NativeSelectOption>
+            <NativeSelectOption value='true'>
+              {t('API access paused')}
+            </NativeSelectOption>
+          </NativeSelect>
+        </div>
         <Button type='submit'>{t('Filter')}</Button>
       </form>
       {query.isPending && <LoadingState />}
@@ -263,166 +305,28 @@ export function EventsPanel() {
           />
         </>
       )}
+      <p className='text-muted-foreground text-sm'>
+        {t(
+          'Recorded violations count retained, deduplicated matches for this user. False positives are excluded. Only matching or failed inspections are logged.'
+        )}
+      </p>
+      <Collapsible>
+        <CollapsibleTrigger render={<Button variant='outline' />}>
+          {t('Manage paused users')}
+        </CollapsibleTrigger>
+        <CollapsibleContent className='pt-4'>
+          <RestrictionsPanel />
+        </CollapsibleContent>
+      </Collapsible>
       {detail && (
-        <Dialog
-          open
-          onOpenChange={(open) => {
-            if (!open) setDetail(null)
+        <EventDetailsDialog
+          event={detail}
+          onClose={() => setDetail(null)}
+          onAction={(next) => {
+            setAction(next)
+            setDetail(null)
           }}
-          title={t('Protection event details')}
-          description={t(
-            'Evidence excerpts are shown only when enabled at inspection time. Full request content is not stored.'
-          )}
-          footer={
-            <>
-              <Button
-                variant='outline'
-                onClick={() => {
-                  setAction({ kind: 'hold', event: detail.id })
-                  setDetail(null)
-                }}
-              >
-                {t('Pause this user')}
-              </Button>
-              {detail.review === 'pending' && (
-                <>
-                  <Button
-                    variant='outline'
-                    onClick={() => {
-                      setAction({
-                        kind: 'review',
-                        event: detail.id,
-                        verdict: 'false_positive',
-                      })
-                      setDetail(null)
-                    }}
-                  >
-                    {t('Mark false positive')}
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setAction({
-                        kind: 'review',
-                        event: detail.id,
-                        verdict: 'confirmed',
-                      })
-                      setDetail(null)
-                    }}
-                  >
-                    {t('Confirm violation')}
-                  </Button>
-                </>
-              )}
-            </>
-          }
-        >
-          <dl className='grid gap-3 text-sm break-words'>
-            <div>
-              <dt className='text-muted-foreground'>{t('Request ID')}</dt>
-              <dd>{detail.request_id}</dd>
-            </div>
-            <div>
-              <dt className='text-muted-foreground'>{t('User / Key')}</dt>
-              <dd>
-                {detail.username} #{detail.user_id} / {detail.token_name} #
-                {detail.token_id}
-              </dd>
-            </div>
-            <div>
-              <dt className='text-muted-foreground'>{t('Model / Group')}</dt>
-              <dd>
-                {detail.model} / {detail.group} · {detail.protocol}
-              </dd>
-            </div>
-            <div>
-              <dt className='text-muted-foreground'>{t('IP address')}</dt>
-              <dd>{detail.ip || '—'}</dd>
-            </div>
-            <div>
-              <dt className='text-muted-foreground'>{t('Channel')}</dt>
-              <dd>
-                {detail.channel_name || '—'} #{detail.channel_id || '—'}
-              </dd>
-            </div>
-            <div>
-              <dt className='text-muted-foreground'>
-                {t('Inspection result')}
-              </dt>
-              <dd>
-                <ProtectionLabel value={detail.finding || 'legacy_event'} /> ·{' '}
-                <ProtectionLabel value={detail.reason || 'legacy_event'} />
-              </dd>
-            </div>
-            <div>
-              <dt className='text-muted-foreground'>{t('Decision')}</dt>
-              <dd>
-                <ProtectionLabel value={detail.decision} /> ·{' '}
-                <ProtectionLabel value={detail.review} /> ·{' '}
-                <ProtectionLabel value={detail.upstream} />
-              </dd>
-            </div>
-            <div>
-              <dt className='text-muted-foreground'>
-                {t('Counted as a violation')}
-              </dt>
-              <dd>{detail.counted ? t('Yes') : t('No')}</dd>
-            </div>
-            {detail.uninspected && (
-              <div>
-                <dt className='text-muted-foreground'>
-                  {t('Incomplete inspection')}
-                </dt>
-                <dd>
-                  <ProtectionLabel value={detail.uninspected} />
-                </dd>
-              </div>
-            )}
-            <div>
-              <dt className='text-muted-foreground'>{t('Policy revision')}</dt>
-              <dd>{detail.revision}</dd>
-            </div>
-            <div>
-              <dt className='text-muted-foreground'>
-                {t('Content fingerprint')}
-              </dt>
-              <dd className='font-mono text-xs break-all'>{detail.digest}</dd>
-            </div>
-          </dl>
-          <div className='mt-5 space-y-3'>
-            <h4 className='font-medium'>{t('Matched rules')}</h4>
-            {detail.matches.length === 0 && <p>{t('No rules matched')}</p>}
-            {detail.matches.map((hit) => (
-              <div
-                key={`${hit.rule_id}-${hit.source}`}
-                className='space-y-1 rounded-lg border p-3 text-sm'
-              >
-                {hit.category && (
-                  <p>
-                    <ProtectionLabel value={hit.category} />
-                  </p>
-                )}
-                {hit.evidence && (
-                  <blockquote className='border-l-2 pl-3 break-words whitespace-pre-wrap'>
-                    {hit.evidence}
-                  </blockquote>
-                )}
-                <p className='font-medium break-words'>
-                  {hit.name} ({hit.rule_id})
-                </p>
-                <p>
-                  <ProtectionLabel value={hit.source} /> ·{' '}
-                  <ProtectionLabel value={hit.action} />
-                </p>
-                <p>
-                  {t('High-confidence rule')}:{' '}
-                  {hit.high_confidence ? t('Yes') : t('No')} ·{' '}
-                  {t('Count toward temporary restrictions')}:{' '}
-                  {hit.count_penalty ? t('Yes') : t('No')}
-                </p>
-              </div>
-            ))}
-          </div>
-        </Dialog>
+        />
       )}
       {action && (
         <ProtectionReviewDialog
@@ -432,25 +336,4 @@ export function EventsPanel() {
       )}
     </div>
   )
-}
-
-export function ProtectionPagination(props: {
-  page: number
-  total: number
-  onChange: (page: number) => void
-}) {
-  const pagination = { pageIndex: props.page - 1, pageSize: 20 }
-  const table = useReactTable({
-    data: [],
-    columns: [],
-    getCoreRowModel: getCoreRowModel(),
-    manualPagination: true,
-    rowCount: props.total,
-    state: { pagination },
-    onPaginationChange: (updater) => {
-      const next = typeof updater === 'function' ? updater(pagination) : updater
-      props.onChange(next.pageIndex + 1)
-    },
-  })
-  return <DataTablePagination table={table} compact />
 }

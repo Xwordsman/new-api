@@ -11,27 +11,31 @@ import (
 )
 
 type Event struct {
-	ChannelID   int    `json:"channel_id"`
-	IP          string `gorm:"size:64" json:"ip"`
-	Finding     string `gorm:"size:24" json:"finding"`
-	Reason      string `gorm:"size:64" json:"reason"`
-	ID          int64  `gorm:"primaryKey" json:"id"`
-	RequestHash string `gorm:"size:64;uniqueIndex" json:"-"`
-	RequestID   string `gorm:"size:100" json:"request_id"`
-	UserID      int    `gorm:"index:idx_rp_user_time,priority:1" json:"user_id"`
-	TokenID     int    `gorm:"index" json:"token_id"`
-	CreatedAt   int64  `gorm:"index:idx_rp_user_time,priority:2;index" json:"created_at"`
-	Revision    int64  `json:"revision"`
-	GroupName   string `gorm:"size:191" json:"group"`
-	Model       string `gorm:"size:191" json:"model"`
-	Protocol    string `gorm:"size:40" json:"protocol"`
-	Decision    string `gorm:"size:24;index" json:"decision"`
-	Hits        string `gorm:"type:text" json:"-"`
-	Digest      string `gorm:"size:64;index" json:"digest"`
-	Counted     bool   `json:"counted"`
-	Review      string `gorm:"size:24;index" json:"review"`
-	Uninspected string `gorm:"size:40" json:"uninspected"`
-	Upstream    string `gorm:"size:24" json:"upstream"`
+	RequestContent   string `gorm:"type:text" json:"-"`
+	Preview          string `gorm:"type:text" json:"preview"`
+	ContentTruncated bool   `json:"content_truncated"`
+	ContentRedacted  bool   `json:"content_redacted"`
+	ChannelID        int    `json:"channel_id"`
+	IP               string `gorm:"size:64" json:"ip"`
+	Finding          string `gorm:"size:24" json:"finding"`
+	Reason           string `gorm:"size:64" json:"reason"`
+	ID               int64  `gorm:"primaryKey" json:"id"`
+	RequestHash      string `gorm:"size:64;uniqueIndex" json:"-"`
+	RequestID        string `gorm:"size:100" json:"request_id"`
+	UserID           int    `gorm:"index:idx_rp_user_time,priority:1" json:"user_id"`
+	TokenID          int    `gorm:"index" json:"token_id"`
+	CreatedAt        int64  `gorm:"index:idx_rp_user_time,priority:2;index" json:"created_at"`
+	Revision         int64  `json:"revision"`
+	GroupName        string `gorm:"size:191" json:"group"`
+	Model            string `gorm:"size:191" json:"model"`
+	Protocol         string `gorm:"size:40" json:"protocol"`
+	Decision         string `gorm:"size:24;index" json:"decision"`
+	Hits             string `gorm:"type:text" json:"-"`
+	Digest           string `gorm:"size:64;index" json:"digest"`
+	Counted          bool   `json:"counted"`
+	Review           string `gorm:"size:24;index" json:"review"`
+	Uninspected      string `gorm:"size:40" json:"uninspected"`
+	Upstream         string `gorm:"size:24" json:"upstream"`
 }
 
 func (Event) TableName() string { return "extension_request_events" }
@@ -181,14 +185,32 @@ func Record(db *gorm.DB, s Settings, in Input, v Verdict, secret string, now int
 			}
 			counted = n == 0
 		}
-		hits, err := common.Marshal(v.Hits)
+		safeHits := make([]Hit, len(v.Hits))
+		for index, hit := range v.Hits {
+			hit.Matched = bounded(strings.ReplaceAll(Redact(hit.Matched), "\x00", `\u0000`), 400)
+			hit.Evidence = bounded(strings.ReplaceAll(Redact(hit.Evidence), "\x00", `\u0000`), 600)
+			safeHits[index] = hit
+		}
+		hits, err := common.Marshal(safeHits)
 		if err != nil {
 			return err
 		}
+		// JSON escaping can expand evidence beyond MySQL TEXT's byte limit.
+		for len(hits) > 60000 {
+			safeHits = safeHits[:len(safeHits)-1]
+			hits, err = common.Marshal(append(safeHits, Hit{RuleID: "more-matches", Name: "Additional matches omitted", Source: "current", Action: "observe"}))
+			if err != nil {
+				return err
+			}
+		}
 		e := Event{ChannelID: in.ChannelID, IP: bounded(in.IP, 64), Finding: v.Finding, Reason: v.Reason, RequestHash: hash, RequestID: bounded(in.RequestID, 100), UserID: in.UserID, TokenID: in.TokenID, CreatedAt: now, Revision: s.Revision,
 			GroupName: bounded(in.Group, 191), Model: bounded(in.Model, 191), Protocol: bounded(in.Protocol, 40), Decision: v.Decision, Hits: string(hits), Digest: v.Digest, Counted: counted, Review: "pending", Uninspected: v.Uninspected, Upstream: "not_sent"}
+		e.RequestContent, e.Preview, e.ContentTruncated, e.ContentRedacted = RequestEvidence(in)
 		if old.ID > 0 {
 			e.ID = old.ID
+			if err = tx.Model(&Event{}).Where("id = ?", old.ID).Updates(map[string]any{"request_content": e.RequestContent, "preview": e.Preview, "content_truncated": e.ContentTruncated, "content_redacted": e.ContentRedacted}).Error; err != nil {
+				return err
+			}
 			if err = tx.Model(&Event{}).Where("id = ?", old.ID).Updates(map[string]any{"decision": e.Decision, "hits": e.Hits, "counted": e.Counted, "review": "pending", "group_name": e.GroupName, "model": e.Model, "digest": e.Digest, "revision": e.Revision, "uninspected": e.Uninspected, "finding": e.Finding, "reason": e.Reason, "channel_id": e.ChannelID, "ip": e.IP}).Error; err != nil {
 				return err
 			}
@@ -198,6 +220,24 @@ func Record(db *gorm.DB, s Settings, in Input, v Verdict, secret string, now int
 			}
 		}
 		result.EventID = e.ID
+		if s.AutomaticSuspend && s.Mode == "enforce" && v.Decision == "block" && v.ImmediateSuspend && v.Eligible {
+			until := now + int64(s.UserSuspendMinutes)*60
+			if s.SuspendUntilReview {
+				until = ManualHoldUntil
+			}
+			id := fmt.Sprintf("user:%d", in.UserID)
+			changed := tx.Model(&Subject{}).Where("id = ? AND expires_at < ? AND watermark < ?", id, until, e.ID).
+				Updates(map[string]any{"expires_at": until, "started_at": now, "cause_event_id": e.ID, "threshold": 0, "window_minutes": 0})
+			if changed.Error != nil {
+				return changed.Error
+			}
+			if changed.RowsAffected > 0 {
+				result.RestrictedUntil = until
+				if err = tx.Create(&Audit{CreatedAt: now, Action: "keyword_suspend", EventID: e.ID, SubjectID: id, Revision: s.Revision}).Error; err != nil {
+					return err
+				}
+			}
+		}
 		if !counted || !s.AutomaticSuspend {
 			return nil
 		}
@@ -243,6 +283,9 @@ func Record(db *gorm.DB, s Settings, in Input, v Verdict, secret string, now int
 				continue
 			}
 			until := now + int64(scope.minutes)*60
+			if scope.tokenID == 0 && s.SuspendUntilReview {
+				until = ManualHoldUntil
+			}
 			if err = tx.Model(&Subject{}).Where("id = ?", scope.id).Updates(map[string]any{"expires_at": until, "started_at": now, "cause_event_id": e.ID, "threshold": scope.threshold, "window_minutes": s.WindowMinutes}).Error; err != nil {
 				return err
 			}
@@ -372,6 +415,11 @@ func Review(db *gorm.DB, id int64, actor int, verdict, note string, now int64) e
 					continue
 				} else if err != nil {
 					return err
+				}
+				// Immediate keyword holds belong to their triggering event. An
+				// unrelated false positive must not release a different violation.
+				if state.Threshold == 0 && (state.CauseEventID != event.ID || cause.Counted) {
+					continue
 				}
 				q := tx.Model(&Event{}).Where("user_id = ? AND counted = ? AND created_at > ? AND created_at <= ? AND id > ? AND id <= ?", event.UserID, true, cause.CreatedAt-int64(state.WindowMinutes)*60, cause.CreatedAt, state.Watermark, cause.ID)
 				if state.TokenID > 0 {

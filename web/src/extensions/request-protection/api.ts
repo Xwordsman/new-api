@@ -28,10 +28,31 @@ import type {
   ProtectionSettings,
   ProtectionVerdict,
   ProtectionChannel,
+  ProtectionEventDetails,
 } from './types'
 
 type Envelope<T> = { success: boolean; message: string; data: T }
 const base = '/api/extensions/request-protection/admin'
+
+export async function getEventDetails(
+  id: number
+): Promise<ProtectionEventDetails> {
+  return requireServerSuccess(
+    (await api.get<Envelope<ProtectionEventDetails>>(`${base}/events/${id}`))
+      .data
+  ).data
+}
+export async function getDefaultKeywords(): Promise<
+  ProtectionSettings['keywords']
+> {
+  return requireServerSuccess(
+    (
+      await api.get<Envelope<ProtectionSettings['keywords']>>(
+        `${base}/keywords`
+      )
+    ).data
+  ).data
+}
 
 export async function getChannels(): Promise<ProtectionChannel[]> {
   return requireServerSuccess(

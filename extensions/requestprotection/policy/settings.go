@@ -37,6 +37,8 @@ type Rule struct {
 }
 
 type Settings struct {
+	Keywords            KeywordSettings  `json:"keywords"`
+	SuspendUntilReview  bool             `json:"suspend_until_review"`
 	ChannelIDs          []int            `json:"channel_ids"`
 	Categories          Categories       `json:"categories"`
 	Reviewer            ReviewerSettings `json:"reviewer"`
@@ -93,7 +95,7 @@ type option struct {
 func (option) TableName() string { return "options" }
 
 func Defaults() Settings {
-	return Settings{Mode: "observe", Groups: []string{}, Models: []string{}, Protocols: []string{}, ExemptUserIDs: []int{}, ChannelIDs: []int{},
+	return Settings{Keywords: DefaultKeywords(), Mode: "observe", Groups: []string{}, Models: []string{}, Protocols: []string{}, ExemptUserIDs: []int{}, ChannelIDs: []int{},
 		Categories: Categories{Jailbreak: true, Theft: true, Attack: true, Sexual: true}, Reviewer: ReviewerSettings{TimeoutSeconds: 20, FailureAction: "block"},
 		MaxBodyBytes: 2 * 1024 * 1024, MaxTextBytes: 256 * 1024, UninspectedAction: "observe", UpstreamAction: "observe", FailClosed: true,
 		WindowMinutes: 10, KeyThreshold: 0, KeySuspendMinutes: 30, UserThreshold: 0, UserSuspendMinutes: 60,
@@ -108,6 +110,9 @@ func Defaults() Settings {
 }
 
 func Validate(s Settings) error {
+	if err := s.Keywords.Validate(); err != nil {
+		return err
+	}
 	if len(s.ChannelIDs) > 100 || s.Reviewer.ChannelID < 0 || len(s.Reviewer.Model) > 191 || strings.TrimSpace(s.Reviewer.Model) != s.Reviewer.Model ||
 		s.Reviewer.TimeoutSeconds < 1 || s.Reviewer.TimeoutSeconds > 60 || !slices.Contains([]string{"observe", "block"}, s.Reviewer.FailureAction) ||
 		(s.Reviewer.Enabled && (s.Reviewer.ChannelID == 0 || s.Reviewer.Model == "" || slices.Contains(s.ChannelIDs, s.Reviewer.ChannelID))) {
