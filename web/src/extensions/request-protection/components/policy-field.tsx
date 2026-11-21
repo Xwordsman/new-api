@@ -107,7 +107,13 @@ export function PolicyField(props: {
               ref={field.ref}
               onBlur={field.onBlur}
               value={String(field.value)}
-              onChange={field.onChange}
+              onChange={(event) =>
+                field.onChange(
+                  props.kind === 'number'
+                    ? Number(event.target.value)
+                    : event.target.value
+                )
+              }
               disabled={props.disabled}
               className='w-full'
             >

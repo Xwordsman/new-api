@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/extensions/requestprotection/policy"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
@@ -44,7 +45,6 @@ func CheckRequestProtection(c *gin.Context, info *relaycommon.RelayInfo) *types.
 	if !requestProtectionInstalled.Load() || model.DB == nil || info.UserId <= 0 || info.IsChannelTest {
 		return nil
 	}
-	marker := "request-protection:" + info.RequestId + ":" + info.OriginModelName + ":" + info.UsingGroup
 	db := model.DB.WithContext(c.Request.Context())
 	s, err := policy.GetSettings(db)
 	if err != nil {
@@ -54,6 +54,14 @@ func CheckRequestProtection(c *gin.Context, info *relaycommon.RelayInfo) *types.
 	if !s.Enabled {
 		return nil
 	}
+	channelID, businessBase := info.GetChannelID(), ""
+	if info.ChannelMeta != nil {
+		businessBase = info.ChannelBaseUrl
+	}
+	if selected := common.GetContextKeyInt(c, constant.ContextKeyChannelId); selected > 0 {
+		channelID, businessBase = selected, common.GetContextKeyString(c, constant.ContextKeyChannelBaseUrl)
+	}
+	marker := "request-protection:" + info.RequestId + ":" + info.OriginModelName + ":" + info.UsingGroup + ":" + strconv.Itoa(channelID) + ":" + strconv.FormatInt(s.Revision, 10)
 	var pendingErr error
 	pendingProtectionSafety.Range(func(key, value any) bool {
 		item := value.(pendingSafety)
@@ -67,7 +75,7 @@ func CheckRequestProtection(c *gin.Context, info *relaycommon.RelayInfo) *types.
 		return requestProtectionUnavailable(c, true, pendingErr)
 	}
 	now := time.Now().Unix()
-	in := policy.Input{UserID: info.UserId, TokenID: info.TokenId, RequestID: info.RequestId, Group: info.UsingGroup, Model: info.OriginModelName, Protocol: string(info.RelayFormat)}
+	in := policy.Input{ChannelID: channelID, IP: c.ClientIP(), UserID: info.UserId, TokenID: info.TokenId, RequestID: info.RequestId, Group: info.UsingGroup, Model: info.OriginModelName, Protocol: string(info.RelayFormat)}
 	if in.RequestID == "" {
 		in.RequestID = c.GetString(common.RequestIdKey)
 	}
@@ -86,6 +94,11 @@ func CheckRequestProtection(c *gin.Context, info *relaycommon.RelayInfo) *types.
 	// Restrictions are deliberately checked again even after this request's
 	// content was inspected: another in-flight call may have created a hold.
 	if done, _ := c.Get(marker); done == true {
+		return nil
+	}
+	// Channel-scoped requests are checked after routing, before the selected
+	// channel is invoked. Do not apply a protected channel's policy to others.
+	if in.ChannelID == 0 && (len(s.ChannelIDs) > 0 || s.Reviewer.Enabled) {
 		return nil
 	}
 	// Auto routing is checked conservatively against any selectable scoped
@@ -164,6 +177,9 @@ func CheckRequestProtection(c *gin.Context, info *relaycommon.RelayInfo) *types.
 		}
 	}
 	v := policy.Inspect(s, in, common.SessionSecret)
+	if in.ChannelID > 0 {
+		v = ReviewRequestProtection(c.Request.Context(), s, in, v, businessBase)
+	}
 	result, err := policy.Record(db, s, in, v, common.SessionSecret, now)
 	if err != nil {
 		return requestProtectionUnavailable(c, s.FailClosed, err)
@@ -172,6 +188,9 @@ func CheckRequestProtection(c *gin.Context, info *relaycommon.RelayInfo) *types.
 		c.Set("request-protection-event:"+info.RequestId, result.EventID)
 	}
 	if result.Decision == "block" {
+		if result.Finding == "check_failed" || result.Finding == "review_needed" {
+			return types.NewErrorWithStatusCode(errors.New(i18n.T(c, "request_protection.review_required")), types.ErrorCode("request_protection_review_required"), http.StatusServiceUnavailable, types.ErrOptionWithSkipRetry())
+		}
 		RequestPolicy(c).AddEvent(PolicyEvent{ErrorCode: "request_protection_blocked", ErrorSource: "local", Decision: PolicyDecision{Action: "stop", Reason: "local_rejection", Source: "request_protection"}, Health: "unchanged"})
 		return types.NewErrorWithStatusCode(errors.New(i18n.T(c, "request_protection.blocked")), types.ErrorCode("request_protection_blocked"), http.StatusForbidden, types.ErrOptionWithSkipRetry())
 	}
@@ -200,7 +219,7 @@ func MarkRequestProtectionForwarded(c *gin.Context, info *relaycommon.RelayInfo)
 	if !ok || id <= 0 {
 		return
 	}
-	if err := model.DB.WithContext(c.Request.Context()).Model(&policy.Event{}).Where("id = ? AND upstream = ?", id, "not_sent").Update("upstream", "attempted").Error; err != nil {
+	if err := model.DB.WithContext(c.Request.Context()).Model(&policy.Event{}).Where("id = ?", id).Updates(map[string]any{"upstream": "attempted", "channel_id": info.GetChannelID()}).Error; err != nil {
 		common.SysError("request protection forwarding audit failed: " + err.Error())
 	}
 }
@@ -233,7 +252,7 @@ func RecordRequestProtectionSafety(c *gin.Context, info *relaycommon.RelayInfo, 
 	if code == "" {
 		return
 	}
-	in := policy.Input{UserID: info.UserId, TokenID: info.TokenId, RequestID: info.RequestId + ":upstream:" + code, Model: info.OriginModelName, Group: info.UsingGroup, Protocol: string(info.RelayFormat)}
+	in := policy.Input{ChannelID: info.GetChannelID(), IP: c.ClientIP(), UserID: info.UserId, TokenID: info.TokenId, RequestID: info.RequestId + ":upstream:" + code, Model: info.OriginModelName, Group: info.UsingGroup, Protocol: string(info.RelayFormat)}
 	if !policy.InScope(s, in) {
 		return
 	}

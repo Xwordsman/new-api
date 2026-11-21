@@ -151,12 +151,13 @@ const (
 
 // Protection errors and alert emails translated by the backend.
 const (
-	MsgRegistrationRiskAlertSubject = "registration_risk.alert_subject"
-	MsgRequestProtectionBlocked     = "request_protection.blocked"
-	MsgRequestProtectionRestricted  = "request_protection.restricted"
-	MsgRequestProtectionUnavailable = "request_protection.unavailable"
-	MsgRequestProtectionSubject     = "request_protection.subject"
-	MsgRequestProtectionAlert       = "request_protection.alert"
+	MsgRegistrationRiskAlertSubject    = "registration_risk.alert_subject"
+	MsgRequestProtectionBlocked        = "request_protection.blocked"
+	MsgRequestProtectionRestricted     = "request_protection.restricted"
+	MsgRequestProtectionUnavailable    = "request_protection.unavailable"
+	MsgRequestProtectionReviewRequired = "request_protection.review_required"
+	MsgRequestProtectionSubject        = "request_protection.subject"
+	MsgRequestProtectionAlert          = "request_protection.alert"
 )
 
 // These English source keys are also web console message keys. Keep their

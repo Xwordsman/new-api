@@ -13,10 +13,12 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/extensions/requestprotection"
 	"github.com/QuantumNous/new-api/extensions/requestprotection/policy"
 	"github.com/QuantumNous/new-api/i18n"
@@ -83,11 +85,12 @@ func protectionDB(t *testing.T) *gorm.DB {
 		common.RedisEnabled, common.BatchUpdateEnabled, common.CriticalRateLimitEnable = oldRedis, oldBatch, oldRate
 		common.SessionSecret, common.SessionCookieSecure, common.SessionCookieTrustedURLs = oldSecret, oldSecure, oldTrusted
 	})
-	for _, table := range []any{&policy.Event{}, &policy.Subject{}, &policy.Audit{}, &policy.Alert{}, &model.UserSession{}, &model.UserAccessToken{}, &model.AuditLog{}, &model.Token{}, &model.User{}, &model.Option{}} {
+	for _, table := range []any{&policy.Event{}, &policy.Subject{}, &policy.Audit{}, &policy.Alert{}, &model.Channel{}, &model.UserSession{}, &model.UserAccessToken{}, &model.AuditLog{}, &model.Token{}, &model.User{}, &model.Option{}} {
 		require.NoError(t, db.Migrator().DropTable(table))
 	}
-	require.NoError(t, db.AutoMigrate(&model.User{}, &model.Token{}, &model.Option{}, &model.UserSession{}, &model.UserAccessToken{}, &model.AuditLog{}))
+	require.NoError(t, db.AutoMigrate(&model.User{}, &model.Token{}, &model.Option{}, &model.UserSession{}, &model.UserAccessToken{}, &model.AuditLog{}, &model.Channel{}))
 	require.NoError(t, policy.Migrate(db))
+	require.NoError(t, policy.Migrate(db), "fresh schema migration must be idempotent")
 	service.InstallRequestProtection()
 	return db
 }
@@ -95,6 +98,7 @@ func protectionDB(t *testing.T) *gorm.DB {
 func blockingSettings() policy.Settings {
 	s := policy.Defaults()
 	s.Enabled, s.Mode = true, "enforce"
+	s.AutomaticSuspend, s.KeyThreshold, s.UserThreshold = true, 3, 10
 	s.Rules = []policy.Rule{{ID: "explicit-test", Name: "Explicit instruction override", Enabled: true, Kind: "all", Patterns: []string{"override instructions", "unrestricted"}, Sources: []string{"current", "system", "history", "tool"}, Action: "block", HighConfidence: true, CountPenalty: true}}
 	return s
 }
@@ -275,6 +279,7 @@ func TestUpstreamSafetyFormatsCreateHoldsAndCachedChecksStillEnforceThem(t *test
 		`{"output_text":"session_blocked_by_cyber_policy"}`,
 		`{"type":"response.output_text.delta","delta":"content_filter"}`,
 		`{"error":{"code":"rate_limit_exceeded","message":"cybersecurity risk"}}`,
+		`{"choices":[{"finish_reason":"content_filter"}]}`,
 	} {
 		service.ObserveRequestProtectionSafety(c, info, data)
 	}
@@ -285,7 +290,6 @@ func TestUpstreamSafetyFormatsCreateHoldsAndCachedChecksStillEnforceThem(t *test
 		{"nested", `{"type":"response.failed","response":{"error":{"code":"session_blocked_by_cyber_policy","type":"invalid_request_error"}}}`},
 		{"top-level", `{"type":"error","code":"session_blocked_by_cyber_policy"}`},
 		{"error-type", `{"error":{"code":"unknown","type":"SESSION_BLOCKED_BY_CYBER_POLICY"}}`},
-		{"finish", `{"choices":[{"finish_reason":"content_filter"}]}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			info.RequestId = tc.name
@@ -471,6 +475,9 @@ func TestAdminSessionOriginCASAndDryRunContracts(t *testing.T) {
 		{"GET", "/settings", "", "", 401},
 		{"GET", "/settings", admin, "", 403},
 		{"GET", "/settings", root, "", 200},
+		{"GET", "/channels", admin, "", 403},
+		{"POST", "/hold", root, "", 403},
+		{"POST", "/hold", root, "http://evil.example", 403},
 		{"PUT", "/settings", root, "", 403},
 		{"POST", "/dry-run", root, "http://evil.example", 403},
 		{"POST", "/release", root, "null", 403},
@@ -485,6 +492,9 @@ func TestAdminSessionOriginCASAndDryRunContracts(t *testing.T) {
 	hash := sha256.Sum256([]byte(patRaw))
 	require.NoError(t, db.Create(&model.UserAccessToken{UserId: rootUser.Id, Name: "automation", TokenHash: hex.EncodeToString(hash[:]), TokenHint: "test", Scopes: `["option:read","option:write"]`, ExpiresAt: time.Now().Unix() + 3600}).Error)
 	w = request("GET", "/settings", patRaw, "", nil)
+	assert.Equal(t, 403, w.Code)
+	assert.Contains(t, w.Body.String(), "AUTH_SESSION_REQUIRED")
+	w = request("POST", "/hold", patRaw, "http://protection.example", map[string]any{"event_id": 1, "note": "review"})
 	assert.Equal(t, 403, w.Code)
 	assert.Contains(t, w.Body.String(), "AUTH_SESSION_REQUIRED")
 	legacy := "legacy_request_protection_test"
@@ -506,6 +516,28 @@ func TestAdminSessionOriginCASAndDryRunContracts(t *testing.T) {
 	assert.Zero(t, count, "dry run writes no events")
 	require.NoError(t, db.Model(&policy.Subject{}).Count(&count).Error)
 	assert.Zero(t, count, "dry run cannot suspend an account")
+	require.NoError(t, db.Create(&model.Channel{Id: 9, Type: 1, Name: "Reviewer", Key: "never-display-secret", Status: common.ChannelStatusEnabled, Models: "review-model"}).Error)
+	w = request("GET", "/channels", root, "", nil)
+	assert.Contains(t, w.Body.String(), `"name":"Reviewer"`)
+	assert.NotContains(t, w.Body.String(), "never-display-secret")
+	assert.NotContains(t, w.Body.String(), `"key"`)
+	event := policy.Event{UserID: 43, TokenID: 8, RequestID: "manual-review", RequestHash: "manual-event", Hits: "[]"}
+	require.NoError(t, db.Create(&event).Error)
+	w = request("POST", "/hold", root, "http://protection.example", map[string]any{"event_id": event.ID, "note": ""})
+	assert.Contains(t, w.Body.String(), `"success":false`)
+	w = request("POST", "/hold", root, "http://protection.example", map[string]any{"event_id": event.ID, "note": "Reviewed incident"})
+	assert.Contains(t, w.Body.String(), `"success":true`)
+	until, err := policy.ActiveRestriction(db, 43, 8, time.Now().Unix())
+	require.NoError(t, err)
+	assert.Equal(t, policy.ManualHoldUntil, until)
+	until, err = policy.ActiveRestriction(db, 44, 9, time.Now().Unix())
+	require.NoError(t, err)
+	assert.Zero(t, until)
+	var manualAudit policy.Audit
+	require.NoError(t, db.Where("action = ? AND event_id = ?", "manual_hold", event.ID).Take(&manualAudit).Error)
+	assert.Equal(t, rootUser.Id, manualAudit.ActorID)
+	assert.Equal(t, "Reviewed incident", manualAudit.Note)
+	require.NoError(t, policy.Release(db, "user:43", rootUser.Id, "Resolved", time.Now().Unix()))
 	require.NoError(t, db.Create(&[]policy.Subject{
 		{ID: "group:legacy", Until: policy.ManualHoldUntil},
 		{ID: "user:42", UserID: 42, Until: policy.ManualHoldUntil},
@@ -635,6 +667,252 @@ func TestResponsesWebSocketInspectsEachNormalizedCreateWithCachedBody(t *testing
 	assert.Equal(t, "block", events[2].Decision)
 	_, _, err = conn.ReadMessage()
 	assert.True(t, websocket.IsCloseError(err, websocket.ClosePolicyViolation))
+}
+
+func TestSemanticAssessmentSeparatesViolationsFromUncertainty(t *testing.T) {
+	s := policy.Defaults()
+	s.Enabled, s.Mode, s.StoreEvidence = true, "enforce", true
+	in := requestInput("semantic", 7, "malicious test instruction")
+	in.Segments = append(in.Segments, policy.Segment{Source: "history", Text: "historical attack example"})
+	for _, tc := range []struct {
+		name, verdict, category, source, evidence, decision, finding string
+		eligible                                                     bool
+	}{
+		{"greeting", "allow", "", "", "", "allow", "clear", false},
+		{"current violation", "unsafe", "attack", "current", "malicious test instruction", "block", "violation", true},
+		{"history alone", "unsafe", "attack", "history", "historical attack example", "block", "review_needed", false},
+		{"uncertain without category", "uncertain", "", "", "", "block", "review_needed", false},
+		{"invented evidence", "unsafe", "attack", "current", "absent quote", "block", "check_failed", false},
+		{"invalid category", "unsafe", "unknown", "current", "malicious test instruction", "block", "check_failed", false},
+		{"invalid source", "uncertain", "attack", "unknown", "", "block", "check_failed", false},
+		{"inconsistent allow", "allow", "attack", "current", "malicious test instruction", "block", "check_failed", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			v := policy.ApplyAssessment(s, in, policy.Inspect(s, in, "test"), policy.Assessment{Verdict: tc.verdict, Category: tc.category, Source: tc.source, Evidence: tc.evidence})
+			assert.Equal(t, tc.decision, v.Decision)
+			assert.Equal(t, tc.finding, v.Finding)
+			assert.Equal(t, tc.eligible, v.Eligible)
+		})
+	}
+	a := policy.Assessment{Verdict: "unsafe", Category: "attack", Source: "current", Evidence: "malicious test instruction"}
+	s.Categories.Attack = false
+	assert.Equal(t, "allow", policy.ApplyAssessment(s, in, policy.Inspect(s, in, "test"), a).Decision)
+	s.Categories.Attack, s.StoreEvidence, s.Mode = true, false, "observe"
+	v := policy.ApplyAssessment(s, in, policy.Inspect(s, in, "test"), a)
+	assert.Equal(t, "observe", v.Decision)
+	assert.False(t, v.Eligible)
+	require.Len(t, v.Hits, 1)
+	assert.Empty(t, v.Hits[0].Evidence)
+	s.Mode, s.Reviewer.FailureAction = "enforce", "observe"
+	v = policy.ApplyAssessment(s, in, policy.Inspect(s, in, "test"), policy.Assessment{Verdict: "uncertain"})
+	assert.Equal(t, "observe", v.Decision)
+	assert.False(t, v.Eligible)
+}
+
+func TestSemanticReviewerBlocksFirstRequestBeforeBillingAndDoesNotSuspend(t *testing.T) {
+	db := protectionDB(t)
+	var calls atomic.Int32
+	reviewer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		assert.Equal(t, "/v1/chat/completions", r.URL.Path)
+		assert.Equal(t, "Bearer review-only-secret", r.Header.Get("Authorization"))
+		assert.Empty(t, r.Header.Get("Cookie"))
+		var payload struct {
+			Model    string `json:"model"`
+			Messages []struct {
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		if err := common.DecodeJson(r.Body, &payload); !assert.NoError(t, err) {
+			return
+		}
+		assert.Equal(t, "mapped-review", payload.Model)
+		if !assert.Len(t, payload.Messages, 2) {
+			return
+		}
+		assessment := policy.Assessment{Verdict: "allow"}
+		if strings.Contains(payload.Messages[1].Content, "malicious test instruction") {
+			assessment = policy.Assessment{Verdict: "unsafe", Category: "attack", Source: "current", Evidence: "malicious test instruction"}
+		}
+		content, err := common.Marshal(assessment)
+		if !assert.NoError(t, err) {
+			return
+		}
+		response, err := common.Marshal(map[string]any{"choices": []any{map[string]any{"finish_reason": "stop", "message": map[string]string{"content": string(content)}}}})
+		if assert.NoError(t, err) {
+			_, _ = w.Write(response)
+		}
+	}))
+	defer reviewer.Close()
+	base, mapping := reviewer.URL, `{"review-model":"mapped-review"}`
+	require.NoError(t, db.Create(&model.Channel{Id: 900, Type: 1, Name: "review", Key: "review-only-secret", Models: "review-model", ModelMapping: &mapping, Status: common.ChannelStatusEnabled, BaseURL: &base}).Error)
+	s := policy.Defaults()
+	s.Enabled, s.Mode, s.StoreEvidence = true, "enforce", true
+	s.ChannelIDs = []int{5}
+	s.Reviewer = policy.ReviewerSettings{Enabled: true, ChannelID: 900, Model: "review-model", TimeoutSeconds: 5, FailureAction: "block"}
+	_, err := policy.SaveSettings(db, s, 1, time.Now().Unix())
+	require.NoError(t, err)
+	for index, text := range []string{"hi", "malicious test instruction"} {
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+		body, err := common.Marshal(map[string]any{"messages": []map[string]string{{"role": "user", "content": text}}})
+		require.NoError(t, err)
+		c.Request = httptest.NewRequest("POST", "/v1/chat/completions", bytes.NewReader(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Request.RemoteAddr = "192.0.2.10:1234"
+		info := &relaycommon.RelayInfo{UserId: 42, TokenId: 7, RequestId: fmt.Sprintf("review-%d", index), OriginModelName: "gpt-4.1", UsingGroup: "default", RelayFormat: types.RelayFormatOpenAI}
+		require.Nil(t, service.CheckRequestProtection(c, info), "review waits until the business channel is known")
+		assert.EqualValues(t, index, calls.Load())
+		c.Set(string(constant.ContextKeyChannelId), 5)
+		c.Set(string(constant.ContextKeyChannelBaseUrl), "https://business.example")
+		if index == 0 {
+			require.Nil(t, service.CheckRequestProtection(c, info))
+			require.Nil(t, service.CheckRequestProtection(c, info), "same request is not reviewed twice")
+		} else {
+			blocked := relay.PrepareRequestBilling(c, info)
+			require.NotNil(t, blocked)
+			assert.Equal(t, types.ErrorCode("request_protection_blocked"), blocked.GetErrorCode())
+			assert.True(t, types.IsSkipRetryError(blocked))
+			assert.Nil(t, info.Billing)
+		}
+		common.CleanupBodyStorage(c)
+	}
+	assert.EqualValues(t, 2, calls.Load())
+	var events []policy.Event
+	require.NoError(t, db.Find(&events).Error)
+	require.Len(t, events, 1)
+	assert.Equal(t, "not_sent", events[0].Upstream)
+	assert.Equal(t, "192.0.2.10", events[0].IP)
+	assert.Equal(t, 5, events[0].ChannelID)
+	assert.True(t, events[0].Counted)
+	assert.Contains(t, events[0].Hits, "malicious test instruction")
+	until, err := policy.ActiveRestriction(db, 42, 7, time.Now().Unix())
+	require.NoError(t, err)
+	assert.Zero(t, until, "blocking a request does not suspend an account by default")
+}
+
+func TestSemanticReviewerFailureIsolationAndResponseContract(t *testing.T) {
+	db := protectionDB(t)
+	s := policy.Defaults()
+	s.Enabled, s.Mode = true, "enforce"
+	s.Reviewer = policy.ReviewerSettings{Enabled: true, ChannelID: 900, Model: "review-model", TimeoutSeconds: 5, FailureAction: "block"}
+	in := requestInput("failure", 7, "hi")
+	in.ChannelID = 5
+	for _, tc := range []struct {
+		name, body, baseSuffix, business string
+		status                           int
+		finding, reason                  string
+	}{
+		{"valid allow", `{"choices":[{"finish_reason":"stop","message":{"content":"{\"verdict\":\"allow\",\"category\":\"\",\"source\":\"\",\"evidence\":\"\"}"}}]}`, "/v1", "https://business.example", 200, "clear", ""},
+		{"malformed JSON", `{`, "", "https://business.example", 200, "check_failed", "invalid_review"},
+		{"truncated", `{"choices":[{"finish_reason":"length","message":{"content":"{}"}}]}`, "", "https://business.example", 200, "check_failed", "invalid_review"},
+		{"extra field", `{"choices":[{"finish_reason":"stop","message":{"content":"{\"verdict\":\"allow\",\"category\":\"\",\"source\":\"\",\"evidence\":\"\",\"extra\":\"x\"}"}}]}`, "", "https://business.example", 200, "check_failed", "invalid_review"},
+		{"HTTP error", "sensitive provider error", "", "https://business.example", 500, "check_failed", "reviewer_unavailable"},
+		{"redirect refused", "", "", "https://business.example", 302, "check_failed", "reviewer_unavailable"},
+		{"same provider host", "", "", "http://127.0.0.1:99", 200, "check_failed", "reviewer_not_independent"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				w.Header().Set("Location", "/never-follow")
+				w.WriteHeader(tc.status)
+				_, _ = io.WriteString(w, tc.body)
+			}))
+			defer server.Close()
+			base := server.URL + tc.baseSuffix
+			require.NoError(t, db.Where("id = ?", 900).Delete(&model.Channel{}).Error)
+			require.NoError(t, db.Create(&model.Channel{Id: 900, Type: 1, Status: common.ChannelStatusEnabled, Key: "review-secret", Models: "review-model", BaseURL: &base}).Error)
+			v := service.ReviewRequestProtection(context.Background(), s, in, policy.Inspect(s, in, "test"), tc.business)
+			assert.Equal(t, tc.finding, v.Finding)
+			assert.Equal(t, tc.reason, v.Reason)
+			assert.False(t, v.Eligible)
+			if tc.finding == "check_failed" {
+				assert.Equal(t, "block", v.Decision)
+			}
+			if tc.reason == "reviewer_not_independent" {
+				assert.Zero(t, calls.Load())
+			} else {
+				assert.EqualValues(t, 1, calls.Load())
+			}
+		})
+	}
+	in.ChannelID = 900
+	v := service.ReviewRequestProtection(context.Background(), s, in, policy.Inspect(s, in, "test"), "")
+	assert.Equal(t, "reviewer_not_independent", v.Reason)
+	in.ChannelID, s.Reviewer.Model = 5, "unlisted-model"
+	v = service.ReviewRequestProtection(context.Background(), s, in, policy.Inspect(s, in, "test"), "")
+	assert.Equal(t, "reviewer_unavailable", v.Reason)
+	s.Reviewer.Model = "review-model"
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	v = service.ReviewRequestProtection(ctx, s, in, policy.Inspect(s, in, "test"), "")
+	assert.Equal(t, "check_failed", v.Finding)
+	assert.False(t, v.Eligible)
+	s.ChannelIDs = []int{6}
+	v = service.ReviewRequestProtection(context.Background(), s, in, policy.Inspect(s, in, "test"), "")
+	assert.Equal(t, "allow", v.Decision, "out-of-scope calls never invoke review")
+	var count int64
+	require.NoError(t, db.Model(&policy.Event{}).Count(&count).Error)
+	assert.Zero(t, count, "the reviewer has no audit or penalty side effects by itself")
+}
+
+func TestProtectionMigrationPreservesDeployedEventsAndLegacySettings(t *testing.T) {
+	db := protectionDB(t)
+	// Recreate the event shape shipped in 069eecd before the new audit columns.
+	require.NoError(t, db.Migrator().DropTable(&policy.Event{}))
+	legacy := struct {
+		ID          int64  `gorm:"primaryKey"`
+		RequestHash string `gorm:"size:64;uniqueIndex"`
+		RequestID   string `gorm:"size:100"`
+		UserID      int    `gorm:"index:idx_rp_user_time,priority:1"`
+		TokenID     int    `gorm:"index"`
+		CreatedAt   int64  `gorm:"index:idx_rp_user_time,priority:2;index"`
+		Revision    int64
+		GroupName   string `gorm:"size:191"`
+		Model       string `gorm:"size:191"`
+		Protocol    string `gorm:"size:40"`
+		Decision    string `gorm:"size:24;index"`
+		Hits        string `gorm:"type:text"`
+		Digest      string `gorm:"size:64;index"`
+		Counted     bool
+		Review      string `gorm:"size:24;index"`
+		Uninspected string `gorm:"size:40"`
+		Upstream    string `gorm:"size:24"`
+	}{RequestHash: "legacy-unique", RequestID: "deployed-request", UserID: 206, TokenID: 7, CreatedAt: 1000, GroupName: "premium", Hits: "[]", Review: "pending", Decision: "hold"}
+	require.NoError(t, db.Table("extension_request_events").AutoMigrate(&legacy))
+	require.NoError(t, db.Table("extension_request_events").Create(&legacy).Error)
+	require.NoError(t, db.Create(&policy.Subject{ID: "user:206", UserID: 206, Until: policy.ManualHoldUntil, CauseEventID: legacy.ID}).Error)
+	for range 2 {
+		require.NoError(t, policy.Migrate(db))
+		var event policy.Event
+		require.NoError(t, db.First(&event, legacy.ID).Error)
+		assert.Equal(t, "deployed-request", event.RequestID)
+		assert.Equal(t, "premium", event.GroupName)
+		assert.Equal(t, "hold", event.Decision)
+		assert.Empty(t, event.IP)
+		until, err := policy.ActiveRestriction(db, 206, 7, 1001)
+		require.NoError(t, err)
+		assert.Equal(t, policy.ManualHoldUntil, until)
+	}
+	assert.True(t, db.Migrator().HasIndex(&policy.Event{}, "idx_rp_user_time"))
+	assert.Error(t, db.Create(&policy.Event{RequestHash: "legacy-unique"}).Error, "request hash must remain unique")
+	old := policy.Defaults()
+	encoded, err := common.Marshal(old)
+	require.NoError(t, err)
+	var fields map[string]any
+	require.NoError(t, common.Unmarshal(encoded, &fields))
+	for _, key := range []string{"channel_ids", "categories", "reviewer", "automatic_suspend", "store_evidence"} {
+		delete(fields, key)
+	}
+	encoded, err = common.Marshal(fields)
+	require.NoError(t, err)
+	require.NoError(t, db.Create(&model.Option{Key: policy.SettingsKey, Value: string(encoded)}).Error)
+	saved, err := policy.GetSettings(db)
+	require.NoError(t, err)
+	assert.False(t, saved.Enabled)
+	assert.False(t, saved.AutomaticSuspend)
+	assert.False(t, saved.Reviewer.Enabled)
+	assert.True(t, saved.Categories.Attack)
 }
 
 func TestMaintenancePreservesLiveEvidenceAndDeduplicatesAlertWindows(t *testing.T) {

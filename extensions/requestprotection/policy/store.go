@@ -11,6 +11,10 @@ import (
 )
 
 type Event struct {
+	ChannelID   int    `json:"channel_id"`
+	IP          string `gorm:"size:64" json:"ip"`
+	Finding     string `gorm:"size:24" json:"finding"`
+	Reason      string `gorm:"size:64" json:"reason"`
 	ID          int64  `gorm:"primaryKey" json:"id"`
 	RequestHash string `gorm:"size:64;uniqueIndex" json:"-"`
 	RequestID   string `gorm:"size:100" json:"request_id"`
@@ -91,10 +95,10 @@ const ManualHoldUntil int64 = 253402300799
 // RecordSafety atomically records provider evidence and protective holds. A hold
 // is not a finding of user misconduct and never increments violation scores.
 func RecordSafety(db *gorm.DB, s Settings, in Input, code, secret string, now int64) (Result, error) {
-	v := Verdict{Decision: "observe", Digest: Digest(secret, "upstream-code", fmt.Sprintf("%d:%s:%s", in.UserID, in.RequestID, code)), Hits: []Hit{{RuleID: "upstream_safety", Name: code, Source: "upstream", Action: "observe"}}}
+	v := Verdict{Decision: "observe", Finding: "upstream_refusal", Reason: "upstream_signal", Digest: Digest(secret, "upstream-code", fmt.Sprintf("%d:%s:%s", in.UserID, in.RequestID, code)), Hits: []Hit{{RuleID: "upstream_safety", Name: code, Source: "upstream", Action: "observe"}}}
 	// An in-flight request can carry a legacy snapshot. Both actions protect
 	// only the triggering user, including requests made with their other keys.
-	hold := s.Mode == "enforce" && (s.UpstreamAction == "hold_user" || s.UpstreamAction == "hold_group")
+	hold := s.Mode == "enforce" && code == "session_blocked_by_cyber_policy" && (s.UpstreamAction == "hold_user" || s.UpstreamAction == "hold_group")
 	if hold {
 		v.Decision = "hold"
 	}
@@ -181,11 +185,11 @@ func Record(db *gorm.DB, s Settings, in Input, v Verdict, secret string, now int
 		if err != nil {
 			return err
 		}
-		e := Event{RequestHash: hash, RequestID: bounded(in.RequestID, 100), UserID: in.UserID, TokenID: in.TokenID, CreatedAt: now, Revision: s.Revision,
+		e := Event{ChannelID: in.ChannelID, IP: bounded(in.IP, 64), Finding: v.Finding, Reason: v.Reason, RequestHash: hash, RequestID: bounded(in.RequestID, 100), UserID: in.UserID, TokenID: in.TokenID, CreatedAt: now, Revision: s.Revision,
 			GroupName: bounded(in.Group, 191), Model: bounded(in.Model, 191), Protocol: bounded(in.Protocol, 40), Decision: v.Decision, Hits: string(hits), Digest: v.Digest, Counted: counted, Review: "pending", Uninspected: v.Uninspected, Upstream: "not_sent"}
 		if old.ID > 0 {
 			e.ID = old.ID
-			if err = tx.Model(&Event{}).Where("id = ?", old.ID).Updates(map[string]any{"decision": e.Decision, "hits": e.Hits, "counted": e.Counted, "review": "pending", "group_name": e.GroupName, "model": e.Model, "digest": e.Digest, "revision": e.Revision, "uninspected": e.Uninspected}).Error; err != nil {
+			if err = tx.Model(&Event{}).Where("id = ?", old.ID).Updates(map[string]any{"decision": e.Decision, "hits": e.Hits, "counted": e.Counted, "review": "pending", "group_name": e.GroupName, "model": e.Model, "digest": e.Digest, "revision": e.Revision, "uninspected": e.Uninspected, "finding": e.Finding, "reason": e.Reason, "channel_id": e.ChannelID, "ip": e.IP}).Error; err != nil {
 				return err
 			}
 		} else {
@@ -194,7 +198,7 @@ func Record(db *gorm.DB, s Settings, in Input, v Verdict, secret string, now int
 			}
 		}
 		result.EventID = e.ID
-		if !counted {
+		if !counted || !s.AutomaticSuspend {
 			return nil
 		}
 		for _, scope := range []struct {
@@ -260,6 +264,31 @@ func bounded(value string, n int) string {
 		n--
 	}
 	return value[:n]
+}
+
+// HoldUser requires an explicit administrator action on a specific event.
+// It never affects a group or changes host credential/account status.
+func HoldUser(db *gorm.DB, eventID int64, actor int, note string, now int64) error {
+	if strings.TrimSpace(note) == "" || len(note) > 500 {
+		return ErrInvalid
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		var event Event
+		if err := tx.Where("id = ?", eventID).Take(&event).Error; err != nil {
+			return err
+		}
+		if event.UserID <= 0 {
+			return ErrInvalid
+		}
+		if err := LockAccount(tx, event.UserID); err != nil {
+			return err
+		}
+		id := fmt.Sprintf("user:%d", event.UserID)
+		if err := tx.Model(&Subject{}).Where("id = ?", id).Updates(map[string]any{"expires_at": ManualHoldUntil, "started_at": now, "cause_event_id": event.ID, "threshold": 0, "window_minutes": 0}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&Audit{ActorID: actor, CreatedAt: now, Action: "manual_hold", EventID: event.ID, SubjectID: id, Note: note, Revision: event.Revision}).Error
+	})
 }
 
 // Release clears only extension state and resets its score watermark. It does

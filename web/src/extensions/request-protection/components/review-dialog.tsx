@@ -25,10 +25,11 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 
-import { releaseSubject, reviewEvent } from '../api'
+import { holdUser, releaseSubject, reviewEvent } from '../api'
 
 export type ReviewAction =
   | { kind: 'release'; subject: string }
+  | { kind: 'hold'; event: number }
   | { kind: 'review'; event: number; verdict: 'confirmed' | 'false_positive' }
 
 export function ProtectionReviewDialog(props: {
@@ -41,17 +42,22 @@ export function ProtectionReviewDialog(props: {
   const [note, setNote] = useState('')
   const [invalid, setInvalid] = useState(false)
   const save = useMutation({
-    mutationFn: () =>
-      props.action.kind === 'release'
-        ? releaseSubject({
-            subject_id: props.action.subject,
-            note: note.trim(),
-          })
-        : reviewEvent({
-            event_id: props.action.event,
-            verdict: props.action.verdict,
-            note: note.trim(),
-          }),
+    mutationFn: () => {
+      if (props.action.kind === 'release') {
+        return releaseSubject({
+          subject_id: props.action.subject,
+          note: note.trim(),
+        })
+      }
+      if (props.action.kind === 'hold') {
+        return holdUser({ event_id: props.action.event, note: note.trim() })
+      }
+      return reviewEvent({
+        event_id: props.action.event,
+        verdict: props.action.verdict,
+        note: note.trim(),
+      })
+    },
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: ['request-protection'] })
       toast.success(t('Protection review saved'))
@@ -62,6 +68,12 @@ export function ProtectionReviewDialog(props: {
   let description = t(
     'Release this plugin restriction and reset its violation window. Host account and Key settings are preserved.'
   )
+  if (props.action.kind === 'hold') {
+    title = t('Pause this user')
+    description = t(
+      'Pause all API keys belonging to this user until manual release. Other users and groups are unaffected.'
+    )
+  }
   if (props.action.kind === 'review') {
     title =
       props.action.verdict === 'confirmed'

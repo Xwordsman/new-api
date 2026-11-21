@@ -21,6 +21,34 @@ import { useTranslation } from 'react-i18next'
 export function ProtectionLabel(props: { value: string }) {
   const { t } = useTranslation()
   const labels: Record<string, string> = {
+    jailbreak: t('Jailbreak and safety bypass'),
+    theft: t('Credential theft and malicious cracking'),
+    attack: t('Malicious cyberattacks'),
+    sexual: t('Pornography and sexual exploitation'),
+    clear: t('No risk detected'),
+    violation: t('Clear violation'),
+    rule_match: t('Custom rule match'),
+    review_needed: t('Needs manual review'),
+    check_failed: t('Inspection failed'),
+    upstream_refusal: t('Upstream refusal'),
+    legacy_event: t('Legacy event'),
+    custom_rule: t('Custom local rule matched'),
+    incomplete_input: t('Input could not be fully inspected'),
+    ambiguous_intent: t('Intent is uncertain'),
+    harmful_jailbreak: t('Instructions to bypass safety controls'),
+    harmful_theft: t('Malicious cracking or credential theft request'),
+    harmful_attack: t('Operational malicious attack request'),
+    harmful_sexual: t('Explicit pornography or sexual exploitation request'),
+    reviewer_unavailable: t('Review service unavailable'),
+    reviewer_busy: t('Review service busy'),
+    reviewer_not_independent: t(
+      'Review channel must use a separate provider host'
+    ),
+    invalid_review: t('Review response is incomplete or invalid'),
+    upstream_signal: t(
+      'Upstream reported a safety refusal; no violation penalty'
+    ),
+    manual_hold: t('User paused by administrator'),
     allow: t('Allow'),
     observe: t('Record only'),
     block: t('Block'),
@@ -49,5 +77,5 @@ export function ProtectionLabel(props: { value: string }) {
     nested_content_limit: t('Content nesting exceeds inspection limit'),
     realtime_uninspected: t('Realtime frames are not inspected'),
   }
-  return <span>{labels[props.value] || props.value}</span>
+  return <span>{labels[props.value] || props.value || '—'}</span>
 }

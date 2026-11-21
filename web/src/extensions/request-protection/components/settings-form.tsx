@@ -24,6 +24,11 @@ import { toast } from 'sonner'
 
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import { Form } from '@/components/ui/form'
 
 import { checkAlerts, saveSettings } from '../api'
@@ -36,6 +41,7 @@ import {
 import type { ProtectionSettings } from '../types'
 import { DryRunPanel } from './dry-run-panel'
 import { PenaltyControls, PolicyControls } from './policy-controls'
+import { ProtectionControls } from './protection-controls'
 import { RulesEditor } from './rules-editor'
 
 export function ProtectionSettingsForm(props: {
@@ -91,7 +97,7 @@ export function ProtectionSettingsForm(props: {
           <Alert>
             <AlertDescription>
               {t(
-                'Start in observation mode and review matches before enforcing. The plugin stores rule hits and keyed content fingerprints, never full prompts or API credentials.'
+                'Start with observation, check events, then enforce. Semantic review uses a separate provider; inspection failures are not proof of user misconduct.'
               )}
             </AlertDescription>
           </Alert>
@@ -112,8 +118,19 @@ export function ProtectionSettingsForm(props: {
               </AlertDescription>
             </Alert>
           )}
-          <PolicyControls disabled={save.isPending} />
-          <RulesEditor disabled={save.isPending} />
+          <ProtectionControls disabled={save.isPending} />
+          <Collapsible>
+            <CollapsibleTrigger
+              render={<Button type='button' variant='outline' />}
+            >
+              {t('Advanced protection settings')}
+            </CollapsibleTrigger>
+            <CollapsibleContent className='space-y-6 pt-5'>
+              <PolicyControls disabled={save.isPending} />
+              <RulesEditor disabled={save.isPending} />
+              <PenaltyControls disabled={save.isPending} />
+            </CollapsibleContent>
+          </Collapsible>
           {form.formState.isSubmitted && !form.formState.isValid && (
             <p role='alert' className='text-destructive text-sm'>
               {t(
@@ -121,7 +138,6 @@ export function ProtectionSettingsForm(props: {
               )}
             </p>
           )}
-          <PenaltyControls disabled={save.isPending} />
           <p className='text-muted-foreground text-sm'>
             {t(
               'Disabling protection or using observation mode bypasses plugin restrictions. Releasing a restriction never enables a disabled, expired or exhausted Key or account.'

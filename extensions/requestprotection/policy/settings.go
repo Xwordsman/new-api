@@ -37,32 +37,52 @@ type Rule struct {
 }
 
 type Settings struct {
-	Revision            int64    `json:"revision"`
-	Enabled             bool     `json:"enabled"`
-	Mode                string   `json:"mode"`
-	Groups              []string `json:"groups"`
-	Models              []string `json:"models"`
-	Protocols           []string `json:"protocols"`
-	ExemptUserIDs       []int    `json:"exempt_user_ids"`
-	MaxBodyBytes        int      `json:"max_body_bytes"`
-	MaxTextBytes        int      `json:"max_text_bytes"`
-	UninspectedAction   string   `json:"uninspected_action"`
-	RequireCompleteText bool     `json:"require_complete_text"`
-	UpstreamAction      string   `json:"upstream_action"`
-	FailClosed          bool     `json:"fail_closed"`
-	Rules               []Rule   `json:"rules"`
-	WindowMinutes       int      `json:"window_minutes"`
-	KeyThreshold        int      `json:"key_threshold"`
-	KeySuspendMinutes   int      `json:"key_suspend_minutes"`
-	UserThreshold       int      `json:"user_threshold"`
-	UserSuspendMinutes  int      `json:"user_suspend_minutes"`
-	DuplicateSeconds    int      `json:"duplicate_seconds"`
-	RetentionDays       int      `json:"retention_days"`
-	UpstreamCodes       []string `json:"upstream_codes"`
-	AlertEnabled        bool     `json:"alert_enabled"`
-	AlertEmails         []string `json:"alert_emails"`
-	AlertMinutes        int      `json:"alert_minutes"`
-	AlertThreshold      int      `json:"alert_threshold"`
+	ChannelIDs          []int            `json:"channel_ids"`
+	Categories          Categories       `json:"categories"`
+	Reviewer            ReviewerSettings `json:"reviewer"`
+	StoreEvidence       bool             `json:"store_evidence"`
+	AutomaticSuspend    bool             `json:"automatic_suspend"`
+	Revision            int64            `json:"revision"`
+	Enabled             bool             `json:"enabled"`
+	Mode                string           `json:"mode"`
+	Groups              []string         `json:"groups"`
+	Models              []string         `json:"models"`
+	Protocols           []string         `json:"protocols"`
+	ExemptUserIDs       []int            `json:"exempt_user_ids"`
+	MaxBodyBytes        int              `json:"max_body_bytes"`
+	MaxTextBytes        int              `json:"max_text_bytes"`
+	UninspectedAction   string           `json:"uninspected_action"`
+	RequireCompleteText bool             `json:"require_complete_text"`
+	UpstreamAction      string           `json:"upstream_action"`
+	FailClosed          bool             `json:"fail_closed"`
+	Rules               []Rule           `json:"rules"`
+	WindowMinutes       int              `json:"window_minutes"`
+	KeyThreshold        int              `json:"key_threshold"`
+	KeySuspendMinutes   int              `json:"key_suspend_minutes"`
+	UserThreshold       int              `json:"user_threshold"`
+	UserSuspendMinutes  int              `json:"user_suspend_minutes"`
+	DuplicateSeconds    int              `json:"duplicate_seconds"`
+	RetentionDays       int              `json:"retention_days"`
+	UpstreamCodes       []string         `json:"upstream_codes"`
+	AlertEnabled        bool             `json:"alert_enabled"`
+	AlertEmails         []string         `json:"alert_emails"`
+	AlertMinutes        int              `json:"alert_minutes"`
+	AlertThreshold      int              `json:"alert_threshold"`
+}
+
+type Categories struct {
+	Jailbreak bool `json:"jailbreak"`
+	Theft     bool `json:"theft"`
+	Attack    bool `json:"attack"`
+	Sexual    bool `json:"sexual"`
+}
+
+type ReviewerSettings struct {
+	Enabled        bool   `json:"enabled"`
+	ChannelID      int    `json:"channel_id"`
+	Model          string `json:"model"`
+	TimeoutSeconds int    `json:"timeout_seconds"`
+	FailureAction  string `json:"failure_action"`
 }
 
 type option struct {
@@ -73,9 +93,10 @@ type option struct {
 func (option) TableName() string { return "options" }
 
 func Defaults() Settings {
-	return Settings{Mode: "observe", Groups: []string{}, Models: []string{}, Protocols: []string{}, ExemptUserIDs: []int{},
+	return Settings{Mode: "observe", Groups: []string{}, Models: []string{}, Protocols: []string{}, ExemptUserIDs: []int{}, ChannelIDs: []int{},
+		Categories: Categories{Jailbreak: true, Theft: true, Attack: true, Sexual: true}, Reviewer: ReviewerSettings{TimeoutSeconds: 20, FailureAction: "block"},
 		MaxBodyBytes: 2 * 1024 * 1024, MaxTextBytes: 256 * 1024, UninspectedAction: "observe", UpstreamAction: "observe", FailClosed: true,
-		WindowMinutes: 10, KeyThreshold: 3, KeySuspendMinutes: 30, UserThreshold: 10, UserSuspendMinutes: 60,
+		WindowMinutes: 10, KeyThreshold: 0, KeySuspendMinutes: 30, UserThreshold: 0, UserSuspendMinutes: 60,
 		DuplicateSeconds: 60, RetentionDays: 30, AlertMinutes: 15, AlertThreshold: 10, AlertEmails: []string{},
 		UpstreamCodes: []string{"content_policy_violation", "content_filter", "safety_violation", "session_blocked_by_cyber_policy"},
 		Rules: []Rule{
@@ -87,6 +108,16 @@ func Defaults() Settings {
 }
 
 func Validate(s Settings) error {
+	if len(s.ChannelIDs) > 100 || s.Reviewer.ChannelID < 0 || len(s.Reviewer.Model) > 191 || strings.TrimSpace(s.Reviewer.Model) != s.Reviewer.Model ||
+		s.Reviewer.TimeoutSeconds < 1 || s.Reviewer.TimeoutSeconds > 60 || !slices.Contains([]string{"observe", "block"}, s.Reviewer.FailureAction) ||
+		(s.Reviewer.Enabled && (s.Reviewer.ChannelID == 0 || s.Reviewer.Model == "" || slices.Contains(s.ChannelIDs, s.Reviewer.ChannelID))) {
+		return ErrInvalid
+	}
+	for _, id := range s.ChannelIDs {
+		if id <= 0 {
+			return ErrInvalid
+		}
+	}
 	if s.Revision < 0 || s.Revision == math.MaxInt64 || !slices.Contains([]string{"observe", "enforce"}, s.Mode) ||
 		!slices.Contains([]string{"", "observe", "hold_user"}, s.UpstreamAction) ||
 		!slices.Contains([]string{"allow", "observe", "block"}, s.UninspectedAction) || s.MaxBodyBytes < 1024 || s.MaxBodyBytes > 32*1024*1024 ||

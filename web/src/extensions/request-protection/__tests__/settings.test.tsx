@@ -28,6 +28,17 @@ import { RequestProtectionSettingsPage } from '../settings-page'
 import type { ProtectionSettings } from '../types'
 
 const settings: ProtectionSettings = {
+  channel_ids: [],
+  categories: { jailbreak: true, theft: true, attack: true, sexual: true },
+  reviewer: {
+    enabled: false,
+    channel_id: 0,
+    model: '',
+    timeout_seconds: 20,
+    failure_action: 'block',
+  },
+  store_evidence: false,
+  automatic_suspend: false,
   revision: 4,
   enabled: true,
   mode: 'observe',
@@ -75,9 +86,22 @@ beforeEach(() => {
     queries: { retry: false, gcTime: 0 },
     mutations: { retry: false },
   })
-  vi.spyOn(api, 'get').mockResolvedValue({
-    data: { success: true, data: settings },
-  })
+  vi.spyOn(api, 'get').mockImplementation(async (url) => ({
+    data: {
+      success: true,
+      data: url.endsWith('/channels')
+        ? [
+            { id: 5, name: 'Business provider', type: 1, models: 'gpt-4.1' },
+            {
+              id: 900,
+              name: 'Review provider',
+              type: 1,
+              models: 'review-model',
+            },
+          ]
+        : settings,
+    },
+  }))
 })
 afterEach(() => {
   client.clear()
@@ -107,6 +131,9 @@ it('rejects invalid limits and saves the configured scope, restriction threshold
     .spyOn(api, 'put')
     .mockResolvedValue({ data: { success: true, data: saved } })
   renderSettings()
+  await user.click(
+    await screen.findByRole('button', { name: 'Advanced protection settings' })
+  )
   const threshold = await screen.findByRole('spinbutton', {
     name: 'Key violation threshold',
   })
@@ -135,7 +162,9 @@ it('rejects invalid limits and saves the configured scope, restriction threshold
     screen.getByRole('combobox', { name: 'Upstream safety response' }),
     'hold_user'
   )
-  vi.mocked(api.get).mockResolvedValue({ data: { success: true, data: saved } })
+  vi.mocked(api.get).mockImplementation(async (url) => ({
+    data: { success: true, data: url.endsWith('/channels') ? [] : saved },
+  }))
   await user.click(screen.getAllByRole('button', { name: 'Save' })[0])
   await waitFor(() =>
     expect(put).toHaveBeenCalledExactlyOnceWith(
@@ -157,17 +186,22 @@ it('preserves unsaved edits after a revision conflict and reloads only on explic
     },
   })
   renderSettings()
+  await user.click(
+    await screen.findByRole('button', { name: 'Advanced protection settings' })
+  )
   const threshold = await screen.findByRole('spinbutton', {
     name: 'Key violation threshold',
   })
   await user.clear(threshold)
   await user.type(threshold, '5')
-  vi.mocked(api.get).mockResolvedValue({
+  vi.mocked(api.get).mockImplementation(async (url) => ({
     data: {
       success: true,
-      data: { ...settings, revision: 5, key_threshold: 8 },
+      data: url.endsWith('/channels')
+        ? []
+        : { ...settings, revision: 5, key_threshold: 8 },
     },
-  })
+  }))
   await user.click(screen.getAllByRole('button', { name: 'Save' })[0])
   const reload = await screen.findByRole('button', {
     name: 'Reload saved settings',
@@ -195,6 +229,9 @@ it('runs unsaved rules locally without saving and keeps rule editors collapsed u
     },
   })
   renderSettings()
+  await user.click(
+    await screen.findByRole('button', { name: 'Advanced protection settings' })
+  )
   const rule = await screen.findByRole('button', {
     name: 'Example override rule',
   })
@@ -221,4 +258,90 @@ it('runs unsaved rules locally without saving and keeps rule editors collapsed u
     })
   )
   expect(put).not.toHaveBeenCalled()
+})
+
+it('keeps advanced rules hidden by default and opens them with the keyboard', async () => {
+  const user = userEvent.setup()
+  renderSettings()
+  const advanced = await screen.findByRole('button', {
+    name: 'Advanced protection settings',
+  })
+  expect(advanced).toHaveAttribute('aria-expanded', 'false')
+  expect(
+    screen.queryByRole('spinbutton', { name: 'Key violation threshold' })
+  ).not.toBeInTheDocument()
+  expect(
+    screen.getByRole('switch', {
+      name: 'Automatically suspend repeat violators',
+    })
+  ).not.toBeChecked()
+  advanced.focus()
+  await user.keyboard('{Enter}')
+  expect(advanced).toHaveAttribute('aria-expanded', 'true')
+  expect(
+    screen.getByRole('spinbutton', { name: 'Key violation threshold' })
+  ).toBeVisible()
+})
+
+it('requires a review channel and model and calls semantic testing only after an explicit click', async () => {
+  const user = userEvent.setup()
+  const post = vi.spyOn(api, 'post').mockResolvedValue({
+    data: {
+      success: true,
+      data: {
+        decision: 'allow',
+        finding: 'clear',
+        reason: '',
+        eligible: false,
+        hits: [],
+        uninspected: '',
+        digest: 'sample',
+      },
+    },
+  })
+  const put = vi.spyOn(api, 'put')
+  renderSettings()
+  await user.click(
+    await screen.findByRole('switch', { name: 'Enable semantic review' })
+  )
+  await user.click(screen.getAllByRole('button', { name: 'Save' })[0])
+  expect(
+    screen.getByRole('combobox', { name: 'Review channel' })
+  ).toHaveAttribute('aria-invalid', 'true')
+  expect(put).not.toHaveBeenCalled()
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Review channel' }),
+    '900'
+  )
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Review model' }),
+    'review-model'
+  )
+  expect(
+    screen.getByRole('button', { name: 'Run semantic test' })
+  ).toBeDisabled()
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Business channel for test' }),
+    '5'
+  )
+  expect(post).not.toHaveBeenCalled()
+  await user.click(screen.getByRole('button', { name: 'Run semantic test' }))
+  expect(
+    await screen.findByRole('heading', { name: 'Last semantic test result' })
+  ).toBeVisible()
+  expect(post).toHaveBeenCalledExactlyOnceWith(
+    '/api/extensions/request-protection/admin/dry-run',
+    expect.objectContaining({
+      channel_id: 5,
+      semantic: true,
+      settings: expect.objectContaining({
+        reviewer: {
+          ...settings.reviewer,
+          enabled: true,
+          channel_id: 900,
+          model: 'review-model',
+        },
+      }),
+    })
+  )
 })

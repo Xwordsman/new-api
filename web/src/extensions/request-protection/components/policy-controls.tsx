@@ -26,21 +26,6 @@ export function PolicyControls(props: { disabled: boolean }) {
     <div className='space-y-6'>
       <div className='grid gap-5 sm:grid-cols-2'>
         <PolicyField
-          name='enabled'
-          label={t('Enable request protection')}
-          kind='switch'
-          disabled={props.disabled}
-        />
-        <PolicyField
-          name='mode'
-          label={t('Protection mode')}
-          options={[
-            { value: 'observe', label: t('Observe only') },
-            { value: 'enforce', label: t('Enforce rules') },
-          ]}
-          disabled={props.disabled}
-        />
-        <PolicyField
           name='groups'
           label={t('Protected groups')}
           description={t('One value per line. Leave empty to match all.')}
@@ -75,6 +60,23 @@ export function PolicyControls(props: { disabled: boolean }) {
           disabled={props.disabled}
         />
       </div>
+      <PolicyField
+        name='store_evidence'
+        label={t('Store short evidence excerpts')}
+        kind='switch'
+        disabled={props.disabled}
+        description={t(
+          'Optional: store up to 240 bytes of matching text for review. Excerpts may contain sensitive content; full prompts and channel keys are not stored.'
+        )}
+      />
+      <PolicyField
+        name='reviewer.timeout_seconds'
+        label={t('Review timeout (seconds)')}
+        kind='number'
+        min={1}
+        max={60}
+        disabled={props.disabled}
+      />
       <h3 className='font-semibold'>{t('Inspection limits')}</h3>
       <div className='grid gap-5 sm:grid-cols-2'>
         <PolicyField
@@ -198,7 +200,7 @@ export function PenaltyControls(props: { disabled: boolean }) {
           name='upstream_action'
           label={t('Upstream safety response')}
           description={t(
-            'In enforce mode, a structured upstream safety signal pauses only the triggering user until manual release. Holds do not add violation penalties.'
+            'Only an explicit upstream cyber-session block can pause the triggering user. Ordinary refusals are recorded without suspending users.'
           )}
           options={[
             { value: 'observe', label: t('Record only') },

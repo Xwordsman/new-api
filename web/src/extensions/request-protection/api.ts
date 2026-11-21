@@ -27,10 +27,26 @@ import type {
   ProtectionRestriction,
   ProtectionSettings,
   ProtectionVerdict,
+  ProtectionChannel,
 } from './types'
 
 type Envelope<T> = { success: boolean; message: string; data: T }
 const base = '/api/extensions/request-protection/admin'
+
+export async function getChannels(): Promise<ProtectionChannel[]> {
+  return requireServerSuccess(
+    (await api.get<Envelope<ProtectionChannel[]>>(`${base}/channels`)).data
+  ).data
+}
+
+export async function holdUser(input: {
+  event_id: number
+  note: string
+}): Promise<void> {
+  requireServerSuccess(
+    (await api.post<Envelope<null>>(`${base}/hold`, input)).data
+  )
+}
 
 export async function getSettings(): Promise<ProtectionSettings> {
   return requireServerSuccess(
@@ -51,6 +67,8 @@ export async function dryRun(input: {
   model: string
   group: string
   protocol: string
+  channel_id?: number
+  semantic?: boolean
 }): Promise<ProtectionVerdict> {
   return requireServerSuccess(
     (await api.post<Envelope<ProtectionVerdict>>(`${base}/dry-run`, input)).data

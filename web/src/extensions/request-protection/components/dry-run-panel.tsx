@@ -16,24 +16,31 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { useId, useState } from 'react'
-import { useFormContext } from 'react-hook-form'
+import { useFormContext, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
 import { JsonCodeEditor } from '@/components/json-code-editor'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 
-import { dryRun } from '../api'
+import { dryRun, getChannels } from '../api'
 import { toSettings, type ProtectionForm } from '../lib/schema'
 import { ProtectionLabel } from './record-label'
 
 export function DryRunPanel(props: { disabled: boolean }) {
   const { t } = useTranslation()
   const form = useFormContext<ProtectionForm>()
+  const reviewer = useWatch({ control: form.control, name: 'reviewer' })
+  const channels = useQuery({
+    queryKey: ['request-protection', 'channels'],
+    queryFn: getChannels,
+  })
   const id = useId()
+  const [channelID, setChannelID] = useState(0)
   const [input, setInput] = useState({
     model: 'gpt-4.1',
     group: 'default',
@@ -97,16 +104,73 @@ export function DryRunPanel(props: { disabled: boolean }) {
       >
         {t('Run local test')}
       </Button>
+      <div className='space-y-3 rounded-lg border p-4'>
+        <p className='text-muted-foreground text-sm'>
+          {t(
+            'Semantic tests send the sample to the configured review provider and incur provider cost. They do not call the business channel, store events or suspend users.'
+          )}
+        </p>
+        <Label htmlFor={`${id}-channel`}>
+          {t('Business channel for test')}
+        </Label>
+        <NativeSelect
+          id={`${id}-channel`}
+          value={channelID}
+          disabled={disabled || channels.isPending}
+          onChange={(event) => {
+            setChannelID(Number(event.target.value))
+            run.reset()
+          }}
+        >
+          <NativeSelectOption value={0}>
+            {t('Select a business channel')}
+          </NativeSelectOption>
+          {(channels.data ?? []).map((channel) => (
+            <NativeSelectOption key={channel.id} value={channel.id}>
+              {channel.name} (#{channel.id})
+            </NativeSelectOption>
+          ))}
+        </NativeSelect>
+        <Button
+          type='button'
+          variant='outline'
+          disabled={
+            disabled || !reviewer.enabled || !reviewer.model || channelID === 0
+          }
+          onClick={async () => {
+            run.reset()
+            if (await form.trigger()) {
+              run.mutate({
+                ...input,
+                channel_id: channelID,
+                semantic: true,
+                settings: toSettings(form.getValues()),
+              })
+            }
+          }}
+        >
+          {t('Run semantic test')}
+        </Button>
+      </div>
       {run.isError && (
         <p role='alert' className='text-destructive text-sm'>
-          {t('Local test failed. Check the policy and request, then retry.')}
+          {t('Policy test failed. Check the settings and sample, then retry.')}
         </p>
       )}
       {run.data && (
         <div role='status' className='space-y-3 rounded-lg border p-4'>
-          <h4 className='font-medium'>{t('Last local test result')}</h4>
+          <h4 className='font-medium'>
+            {run.variables?.semantic
+              ? t('Last semantic test result')
+              : t('Last local test result')}
+          </h4>
           <p>
             {t('Decision')}: <ProtectionLabel value={run.data.decision} />
+          </p>
+          <p>
+            {t('Inspection result')}:{' '}
+            <ProtectionLabel value={run.data.finding} /> ·{' '}
+            <ProtectionLabel value={run.data.reason || ''} />
           </p>
           <p>
             {t('Eligible for violation counting')}:{' '}

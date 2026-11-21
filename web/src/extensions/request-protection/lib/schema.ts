@@ -41,6 +41,22 @@ export const protectionSchema = z
   .object({
     revision: integer(0, Number.MAX_SAFE_INTEGER),
     enabled: z.boolean(),
+    channel_ids: z.array(integer(1, Number.MAX_SAFE_INTEGER)).max(100),
+    categories: z.object({
+      jailbreak: z.boolean(),
+      theft: z.boolean(),
+      attack: z.boolean(),
+      sexual: z.boolean(),
+    }),
+    reviewer: z.object({
+      enabled: z.boolean(),
+      channel_id: integer(0, Number.MAX_SAFE_INTEGER),
+      model: z.string().trim().max(191),
+      timeout_seconds: integer(1, 60),
+      failure_action: z.enum(['observe', 'block']),
+    }),
+    store_evidence: z.boolean(),
+    automatic_suspend: z.boolean(),
     mode: z.enum(['observe', 'enforce']),
     groups: list(100),
     models: list(100),
@@ -102,6 +118,24 @@ export const protectionSchema = z
     alert_threshold: integer(1, 100000),
   })
   .superRefine((value, ctx) => {
+    if (
+      value.reviewer.enabled &&
+      (value.reviewer.channel_id === 0 ||
+        value.channel_ids.includes(value.reviewer.channel_id))
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['reviewer', 'channel_id'],
+        message: 'Select a separate review channel',
+      })
+    }
+    if (value.reviewer.enabled && !value.reviewer.model) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['reviewer', 'model'],
+        message: 'Select a review model',
+      })
+    }
     if (value.max_text_bytes > value.max_body_bytes) {
       ctx.addIssue({
         code: 'custom',

@@ -21,11 +21,13 @@ func RegisterRoutes(api *gin.RouterGroup) {
 	admin.GET("/events", events)
 	admin.GET("/restrictions", restrictions)
 	admin.GET("/audit", audit)
+	admin.GET("/channels", channels)
 	write := admin.Group("", middleware.StrictSessionCookieOriginGuard(), middleware.UserCriticalRateLimit("request-protection"))
 	write.PUT("/settings", putSettings)
 	write.POST("/dry-run", dryRun)
 	write.POST("/review", review)
 	write.POST("/release", release)
+	write.POST("/hold", hold)
 	write.POST("/check-alerts", checkAlerts)
 }
 
@@ -50,7 +52,7 @@ func getSettings(c *gin.Context) {
 	respond(c, s, err)
 }
 func putSettings(c *gin.Context) {
-	var s policy.Settings
+	s := policy.Defaults()
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 256*1024)
 	if common.DecodeJson(c.Request.Body, &s) != nil {
 		respond(c, nil, policy.ErrInvalid)
@@ -61,24 +63,39 @@ func putSettings(c *gin.Context) {
 }
 func dryRun(c *gin.Context) {
 	var input struct {
-		Settings policy.Settings `json:"settings"`
-		Body     string          `json:"body"`
-		Protocol string          `json:"protocol"`
-		Model    string          `json:"model"`
-		Group    string          `json:"group"`
+		Settings  policy.Settings `json:"settings"`
+		Body      string          `json:"body"`
+		Protocol  string          `json:"protocol"`
+		Model     string          `json:"model"`
+		Group     string          `json:"group"`
+		ChannelID int             `json:"channel_id"`
+		Semantic  bool            `json:"semantic"`
 	}
+	input.Settings = policy.Defaults()
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1024*1024)
 	if common.DecodeJson(c.Request.Body, &input) != nil || policy.Validate(input.Settings) != nil || len(input.Body) > 512*1024 || len(input.Protocol) > 40 || len(input.Model) > 191 || len(input.Group) > 191 {
 		respond(c, nil, policy.ErrInvalid)
 		return
 	}
-	in := policy.Input{UserID: c.GetInt("id"), Model: input.Model, Group: input.Group, Protocol: input.Protocol}
+	in := policy.Input{ChannelID: input.ChannelID, UserID: c.GetInt("id"), Model: input.Model, Group: input.Group, Protocol: input.Protocol}
 	if len(input.Body) > input.Settings.MaxBodyBytes {
 		in.Uninspected = "body_limit"
 	} else {
 		in.Segments, in.Uninspected = policy.Extract([]byte(input.Body), input.Protocol)
 	}
 	v := policy.Inspect(input.Settings, in, common.SessionSecret)
+	if input.Semantic {
+		if !input.Settings.Reviewer.Enabled || input.ChannelID <= 0 {
+			respond(c, nil, policy.ErrInvalid)
+			return
+		}
+		channel, err := model.GetChannelById(input.ChannelID, false)
+		if err != nil {
+			respond(c, nil, err)
+			return
+		}
+		v = service.ReviewRequestProtection(c.Request.Context(), input.Settings, in, v, channel.GetBaseURL())
+	}
 	// Dry runs have no event, score, restriction or notification side effects.
 	respond(c, v, nil)
 }
@@ -97,7 +114,10 @@ func filteredQuery(c *gin.Context, table any) (*gorm.DB, int) {
 
 type eventView struct {
 	policy.Event
-	Matches []policy.Hit `json:"matches"`
+	Matches     []policy.Hit `json:"matches"`
+	Username    string       `json:"username"`
+	TokenName   string       `json:"token_name"`
+	ChannelName string       `json:"channel_name"`
 }
 
 func events(c *gin.Context) {
@@ -119,15 +139,73 @@ func events(c *gin.Context) {
 		return
 	}
 	items := make([]eventView, 0, len(rows))
+	userIDs, tokenIDs, channelIDs := []int{}, []int{}, []int{}
+	for _, row := range rows {
+		userIDs = append(userIDs, row.UserID)
+		tokenIDs = append(tokenIDs, row.TokenID)
+		channelIDs = append(channelIDs, row.ChannelID)
+	}
+	users, tokens, channelRows := []model.User{}, []model.Token{}, []model.Channel{}
+	if len(rows) > 0 {
+		db := model.DB.WithContext(c.Request.Context())
+		for _, lookup := range []struct {
+			target  any
+			columns []string
+			ids     []int
+		}{{&users, []string{"id", "username"}, userIDs}, {&tokens, []string{"id", "name"}, tokenIDs}, {&channelRows, []string{"id", "name"}, channelIDs}} {
+			if err := db.Unscoped().Select(lookup.columns).Where("id IN ?", lookup.ids).Find(lookup.target).Error; err != nil {
+				respond(c, nil, err)
+				return
+			}
+		}
+	}
+	userNames, tokenNames, channelNames := map[int]string{}, map[int]string{}, map[int]string{}
+	for _, row := range users {
+		userNames[row.Id] = row.Username
+	}
+	for _, row := range tokens {
+		tokenNames[row.Id] = row.Name
+	}
+	for _, row := range channelRows {
+		channelNames[row.Id] = row.Name
+	}
 	for _, row := range rows {
 		matches := []policy.Hit{}
 		if err := common.UnmarshalJsonStr(row.Hits, &matches); err != nil {
 			respond(c, nil, err)
 			return
 		}
-		items = append(items, eventView{Event: row, Matches: matches})
+		items = append(items, eventView{Event: row, Matches: matches, Username: userNames[row.UserID], TokenName: tokenNames[row.TokenID], ChannelName: channelNames[row.ChannelID]})
 	}
 	respond(c, gin.H{"items": items, "total": total, "page": page}, nil)
+}
+
+func channels(c *gin.Context) {
+	// Only safe display fields leave the server; channel credentials remain in
+	// the existing operator-managed channel record.
+	type choice struct {
+		ID     int    `json:"id"`
+		Name   string `json:"name"`
+		Type   int    `json:"type"`
+		Models string `json:"models"`
+	}
+	rows := []choice{}
+	err := model.DB.WithContext(c.Request.Context()).Model(&model.Channel{}).Select("id", "name", "type", "models").Where("status = ?", common.ChannelStatusEnabled).Order("id ASC").Find(&rows).Error
+	respond(c, rows, err)
+}
+
+func hold(c *gin.Context) {
+	var input struct {
+		EventID int64  `json:"event_id"`
+		Note    string `json:"note"`
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4096)
+	if common.DecodeJson(c.Request.Body, &input) != nil || input.EventID <= 0 {
+		respond(c, nil, policy.ErrInvalid)
+		return
+	}
+	err := policy.HoldUser(model.DB.WithContext(c.Request.Context()), input.EventID, c.GetInt("id"), input.Note, time.Now().Unix())
+	respond(c, nil, err)
 }
 func restrictions(c *gin.Context) {
 	q, page := filteredQuery(c, &policy.Subject{})

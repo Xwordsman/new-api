@@ -65,16 +65,87 @@ export function EventsPanel() {
       cell: (event) => formatTimestamp(event.created_at),
     },
     {
-      id: 'identity',
-      header: t('User / Key'),
-      cell: (event) => `${event.user_id} / ${event.token_id}`,
+      id: 'user',
+      header: t('User'),
+      cell: (event) => (
+        <span>
+          {event.username || '—'}
+          <br />#{event.user_id}
+        </span>
+      ),
     },
     {
-      id: 'scope',
-      header: t('Model / Group'),
+      id: 'key',
+      header: t('API Key'),
       cell: (event) => (
-        <span className='block max-w-56 break-words'>
-          {event.model} / {event.group}
+        <span>
+          {event.token_name || '—'}
+          <br />#{event.token_id}
+        </span>
+      ),
+    },
+    {
+      id: 'category',
+      header: t('Risk categories'),
+      cell: (event) => (
+        <span>
+          {event.matches.some((hit) => hit.category)
+            ? [
+                ...new Set(
+                  event.matches.map((hit) => hit.category).filter(Boolean)
+                ),
+              ].map((category) => (
+                <span key={category} className='block'>
+                  <ProtectionLabel value={category ?? ''} />
+                </span>
+              ))
+            : '—'}
+        </span>
+      ),
+    },
+    {
+      id: 'finding',
+      header: t('Inspection result'),
+      cell: (event) => (
+        <ProtectionLabel value={event.finding || 'legacy_event'} />
+      ),
+    },
+    {
+      id: 'reason',
+      header: t('Reason'),
+      cell: (event) => (
+        <span className='block max-w-64 whitespace-normal'>
+          <ProtectionLabel
+            value={event.reason || event.uninspected || 'legacy_event'}
+          />
+        </span>
+      ),
+    },
+    {
+      id: 'source',
+      header: t('Source'),
+      cell: (event) => (
+        <span>
+          {[...new Set(event.matches.map((hit) => hit.source))].map(
+            (source) => (
+              <span key={source} className='block'>
+                <ProtectionLabel value={source} />
+              </span>
+            )
+          )}
+        </span>
+      ),
+    },
+    { id: 'model', header: t('Model'), cell: (event) => event.model },
+    {
+      id: 'channel',
+      header: t('Channel / Group'),
+      cell: (event) => (
+        <span>
+          {event.channel_name || '—'}{' '}
+          {event.channel_id > 0 && `#${event.channel_id}`}
+          <br />
+          {event.group}
         </span>
       ),
     },
@@ -200,38 +271,49 @@ export function EventsPanel() {
           }}
           title={t('Protection event details')}
           description={t(
-            'Content fingerprints support deduplication. Full request content is not stored.'
+            'Evidence excerpts are shown only when enabled at inspection time. Full request content is not stored.'
           )}
           footer={
-            detail.review === 'pending' ? (
-              <>
-                <Button
-                  variant='outline'
-                  onClick={() => {
-                    setAction({
-                      kind: 'review',
-                      event: detail.id,
-                      verdict: 'false_positive',
-                    })
-                    setDetail(null)
-                  }}
-                >
-                  {t('Mark false positive')}
-                </Button>
-                <Button
-                  onClick={() => {
-                    setAction({
-                      kind: 'review',
-                      event: detail.id,
-                      verdict: 'confirmed',
-                    })
-                    setDetail(null)
-                  }}
-                >
-                  {t('Confirm violation')}
-                </Button>
-              </>
-            ) : undefined
+            <>
+              <Button
+                variant='outline'
+                onClick={() => {
+                  setAction({ kind: 'hold', event: detail.id })
+                  setDetail(null)
+                }}
+              >
+                {t('Pause this user')}
+              </Button>
+              {detail.review === 'pending' && (
+                <>
+                  <Button
+                    variant='outline'
+                    onClick={() => {
+                      setAction({
+                        kind: 'review',
+                        event: detail.id,
+                        verdict: 'false_positive',
+                      })
+                      setDetail(null)
+                    }}
+                  >
+                    {t('Mark false positive')}
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setAction({
+                        kind: 'review',
+                        event: detail.id,
+                        verdict: 'confirmed',
+                      })
+                      setDetail(null)
+                    }}
+                  >
+                    {t('Confirm violation')}
+                  </Button>
+                </>
+              )}
+            </>
           }
         >
           <dl className='grid gap-3 text-sm break-words'>
@@ -242,13 +324,33 @@ export function EventsPanel() {
             <div>
               <dt className='text-muted-foreground'>{t('User / Key')}</dt>
               <dd>
-                {detail.user_id} / {detail.token_id}
+                {detail.username} #{detail.user_id} / {detail.token_name} #
+                {detail.token_id}
               </dd>
             </div>
             <div>
               <dt className='text-muted-foreground'>{t('Model / Group')}</dt>
               <dd>
                 {detail.model} / {detail.group} · {detail.protocol}
+              </dd>
+            </div>
+            <div>
+              <dt className='text-muted-foreground'>{t('IP address')}</dt>
+              <dd>{detail.ip || '—'}</dd>
+            </div>
+            <div>
+              <dt className='text-muted-foreground'>{t('Channel')}</dt>
+              <dd>
+                {detail.channel_name || '—'} #{detail.channel_id || '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className='text-muted-foreground'>
+                {t('Inspection result')}
+              </dt>
+              <dd>
+                <ProtectionLabel value={detail.finding || 'legacy_event'} /> ·{' '}
+                <ProtectionLabel value={detail.reason || 'legacy_event'} />
               </dd>
             </div>
             <div>
@@ -294,6 +396,16 @@ export function EventsPanel() {
                 key={`${hit.rule_id}-${hit.source}`}
                 className='space-y-1 rounded-lg border p-3 text-sm'
               >
+                {hit.category && (
+                  <p>
+                    <ProtectionLabel value={hit.category} />
+                  </p>
+                )}
+                {hit.evidence && (
+                  <blockquote className='border-l-2 pl-3 break-words whitespace-pre-wrap'>
+                    {hit.evidence}
+                  </blockquote>
+                )}
                 <p className='font-medium break-words'>
                   {hit.name} ({hit.rule_id})
                 </p>

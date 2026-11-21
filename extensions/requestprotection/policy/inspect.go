@@ -19,6 +19,8 @@ type Segment struct {
 	Text   string `json:"text"`
 }
 type Input struct {
+	ChannelID   int       `json:"channel_id"`
+	IP          string    `json:"ip"`
 	UserID      int       `json:"user_id"`
 	TokenID     int       `json:"token_id"`
 	RequestID   string    `json:"request_id"`
@@ -29,6 +31,8 @@ type Input struct {
 	Uninspected string    `json:"uninspected"`
 }
 type Hit struct {
+	Category       string `json:"category,omitempty"`
+	Evidence       string `json:"evidence,omitempty"`
 	RuleID         string `json:"rule_id"`
 	Name           string `json:"name"`
 	Source         string `json:"source"`
@@ -37,6 +41,8 @@ type Hit struct {
 	CountPenalty   bool   `json:"count_penalty"`
 }
 type Verdict struct {
+	Finding     string `json:"finding"`
+	Reason      string `json:"reason"`
 	Hits        []Hit  `json:"hits"`
 	Decision    string `json:"decision"`
 	Eligible    bool   `json:"eligible"`
@@ -77,6 +83,11 @@ func Digest(secret, purpose, text string) string {
 }
 
 func InScope(s Settings, in Input) bool {
+	// Before routing, conservatively inspect requests that could reach a
+	// protected channel. A later check binds the result to the selected channel.
+	if in.ChannelID > 0 && len(s.ChannelIDs) > 0 && !slices.Contains(s.ChannelIDs, in.ChannelID) {
+		return false
+	}
 	if slices.Contains(s.ExemptUserIDs, in.UserID) {
 		return false
 	}
@@ -98,7 +109,7 @@ func InScope(s Settings, in Input) bool {
 }
 
 func Inspect(s Settings, in Input, secret string) Verdict {
-	v := Verdict{Decision: "allow", Hits: []Hit{}, Uninspected: in.Uninspected}
+	v := Verdict{Decision: "allow", Finding: "clear", Hits: []Hit{}, Uninspected: in.Uninspected}
 	// Aggregate content parts of one source without mixing trustedness levels.
 	texts := map[string]string{}
 	var canonical strings.Builder
@@ -174,6 +185,7 @@ func Inspect(s Settings, in Input, secret string) Verdict {
 			}
 			h := Hit{RuleID: r.ID, Name: r.Name, Source: source, Action: r.Action, HighConfidence: r.HighConfidence, CountPenalty: r.CountPenalty}
 			v.Hits = append(v.Hits, h)
+			v.Finding, v.Reason = "rule_match", "custom_rule"
 			if v.Decision == "allow" {
 				v.Decision = "observe"
 			}
@@ -185,6 +197,7 @@ func Inspect(s Settings, in Input, secret string) Verdict {
 		}
 	}
 	if v.Uninspected != "" && s.UninspectedAction != "allow" {
+		v.Finding, v.Reason = "check_failed", "incomplete_input"
 		if v.Decision == "allow" {
 			v.Decision = "observe"
 		}
@@ -196,6 +209,7 @@ func Inspect(s Settings, in Input, secret string) Verdict {
 		v.Decision = "block"
 		// Incomplete inspection is a protective rejection, never a penalty.
 		v.Eligible = false
+		v.Finding, v.Reason = "check_failed", "incomplete_input"
 	}
 	return v
 }
