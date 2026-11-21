@@ -39,7 +39,7 @@ export type ProtectionSettings = {
   max_text_bytes: number
   uninspected_action: 'allow' | 'observe' | 'block'
   require_complete_text: boolean
-  upstream_action: 'observe' | 'hold_user' | 'hold_group'
+  upstream_action: 'observe' | 'hold_user'
   fail_closed: boolean
   rules: ProtectionRule[]
   window_minutes: number

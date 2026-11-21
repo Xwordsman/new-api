@@ -198,15 +198,11 @@ export function PenaltyControls(props: { disabled: boolean }) {
           name='upstream_action'
           label={t('Upstream safety response')}
           description={t(
-            'In enforce mode, pause access until manual release after a structured safety signal. Group pause affects all users in that local group. Holds do not add violation penalties.'
+            'In enforce mode, a structured upstream safety signal pauses only the triggering user until manual release. Holds do not add violation penalties.'
           )}
           options={[
             { value: 'observe', label: t('Record only') },
             { value: 'hold_user', label: t('Pause user until review') },
-            {
-              value: 'hold_group',
-              label: t('Pause user and group until review'),
-            },
           ]}
           disabled={props.disabled}
         />

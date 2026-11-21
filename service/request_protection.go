@@ -76,15 +76,6 @@ func CheckRequestProtection(c *gin.Context, info *relaycommon.RelayInfo) *types.
 		if e != nil {
 			return requestProtectionUnavailable(c, s.FailClosed, e)
 		}
-		groups := []string{in.Group}
-		if in.Group == "auto" {
-			groups = append(groups, GetUserAutoGroup(info.UserGroup)...)
-		}
-		groupUntil, e := policy.ActiveGroupRestriction(db, groups, now)
-		if e != nil {
-			return requestProtectionUnavailable(c, s.FailClosed, e)
-		}
-		until = max(until, groupUntil)
 		if until > now {
 			if until != policy.ManualHoldUntil {
 				c.Header("Retry-After", strconv.FormatInt(until-now, 10))

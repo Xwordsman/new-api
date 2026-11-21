@@ -88,7 +88,7 @@ func Defaults() Settings {
 
 func Validate(s Settings) error {
 	if s.Revision < 0 || s.Revision == math.MaxInt64 || !slices.Contains([]string{"observe", "enforce"}, s.Mode) ||
-		!slices.Contains([]string{"", "observe", "hold_user", "hold_group"}, s.UpstreamAction) ||
+		!slices.Contains([]string{"", "observe", "hold_user"}, s.UpstreamAction) ||
 		!slices.Contains([]string{"allow", "observe", "block"}, s.UninspectedAction) || s.MaxBodyBytes < 1024 || s.MaxBodyBytes > 32*1024*1024 ||
 		s.MaxTextBytes < 256 || s.MaxTextBytes > 8*1024*1024 || s.MaxTextBytes > s.MaxBodyBytes || len(s.Rules) > 100 ||
 		s.WindowMinutes < 1 || s.WindowMinutes > 1440 || s.KeyThreshold < 0 || s.KeyThreshold > 10000 || s.UserThreshold < 0 || s.UserThreshold > 10000 ||
@@ -192,6 +192,9 @@ func GetSettings(db *gorm.DB) (Settings, error) {
 	}
 	if s.UpstreamAction == "" {
 		s.UpstreamAction = "observe"
+	} else if s.UpstreamAction == "hold_group" {
+		// Old policies must never pause unrelated members of a group.
+		s.UpstreamAction = "hold_user"
 	}
 	return s, Validate(s)
 }
@@ -199,6 +202,8 @@ func GetSettings(db *gorm.DB) (Settings, error) {
 func SaveSettings(db *gorm.DB, s Settings, actor int, now int64) (Settings, error) {
 	if s.UpstreamAction == "" {
 		s.UpstreamAction = "observe"
+	} else if s.UpstreamAction == "hold_group" {
+		s.UpstreamAction = "hold_user"
 	}
 	if err := Validate(s); err != nil {
 		return s, err

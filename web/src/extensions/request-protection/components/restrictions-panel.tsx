@@ -49,7 +49,7 @@ export function RestrictionsPanel() {
     {
       id: 'subject',
       header: t('Restricted subject'),
-      cell: (row) => (row.id.startsWith('group:') ? t('Group') : row.id),
+      cell: (row) => row.id,
     },
     { id: 'group', header: t('Group'), cell: (row) => row.group || '—' },
     { id: 'user', header: t('User ID'), cell: (row) => row.user_id || '—' },
@@ -81,7 +81,7 @@ export function RestrictionsPanel() {
     <div className='space-y-5'>
       <p className='text-muted-foreground text-sm'>
         {t(
-          'Safety holds require manual release. Release user and group holds separately after review. Timed restrictions expire automatically.'
+          'Safety holds apply only to the triggering user and require manual release. Timed restrictions expire automatically.'
         )}
       </p>
       {query.isPending && <LoadingState />}

@@ -101,7 +101,7 @@ it('rejects invalid limits and saves the configured scope, restriction threshold
     groups: ['gpt', 'premium'],
     key_threshold: 5,
     require_complete_text: true,
-    upstream_action: 'hold_group',
+    upstream_action: 'hold_user',
   } as const
   const put = vi
     .spyOn(api, 'put')
@@ -128,9 +128,12 @@ it('rejects invalid limits and saves the configured scope, restriction threshold
   await user.click(
     screen.getByRole('switch', { name: 'Block incomplete text inspection' })
   )
+  expect(
+    screen.queryByRole('option', { name: 'Pause user and group until review' })
+  ).not.toBeInTheDocument()
   await user.selectOptions(
     screen.getByRole('combobox', { name: 'Upstream safety response' }),
-    'hold_group'
+    'hold_user'
   )
   vi.mocked(api.get).mockResolvedValue({ data: { success: true, data: saved } })
   await user.click(screen.getAllByRole('button', { name: 'Save' })[0])

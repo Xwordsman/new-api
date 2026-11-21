@@ -192,10 +192,10 @@ func TestStrictTextInspectionRejectsLimitsWithoutPenalizingOrBlockingMedia(t *te
 	assert.Equal(t, "allow", policy.Inspect(s, in, "secret").Decision)
 }
 
-func TestSafetyHoldPersistsUntilSeparateAdminReleasesAndCannotBeReplayed(t *testing.T) {
+func TestSafetyHoldAffectsOnlyTriggeringUserAndCannotBeReplayed(t *testing.T) {
 	db := protectionDB(t)
 	s := blockingSettings()
-	s.UpstreamAction = "hold_group"
+	s.UpstreamAction = "hold_user"
 	in := requestInput("provider-safety", 7, "")
 	r, err := policy.RecordSafety(db, s, in, "session_blocked_by_cyber_policy", "secret", 1000)
 	require.NoError(t, err)
@@ -207,42 +207,64 @@ func TestSafetyHoldPersistsUntilSeparateAdminReleasesAndCannotBeReplayed(t *test
 	until, err := policy.ActiveRestriction(db, 42, 99, 10000000)
 	require.NoError(t, err)
 	assert.Equal(t, policy.ManualHoldUntil, until, "new Keys cannot bypass a user hold")
-	until, err = policy.ActiveGroupRestriction(db, []string{"default"}, 10000000)
+	until, err = policy.ActiveRestriction(db, 43, 8, 1001)
 	require.NoError(t, err)
-	assert.Equal(t, policy.ManualHoldUntil, until)
-	until, err = policy.ActiveGroupRestriction(db, []string{"unrelated"}, 1001)
-	require.NoError(t, err)
-	assert.Zero(t, until)
+	assert.Zero(t, until, "other users must remain unrestricted")
 	require.NoError(t, policy.Review(db, r.EventID, 1, "false_positive", "Protective hold still requires release", 1002))
 	until, err = policy.ActiveRestriction(db, 42, 7, 1003)
 	require.NoError(t, err)
 	assert.Equal(t, policy.ManualHoldUntil, until)
 	require.NoError(t, policy.Release(db, "user:42", 1, "User reviewed", 1004))
-	until, err = policy.ActiveGroupRestriction(db, []string{"default"}, 1005)
-	require.NoError(t, err)
-	assert.Equal(t, policy.ManualHoldUntil, until, "user release must not silently release the whole group")
-	require.NoError(t, policy.Release(db, policy.GroupSubjectID("default"), 1, "Upstream group reviewed", 1006))
-	require.NoError(t, policy.Release(db, policy.GroupSubjectID("default"), 1, "Repeated group release", 1006))
+	require.NoError(t, policy.Release(db, "user:42", 1, "Repeated user release", 1006))
 	_, err = policy.RecordSafety(db, s, in, "session_blocked_by_cyber_policy", "secret", 1007)
 	require.NoError(t, err)
-	until, err = policy.ActiveGroupRestriction(db, []string{"default"}, 1008)
-	require.NoError(t, err)
-	assert.Zero(t, until, "replaying an old provider event must not undo admin release")
 	until, err = policy.ActiveRestriction(db, 42, 7, 1008)
 	require.NoError(t, err)
-	assert.Zero(t, until)
+	assert.Zero(t, until, "replaying an old provider event must not undo admin release")
 	in.RequestID = "new-provider-safety"
 	_, err = policy.RecordSafety(db, s, in, "session_blocked_by_cyber_policy", "secret", 1009)
 	require.NoError(t, err)
-	until, err = policy.ActiveGroupRestriction(db, []string{"default"}, 1010)
+	until, err = policy.ActiveRestriction(db, 42, 7, 1010)
 	require.NoError(t, err)
 	assert.Equal(t, policy.ManualHoldUntil, until)
+}
+
+func TestLegacyGroupSafetyPolicyCannotRestrictOtherUsers(t *testing.T) {
+	db := protectionDB(t)
+	s := blockingSettings()
+	s.UpstreamAction = "hold_group"
+	encoded, err := common.Marshal(s)
+	require.NoError(t, err)
+	require.NoError(t, db.Create(&model.Option{Key: policy.SettingsKey, Value: string(encoded)}).Error)
+	loaded, err := policy.GetSettings(db)
+	require.NoError(t, err)
+	assert.Equal(t, "hold_user", loaded.UpstreamAction, "legacy settings must read as user-only")
+	saved, err := policy.SaveSettings(db, s, 1, 1000)
+	require.NoError(t, err)
+	assert.Equal(t, "hold_user", saved.UpstreamAction, "old clients cannot save group holds")
+	// An already admitted request can still carry the old policy snapshot.
+	_, err = policy.RecordSafety(db, s, requestInput("legacy-safety", 7, ""), "session_blocked_by_cyber_policy", "secret", 1001)
+	require.NoError(t, err)
+	var groups int64
+	require.NoError(t, db.Model(&policy.Subject{}).Where("id LIKE ? AND expires_at > ?", "group:%", 1001).Count(&groups).Error)
+	assert.Zero(t, groups, "even an old snapshot must never create a group hold")
+	// A legacy row from a backup must not block other members of the group.
+	legacyID := "group:" + policy.Digest("", "request-protection-group", "default")[:58]
+	require.NoError(t, db.Create(&policy.Subject{ID: legacyID, Until: policy.ManualHoldUntil}).Error)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{"input":"Hello"}`))
+	info := &relaycommon.RelayInfo{UserId: 43, TokenId: 8, RequestId: "other-user", UsingGroup: "default", OriginModelName: "gpt-4.1", RelayFormat: types.RelayFormatOpenAIResponses}
+	assert.Nil(t, service.CheckRequestProtection(c, info), "a different user in the same group must be admitted")
+	info.UserId, info.TokenId, info.RequestId = 42, 99, "held-user"
+	errResponse := service.CheckRequestProtection(c, info)
+	require.NotNil(t, errResponse)
+	assert.Equal(t, types.ErrorCode("request_protection_restricted"), errResponse.GetErrorCode())
 }
 
 func TestUpstreamSafetyFormatsCreateHoldsAndCachedChecksStillEnforceThem(t *testing.T) {
 	db := protectionDB(t)
 	s := blockingSettings()
-	s.UpstreamAction = "hold_group"
+	s.UpstreamAction = "hold_user"
 	_, err := policy.SaveSettings(db, s, 1, time.Now().Unix())
 	require.NoError(t, err)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
@@ -273,14 +295,13 @@ func TestUpstreamSafetyFormatsCreateHoldsAndCachedChecksStillEnforceThem(t *test
 			c.Request = request.WithContext(ctx)
 			service.ObserveRequestProtectionSafety(c, info, tc.data)
 			c.Request = request
-			until, err := policy.ActiveGroupRestriction(db, []string{"default"}, time.Now().Unix())
+			until, err := policy.ActiveRestriction(db, 42, 7, time.Now().Unix())
 			require.NoError(t, err)
 			assert.Equal(t, policy.ManualHoldUntil, until)
 			errResponse := service.CheckRequestProtection(c, info)
 			require.NotNil(t, errResponse)
 			assert.Equal(t, types.ErrorCode("request_protection_restricted"), errResponse.GetErrorCode())
 			require.NoError(t, policy.Release(db, "user:42", 1, "Test review", time.Now().Unix()))
-			require.NoError(t, policy.Release(db, policy.GroupSubjectID("default"), 1, "Test group review", time.Now().Unix()))
 		})
 	}
 }
@@ -485,6 +506,23 @@ func TestAdminSessionOriginCASAndDryRunContracts(t *testing.T) {
 	assert.Zero(t, count, "dry run writes no events")
 	require.NoError(t, db.Model(&policy.Subject{}).Count(&count).Error)
 	assert.Zero(t, count, "dry run cannot suspend an account")
+	require.NoError(t, db.Create(&[]policy.Subject{
+		{ID: "group:legacy", Until: policy.ManualHoldUntil},
+		{ID: "user:42", UserID: 42, Until: policy.ManualHoldUntil},
+	}).Error)
+	w = request("GET", "/restrictions", root, "", nil)
+	var listed struct {
+		Success bool
+		Data    struct {
+			Items []policy.Subject
+			Total int64
+		}
+	}
+	require.NoError(t, common.Unmarshal(w.Body.Bytes(), &listed))
+	require.True(t, listed.Success)
+	assert.EqualValues(t, 1, listed.Data.Total, "legacy group rows are not active restrictions")
+	require.Len(t, listed.Data.Items, 1)
+	assert.Equal(t, "user:42", listed.Data.Items[0].ID)
 	for _, change := range []func(*policy.Settings){
 		func(s *policy.Settings) { s.Rules[0].Sources = []string{"current", "current"} },
 		func(s *policy.Settings) { s.Rules[0].Patterns = []string{"["}; s.Rules[0].Kind = "regex" },

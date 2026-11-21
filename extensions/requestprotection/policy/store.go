@@ -88,38 +88,19 @@ type Result struct {
 // clears a safety hold; ordinary score expiry and false-positive scoring do not.
 const ManualHoldUntil int64 = 253402300799
 
-func GroupSubjectID(group string) string {
-	return "group:" + Digest("", "request-protection-group", group)[:58]
-}
-
-func ActiveGroupRestriction(db *gorm.DB, groups []string, now int64) (int64, error) {
-	if len(groups) == 0 {
-		return 0, nil
-	}
-	ids := make([]string, 0, len(groups))
-	for _, group := range groups {
-		ids = append(ids, GroupSubjectID(group))
-	}
-	var until int64
-	err := db.Model(&Subject{}).Where("id IN ? AND expires_at > ?", ids, now).Select("COALESCE(MAX(expires_at),0)").Scan(&until).Error
-	return until, err
-}
-
 // RecordSafety atomically records provider evidence and protective holds. A hold
 // is not a finding of user misconduct and never increments violation scores.
 func RecordSafety(db *gorm.DB, s Settings, in Input, code, secret string, now int64) (Result, error) {
 	v := Verdict{Decision: "observe", Digest: Digest(secret, "upstream-code", fmt.Sprintf("%d:%s:%s", in.UserID, in.RequestID, code)), Hits: []Hit{{RuleID: "upstream_safety", Name: code, Source: "upstream", Action: "observe"}}}
+	// An in-flight request can carry a legacy snapshot. Both actions protect
+	// only the triggering user, including requests made with their other keys.
 	hold := s.Mode == "enforce" && (s.UpstreamAction == "hold_user" || s.UpstreamAction == "hold_group")
 	if hold {
 		v.Decision = "hold"
 	}
 	var result Result
 	err := db.Transaction(func(tx *gorm.DB) error {
-		// Group state uses the existing account zero lock. Always
-		// acquire it before the user's lock to avoid cross-user lock inversion.
-		if err := LockAccount(tx, 0); err != nil {
-			return err
-		}
+		// Record acquires the user's lock until this outer transaction commits.
 		var err error
 		result, err = Record(tx, s, in, v, secret, now)
 		if err != nil {
@@ -128,24 +109,14 @@ func RecordSafety(db *gorm.DB, s Settings, in Input, code, secret string, now in
 		if err = tx.Model(&Event{}).Where("id = ?", result.EventID).Update("upstream", "responded").Error; err != nil || !hold {
 			return err
 		}
-		states := []Subject{{ID: fmt.Sprintf("user:%d", in.UserID), UserID: in.UserID}}
-		if s.UpstreamAction == "hold_group" && in.Group != "" {
-			states = append(states, Subject{ID: GroupSubjectID(in.Group)})
+		id := fmt.Sprintf("user:%d", in.UserID)
+		changed := tx.Model(&Subject{}).Where("id = ? AND watermark < ? AND expires_at <> ?", id, result.EventID, ManualHoldUntil).
+			Updates(map[string]any{"expires_at": ManualHoldUntil, "started_at": now, "cause_event_id": result.EventID, "threshold": 0, "window_minutes": 0})
+		if changed.Error != nil {
+			return changed.Error
 		}
-		for _, state := range states {
-			if err = tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&state).Error; err != nil {
-				return err
-			}
-			changed := tx.Model(&Subject{}).Where("id = ? AND watermark < ? AND expires_at <> ?", state.ID, result.EventID, ManualHoldUntil).
-				Updates(map[string]any{"expires_at": ManualHoldUntil, "started_at": now, "cause_event_id": result.EventID, "threshold": 0, "window_minutes": 0})
-			if changed.Error != nil {
-				return changed.Error
-			}
-			if changed.RowsAffected > 0 {
-				if err = tx.Create(&Audit{CreatedAt: now, Action: "safety_hold", EventID: result.EventID, SubjectID: state.ID, Revision: s.Revision}).Error; err != nil {
-					return err
-				}
-			}
+		if changed.RowsAffected > 0 {
+			return tx.Create(&Audit{CreatedAt: now, Action: "safety_hold", EventID: result.EventID, SubjectID: id, Revision: s.Revision}).Error
 		}
 		return nil
 	})

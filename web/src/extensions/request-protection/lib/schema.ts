@@ -54,7 +54,7 @@ export const protectionSchema = z
     max_text_bytes: integer(256, 8388608),
     uninspected_action: z.enum(['allow', 'observe', 'block']),
     require_complete_text: z.boolean(),
-    upstream_action: z.enum(['observe', 'hold_user', 'hold_group']),
+    upstream_action: z.enum(['observe', 'hold_user']),
     fail_closed: z.boolean(),
     rules: z
       .array(

@@ -41,7 +41,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-it('shows group safety holds as manual release and opens the selected group release dialog', async () => {
+it('shows user safety holds as manual release and opens the selected user release dialog', async () => {
   const user = userEvent.setup()
   vi.spyOn(api, 'get').mockResolvedValue({
     data: {
@@ -49,9 +49,9 @@ it('shows group safety holds as manual release and opens the selected group rele
       data: {
         items: [
           {
-            id: 'group:test',
+            id: 'user:206',
             group: 'premium',
-            user_id: 0,
+            user_id: 206,
             token_id: 0,
             until: 253402300799,
             manual_review: true,
@@ -76,13 +76,13 @@ it('shows group safety holds as manual release and opens the selected group rele
   await user.click(screen.getByRole('button', { name: 'Release restriction' }))
   await user.type(
     screen.getByRole('textbox', { name: 'Review reason' }),
-    'Group reviewed with upstream'
+    'User reviewed with upstream'
   )
   await user.click(screen.getByRole('button', { name: 'Confirm' }))
   await waitFor(() =>
     expect(post).toHaveBeenCalledWith(
       '/api/extensions/request-protection/admin/release',
-      { subject_id: 'group:test', note: 'Group reviewed with upstream' }
+      { subject_id: 'user:206', note: 'User reviewed with upstream' }
     )
   )
 })

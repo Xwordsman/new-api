@@ -131,7 +131,7 @@ func events(c *gin.Context) {
 }
 func restrictions(c *gin.Context) {
 	q, page := filteredQuery(c, &policy.Subject{})
-	q = q.Where("expires_at > ?", time.Now().Unix())
+	q = q.Where("user_id > ? AND expires_at > ?", 0, time.Now().Unix())
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
 		respond(c, nil, err)
