@@ -113,11 +113,20 @@ export function SuspectedIntent(props: { event: ProtectionEvent }) {
     .join(' · ')
   if (!description) {
     if (
+      props.event.matches.length > 0 &&
+      props.event.reason === 'incomplete_input'
+    ) {
+      return <span>{t('Matched rules; intent not classified')}</span>
+    }
+    if (
       props.event.matches.length === 0 &&
       (props.event.uninspected ||
         props.event.finding === 'check_failed' ||
         props.event.reason === 'incomplete_input')
     ) {
+      if (props.event.uninspected === 'binary_media' && props.event.preview) {
+        return <span>{t('No matches in inspected text')}</span>
+      }
       return <span>{t('No violation intent conclusion')}</span>
     }
     return <ProtectionLabel value={props.event.reason || props.event.finding} />
@@ -128,5 +137,19 @@ export function SuspectedIntent(props: { event: ProtectionEvent }) {
         ? t('Suspected: {{intent}} (semantic review)', { intent: description })
         : t('Suspected: {{intent}} (rule inference)', { intent: description })}
     </span>
+  )
+}
+
+export function InspectionCoverage(props: { event: ProtectionEvent }) {
+  const { t } = useTranslation()
+  if (props.event.uninspected === 'binary_media' && props.event.preview) {
+    return <span>{t('Text checked; media not inspected')}</span>
+  }
+  return (
+    <ProtectionLabel
+      value={
+        props.event.uninspected || props.event.reason || props.event.finding
+      }
+    />
   )
 }

@@ -269,7 +269,8 @@ func Extract(body []byte, protocol string) ([]Segment, string) {
 	for i, value := range messages {
 		if message, ok := value.(map[string]any); ok {
 			role, _ := message["role"].(string)
-			if role == "user" || (role == "" && message["type"] != "function_call_output" && message["type"] != "function_call") {
+			kind, _ := message["type"].(string)
+			if role == "user" || (role == "" && slices.Contains([]string{"", "message", "input_text", "input_image", "input_file"}, kind)) {
 				lastUser = i
 			}
 		}
@@ -293,7 +294,10 @@ func Extract(body []byte, protocol string) ([]Segment, string) {
 			}
 		}
 		kind, _ := message["type"].(string)
-		if kind == "function_call_output" || kind == "tool_result" {
+		if isMediaContent(message) && partial == "" {
+			partial = "binary_media"
+		}
+		if slices.Contains([]string{"function_call", "function_call_output", "custom_tool_call", "custom_tool_call_output", "tool_result"}, kind) {
 			source = "tool"
 		}
 		if content, ok := message["content"]; ok {
@@ -317,6 +321,14 @@ func Extract(body []byte, protocol string) ([]Segment, string) {
 		if kind == "function_call" {
 			segments, partial = appendToolData(segments, "tool", message["arguments"], partial, false, 0)
 		}
+		if kind == "custom_tool_call" {
+			segments, partial = appendToolData(segments, "tool", message["input"], partial, false, 0)
+		}
+		if kind == "reasoning" {
+			// Summaries are readable history; encrypted provider state is not
+			// user-authored text and must not replace the latest user turn.
+			segments, partial = appendContent(segments, "history", message["summary"], partial, 0)
+		}
 	}
 	for _, key := range []string{"tools", "functions"} {
 		if value, ok := root[key]; ok {
@@ -327,6 +339,14 @@ func Extract(body []byte, protocol string) ([]Segment, string) {
 	}
 	for _, key := range []string{"prompt", "negative_prompt", "query", "text", "content"} {
 		if value, ok := root[key]; ok {
+			if key == "text" && protocol == "openai_responses" {
+				if config, ok := value.(map[string]any); ok {
+					// Responses.text describes the output format, not user input.
+					// Inspect schema descriptions without treating them as media.
+					segments, partial = appendToolData(segments, "tool", config, partial, true, 0)
+					continue
+				}
+			}
 			segments, partial = appendContent(segments, "current", value, partial, 0)
 		}
 	}
@@ -338,7 +358,23 @@ func Extract(body []byte, protocol string) ([]Segment, string) {
 		}
 	}
 	for _, key := range []string{"image", "images", "audio", "file", "files", "image_url", "image_urls", "base64", "base64Array", "maskBase64"} {
-		if _, ok := root[key]; ok {
+		if value, ok := root[key]; ok {
+			switch value := value.(type) {
+			case nil:
+				continue
+			case string:
+				if value == "" {
+					continue
+				}
+			case []any:
+				if len(value) == 0 {
+					continue
+				}
+			case map[string]any:
+				if len(value) == 0 {
+					continue
+				}
+			}
 			if partial == "" {
 				partial = "binary_media"
 			}

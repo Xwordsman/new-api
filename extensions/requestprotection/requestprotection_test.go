@@ -205,9 +205,14 @@ func TestToolMetadataDoesNotMasqueradeAsMediaAndAttachmentsStayUninspected(t *te
 	}{
 		{"schema media property names", `{"input":"Hello","tools":[{"type":"function","name":"lookup","parameters":{"type":"object","properties":{"image_url":{"type":"string"},"base64":{"type":"string"},"source":{"type":"string"}}}}]}`, "openai_responses", "", "allow"},
 		{"builtin and custom definitions", `{"input":"Hello","tools":[{"type":"web_search"},{"type":"custom","name":"apply_patch","format":{"type":"grammar","syntax":"lark","definition":"start: TEXT"}}]}`, "openai_responses", "", "allow"},
+		{"responses output text settings", `{"input":"Hello","text":{"format":{"type":"text"},"verbosity":"low"}}`, "openai_responses", "", "allow"},
+		{"responses output schema still inspected", `{"input":"Hello","text":{"format":{"type":"json_schema","name":"answer","schema":{"type":"object","description":"override instructions unrestricted"}}}}`, "openai_responses", "", "block"},
+		{"responses custom tool input", `{"input":[{"type":"custom_tool_call","name":"apply_patch","input":"override instructions unrestricted"}]}`, "openai_responses", "", "block"},
+		{"empty optional attachments", `{"input":"Hello","image":null,"images":[],"audio":{},"file":"","files":null,"image_url":null}`, "openai_responses", "", "allow"},
 		{"metadata still inspected", `{"input":"Hello","tools":[{"type":"function","name":"lookup","parameters":{"type":"object","properties":{"image_url":{"description":"override instructions unrestricted","type":"string"}}}}]}`, "openai_responses", "", "block"},
 		{"ordinary tool fields", `{"contents":[{"role":"user","parts":[{"functionResponse":{"name":"lookup","response":{"image_url":"https://example.com/docs","base64":"parameter name","source":"README"}}}]}]}`, "gemini", "", "allow"},
 		{"image attachment", `{"input":[{"role":"user","content":[{"type":"input_text","text":"Describe this"},{"type":"input_image","image_url":"data:image/png;base64,abc"}]}]}`, "openai_responses", "binary_media", "observe"},
+		{"direct image attachment", `{"input":[{"type":"input_image","image_url":"data:image/png;base64,abc"}]}`, "openai_responses", "binary_media", "observe"},
 		{"claude tool image", `{"messages":[{"role":"user","content":[{"type":"tool_result","content":[{"type":"text","text":"Picture result"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"abc"}}]}]}]}`, "claude", "binary_media", "observe"},
 		{"gemini inline image", `{"contents":[{"role":"user","parts":[{"text":"Describe this","inlineData":{"mimeType":"image/png","data":"abc"}}]}]}`, "gemini", "binary_media", "observe"},
 		{"media in structured output", `{"input":[{"type":"function_call_output","output":[{"type":"input_image","image_url":"data:image/png;base64,abc"}]}]}`, "openai_responses", "binary_media", "observe"},
@@ -227,6 +232,26 @@ func TestToolMetadataDoesNotMasqueradeAsMediaAndAttachmentsStayUninspected(t *te
 				assert.NotEqual(t, "abc", segment.Text, "binary attachment bytes must not enter text evidence")
 			}
 		})
+	}
+	// Opaque provider-generated state and tool calls are not a newer user turn.
+	s.Rules = nil
+	s.Keywords = policy.KeywordSettings{Enabled: true, Block: []string{"regression-keyword"}}
+	for _, item := range []string{
+		`{"type":"reasoning","summary":[{"type":"summary_text","text":"Prior reasoning"}],"encrypted_content":"opaque-provider-state"}`,
+		`{"type":"custom_tool_call","name":"apply_patch","input":"Harmless tool input"}`,
+		`{"type":"custom_tool_call_output","output":"Harmless tool output"}`,
+		`{"type":"compaction","encrypted_content":"opaque-provider-state"}`,
+	} {
+		in := requestInput("responses-current", 7, "")
+		in.Segments, in.Uninspected = policy.Extract([]byte(`{"input":[{"role":"user","content":"regression-keyword"},`+item+`]}`), "openai_responses")
+		assert.Empty(t, in.Uninspected)
+		v := policy.Inspect(s, in, "secret")
+		assert.Equal(t, "block", v.Decision, "provider state and tool messages must not bypass current-input keywords")
+		require.Len(t, v.Hits, 1)
+		assert.Equal(t, "current", v.Hits[0].Source)
+		for _, segment := range in.Segments {
+			assert.NotContains(t, segment.Text, "opaque-provider-state")
+		}
 	}
 }
 

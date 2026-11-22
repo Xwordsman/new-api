@@ -44,7 +44,11 @@ import { getEvents } from '../api'
 import type { EventFilters, ProtectionEvent } from '../types'
 import { EventDetailsDialog } from './event-details-dialog'
 import { ProtectionPagination } from './protection-pagination'
-import { ProtectionLabel, SuspectedIntent } from './record-label'
+import {
+  InspectionCoverage,
+  ProtectionLabel,
+  SuspectedIntent,
+} from './record-label'
 import { RestrictionsPanel } from './restrictions-panel'
 import { ProtectionReviewDialog, type ReviewAction } from './review-dialog'
 
@@ -155,9 +159,7 @@ export function EventsPanel() {
           </div>
           {(event.uninspected || event.finding === 'check_failed') && (
             <div className='text-muted-foreground w-48 text-xs whitespace-normal'>
-              <ProtectionLabel
-                value={event.uninspected || event.reason || event.finding}
-              />
+              <InspectionCoverage event={event} />
             </div>
           )}
         </div>

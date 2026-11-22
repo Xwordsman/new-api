@@ -29,7 +29,11 @@ import { formatTimestamp } from '@/lib/format'
 
 import { getEventDetails } from '../api'
 import type { ProtectionEvent } from '../types'
-import { ProtectionLabel, SuspectedIntent } from './record-label'
+import {
+  InspectionCoverage,
+  ProtectionLabel,
+  SuspectedIntent,
+} from './record-label'
 import type { ReviewAction } from './review-dialog'
 
 export function EventDetailsDialog(props: {
@@ -133,9 +137,7 @@ export function EventDetailsDialog(props: {
       {(event.uninspected || event.finding === 'check_failed') && (
         <section className='space-y-2'>
           <h3 className='font-semibold'>{t('Inspection coverage')}</h3>
-          <ProtectionLabel
-            value={event.uninspected || event.reason || event.finding}
-          />
+          <InspectionCoverage event={event} />
         </section>
       )}
       <section className='space-y-2'>

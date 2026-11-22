@@ -300,54 +300,87 @@ it('lists named users and channels in columns and pauses only the user selected 
   )
 })
 
-it('separates incomplete inspection coverage from suspected intent in the log and details', async () => {
-  const user = userEvent.setup()
-  vi.spyOn(api, 'get').mockImplementation(async (url) => ({
-    data: {
-      success: true,
-      data: url.endsWith('/events/72')
-        ? { request_content: '[current]\nHello', audits: [] }
-        : {
-            items: [
-              {
-                id: 72,
-                user_id: 42,
-                created_at: 1795200000,
-                model: 'gpt-4.1',
-                decision: 'observe',
-                finding: 'check_failed',
-                reason: 'incomplete_input',
-                uninspected: 'binary_or_unknown_content',
-                matches: [],
-                upstream: 'responded',
-                preview: 'Hello',
-              },
-            ],
-            total: 1,
-            page: 1,
-          },
-    },
-  }))
-  render(
-    <QueryClientProvider client={client}>
-      <EventsPanel />
-    </QueryClientProvider>
-  )
-  const intent = await screen.findByRole('cell', {
-    name: 'No violation intent conclusion',
-  })
-  expect(intent).not.toHaveTextContent('Input could not be fully inspected')
-  const coverage = screen.getByRole('cell', {
-    name: /Record only.*Media or unknown content/,
-  })
-  expect(coverage).toHaveTextContent('Upstream responded')
-  await user.click(screen.getByRole('button', { name: 'View details' }))
-  const details = await screen.findByRole('dialog')
-  expect(
-    within(details).getByText('No violation intent conclusion')
-  ).toBeVisible()
-  expect(within(details).getByText('Media or unknown content')).toBeVisible()
-  expect(
-    within(details).getByRole('heading', { name: 'Inspection coverage' })
-  ).toBeVisible()
-})
+it.each([
+  {
+    uninspected: 'binary_or_unknown_content',
+    intent: 'No violation intent conclusion',
+    coverage: 'Media or unknown content',
+    matches: [],
+  },
+  {
+    uninspected: 'binary_media',
+    intent: 'No matches in inspected text',
+    coverage: 'Text checked; media not inspected',
+    matches: [],
+  },
+  {
+    uninspected: 'text_limit',
+    intent: 'No violation intent conclusion',
+    coverage: 'Text exceeds inspection limit',
+    matches: [],
+  },
+  {
+    uninspected: 'binary_media',
+    intent: 'Matched rules; intent not classified',
+    coverage: 'Text checked; media not inspected',
+    matches: [
+      {
+        rule_id: 'operator-rule',
+        name: 'Operator rule',
+        source: 'current',
+        action: 'observe',
+      },
+    ],
+  },
+])(
+  'separates $uninspected coverage from intent with $intent',
+  async (sample) => {
+    const user = userEvent.setup()
+    vi.spyOn(api, 'get').mockImplementation(async (url) => ({
+      data: {
+        success: true,
+        data: url.endsWith('/events/72')
+          ? { request_content: '[current]\nHello', audits: [] }
+          : {
+              items: [
+                {
+                  id: 72,
+                  user_id: 42,
+                  created_at: 1795200000,
+                  model: 'gpt-4.1',
+                  decision: 'observe',
+                  finding: 'check_failed',
+                  reason: 'incomplete_input',
+                  uninspected: sample.uninspected,
+                  matches: sample.matches,
+                  upstream: 'responded',
+                  preview: 'Hello',
+                },
+              ],
+              total: 1,
+              page: 1,
+            },
+      },
+    }))
+    render(
+      <QueryClientProvider client={client}>
+        <EventsPanel />
+      </QueryClientProvider>
+    )
+    const intent = await screen.findByRole('cell', {
+      name: sample.intent,
+    })
+    expect(intent).not.toHaveTextContent('Input could not be fully inspected')
+    const coverage = screen.getByRole('cell', {
+      name: new RegExp(`Record only.*${sample.coverage}`),
+    })
+    expect(coverage).toHaveTextContent('Upstream responded')
+    await user.click(screen.getByRole('button', { name: 'View details' }))
+    const details = await screen.findByRole('dialog')
+    expect(within(details).getByText(sample.intent)).toBeVisible()
+    expect(within(details).getByText(sample.coverage)).toBeVisible()
+    expect(
+      within(details).getByRole('heading', { name: 'Inspection coverage' })
+    ).toBeVisible()
+  }
+)
