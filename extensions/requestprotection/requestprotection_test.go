@@ -269,6 +269,31 @@ func TestPluginSignatureUsesExistingUserThresholdAcrossKeysAndGroups(t *testing.
 	assert.Zero(t, until)
 }
 
+func TestSavedRulesDoNotInheritDefaultSignatureMetadata(t *testing.T) {
+	db := protectionDB(t)
+	legacy := policy.Rule{ID: "legacy", Name: "Legacy rule", Enabled: true, Kind: "any", Patterns: []string{"legacy-marker"}, Sources: []string{"current"}, Action: "block"}
+	for _, tc := range []struct {
+		name, body string
+		rules      []policy.Rule
+	}{
+		{"legacy rule", `{"rules":[{"id":"legacy","name":"Legacy rule","enabled":true,"kind":"any","patterns":["legacy-marker"],"sources":["current"],"action":"block"}]}`, []policy.Rule{legacy}},
+		{"absent rules retain defaults", `{}`, policy.Defaults().Rules},
+		{"empty rules", `{"rules":[]}`, []policy.Rule{}},
+		{"null rules", `{"rules":null}`, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			decoded := policy.Defaults()
+			require.NoError(t, common.DecodeJson(strings.NewReader(tc.body), &decoded))
+			assert.Equal(t, tc.rules, decoded.Rules, "admin settings and dry-run JSON must preserve explicit rules")
+			require.NoError(t, db.Where(&model.Option{Key: policy.SettingsKey}).Delete(&model.Option{}).Error)
+			require.NoError(t, db.Create(&model.Option{Key: policy.SettingsKey, Value: tc.body}).Error)
+			loaded, err := policy.GetSettings(db)
+			require.NoError(t, err)
+			assert.Equal(t, tc.rules, loaded.Rules, "saved rules must not reuse populated default rule objects")
+		})
+	}
+}
+
 func TestStrictTextInspectionRejectsLimitsWithoutPenalizingOrBlockingMedia(t *testing.T) {
 	s := blockingSettings()
 	s.RequireCompleteText, s.MaxTextBytes = true, 256

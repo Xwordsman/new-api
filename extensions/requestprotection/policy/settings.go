@@ -37,6 +37,18 @@ type Rule struct {
 	CountPenalty   bool     `json:"count_penalty"`
 }
 
+func (r *Rule) UnmarshalJSON(data []byte) error {
+	// A saved rule replaces one default rule. Omitted metadata and penalty
+	// flags must start empty instead of inheriting a different signature.
+	type ruleJSON Rule
+	var decoded ruleJSON
+	if err := common.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*r = Rule(decoded)
+	return nil
+}
+
 type Settings struct {
 	Keywords            KeywordSettings  `json:"keywords"`
 	SuspendUntilReview  bool             `json:"suspend_until_review"`
