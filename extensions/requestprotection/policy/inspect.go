@@ -411,8 +411,16 @@ func appendContent(out []Segment, source string, content any, partial string, de
 		if kind == "tool_result" || kind == "function_call_output" {
 			source = "tool"
 		}
-		textFound := false
-		if kind == "tool_use" {
+		// Claude replays signed thinking blocks in assistant history. Inspect
+		// readable thinking, but never turn signatures or redacted state into text.
+		textFound := kind == "redacted_thinking" && source == "history"
+		if kind == "thinking" {
+			if thinking, ok := v["thinking"]; ok {
+				out, partial = appendContent(out, source, thinking, partial, depth+1)
+				textFound = true
+			}
+		}
+		if kind == "tool_use" || kind == "server_tool_use" {
 			out, partial = appendToolData(out, "tool", v["input"], partial, false, depth+1)
 			textFound = true
 		}

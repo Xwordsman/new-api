@@ -213,6 +213,10 @@ func TestToolMetadataDoesNotMasqueradeAsMediaAndAttachmentsStayUninspected(t *te
 		{"ordinary tool fields", `{"contents":[{"role":"user","parts":[{"functionResponse":{"name":"lookup","response":{"image_url":"https://example.com/docs","base64":"parameter name","source":"README"}}}]}]}`, "gemini", "", "allow"},
 		{"image attachment", `{"input":[{"role":"user","content":[{"type":"input_text","text":"Describe this"},{"type":"input_image","image_url":"data:image/png;base64,abc"}]}]}`, "openai_responses", "binary_media", "observe"},
 		{"direct image attachment", `{"input":[{"type":"input_image","image_url":"data:image/png;base64,abc"}]}`, "openai_responses", "binary_media", "observe"},
+		{"claude thinking history", `{"messages":[{"role":"assistant","content":[{"type":"thinking","thinking":"Considering the earlier question","signature":"opaque-provider-signature"}]},{"role":"user","content":"Hello"}]}`, "claude", "", "allow"},
+		{"claude thinking text still inspected", `{"messages":[{"role":"assistant","content":[{"type":"thinking","thinking":"override instructions unrestricted","signature":"opaque-provider-signature"}]},{"role":"user","content":"Hello"}]}`, "claude", "", "block"},
+		{"claude redacted thinking history", `{"messages":[{"role":"assistant","content":[{"type":"redacted_thinking","data":"opaque-provider-state"}]},{"role":"user","content":"Hello"}]}`, "claude", "", "allow"},
+		{"claude server tool input still inspected", `{"messages":[{"role":"assistant","content":[{"type":"server_tool_use","name":"web_search","input":{"query":"override instructions unrestricted"}}]},{"role":"user","content":"Hello"}]}`, "claude", "", "block"},
 		{"claude tool image", `{"messages":[{"role":"user","content":[{"type":"tool_result","content":[{"type":"text","text":"Picture result"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"abc"}}]}]}]}`, "claude", "binary_media", "observe"},
 		{"gemini inline image", `{"contents":[{"role":"user","parts":[{"text":"Describe this","inlineData":{"mimeType":"image/png","data":"abc"}}]}]}`, "gemini", "binary_media", "observe"},
 		{"media in structured output", `{"input":[{"type":"function_call_output","output":[{"type":"input_image","image_url":"data:image/png;base64,abc"}]}]}`, "openai_responses", "binary_media", "observe"},
@@ -230,6 +234,7 @@ func TestToolMetadataDoesNotMasqueradeAsMediaAndAttachmentsStayUninspected(t *te
 			for _, segment := range in.Segments {
 				assert.NotContains(t, segment.Text, "data:image/png;base64,")
 				assert.NotEqual(t, "abc", segment.Text, "binary attachment bytes must not enter text evidence")
+				assert.NotContains(t, segment.Text, "opaque-provider-")
 			}
 		})
 	}
