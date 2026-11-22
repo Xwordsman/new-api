@@ -61,7 +61,10 @@ export function HistoryStrip(props: {
           bucket.success_rate == null
             ? '—'
             : `${formatNumber(bucket.success_rate, locale)}%`
-        const summary = `${formatTimestamp(bucket.start).slice(0, 16)} · ${t('Requests')}: ${formatNumber(bucket.outcomes, locale)} · ${t('Success rate')}: ${successRate}`
+        let summary = `${formatTimestamp(bucket.start).slice(0, 16)} · ${t('Requests')}: ${formatNumber(bucket.outcomes, locale)} · ${t('Success rate')}: ${successRate}`
+        if (bucket.probes) {
+          summary += ` · ${t('Active probe')}: ${formatNumber(bucket.probes, locale)} · ${t('Probe success rate')}: ${formatNumber(((bucket.probe_successes ?? 0) / bucket.probes) * 100, locale)}%`
+        }
         return (
           <Tooltip key={bucket.start}>
             <TooltipTrigger
@@ -97,7 +100,9 @@ export function HistoryStrip(props: {
                   }}
                   className={cn(
                     'h-full min-w-0 flex-1 rounded-xs border-0 p-0 outline-offset-2',
-                    colors[bucket.status]
+                    colors[bucket.status],
+                    bucket.source === 'probe' &&
+                      'opacity-60 ring-1 ring-inset ring-primary/60'
                   )}
                 />
               }

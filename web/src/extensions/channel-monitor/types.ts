@@ -47,17 +47,27 @@ export type MonitorGroupSettings = {
   badge: string
   icon?: string
   promotion: null
+  probe_models?: string[]
+}
+
+export type MonitorProbeSettings = {
+  enabled: boolean
+  interval_minutes: number
+  only_when_idle: boolean
+  daily_limit: number
 }
 
 export type MonitorSettings = {
   revision: number
   enabled: boolean
   groups: MonitorGroupSettings[]
+  probe?: MonitorProbeSettings
 }
 
 export type MonitorSettingsResponse = {
   settings: MonitorSettings
-  available_groups: { group: string; ratio: number }[]
+  available_groups: { group: string; ratio: number; models?: string[] }[]
+  probe_usage_24h?: number
 }
 
 export type MonitorBucket = {
@@ -67,6 +77,20 @@ export type MonitorBucket = {
   outcomes: number
   successes: number
   success_rate: number | null
+  source?: 'probe'
+  probes?: number
+  probe_successes?: number
+}
+
+export type MonitorProbe = {
+  model: string
+  created_at: number
+  status: 'passed' | 'failed' | 'timeout'
+  latency_ms: number
+  ttft_ms: number | null
+  input_tokens: number
+  output_tokens: number
+  manual: boolean
 }
 
 export type MonitorGroup = MonitorGroupSettings &
@@ -94,8 +118,19 @@ export type MonitorGroup = MonitorGroupSettings &
       }
     }
     status: MonitorStatus
+    status_source?: 'real' | 'probe'
+    probe_summary?: {
+      samples: number
+      enabled_models: number
+      success_rate: number
+      ttft_seconds: number | null
+    }
     timeline: MonitorBucket[]
-    models: (MonitorMetrics & { model: string; enabled: boolean })[]
+    models: (MonitorMetrics & {
+      model: string
+      enabled: boolean
+      probe?: MonitorProbe
+    })[]
     sample_limited: boolean
     observed_from: number
   }

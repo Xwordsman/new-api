@@ -158,6 +158,7 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"GET /api/extensions/channel-monitor/snapshot":             accessTokenSessionRule,
 	"GET /api/extensions/channel-monitor/admin/settings":       accessTokenSessionRule,
 	"PUT /api/extensions/channel-monitor/admin/settings":       accessTokenSessionRule,
+	"POST /api/extensions/channel-monitor/admin/probe":         accessTokenSessionRule,
 	"GET /api/extensions/referral/dashboard":                   accessTokenSessionRule,
 	"GET /api/extensions/referral/invitees":                    accessTokenSessionRule,
 	"GET /api/extensions/referral/rewards":                     accessTokenSessionRule,

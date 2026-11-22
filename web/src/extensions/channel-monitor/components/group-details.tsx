@@ -184,56 +184,70 @@ export function GroupDetails(props: {
               return (
                 <li
                   key={observed.model}
-                  className='group/model flex min-w-0 items-center rounded-[calc(var(--radius)*0.25)] border'
+                  className='group/model min-w-0 rounded-[calc(var(--radius)*0.25)] border'
                 >
-                  <Button
-                    variant='ghost'
-                    className='h-auto min-h-8 min-w-0 flex-1 shrink justify-between gap-2 rounded-r-none px-2 text-[11px]'
-                    disabled={!model}
-                    aria-label={t('View prices for {{model}}', {
-                      model: observed.model,
-                    })}
-                    onClick={() => model && setSelected(model)}
-                  >
-                    <span className='flex min-w-0 items-center gap-2'>
-                      {iconKey && (
-                        <span className='shrink-0' aria-hidden>
-                          {getLobeIcon(iconKey, 14)}
+                  <div className='flex min-w-0 items-center'>
+                    <Button
+                      variant='ghost'
+                      className='h-auto min-h-8 min-w-0 flex-1 shrink justify-between gap-2 rounded-r-none px-2 text-[11px]'
+                      disabled={!model}
+                      aria-label={t('View prices for {{model}}', {
+                        model: observed.model,
+                      })}
+                      onClick={() => model && setSelected(model)}
+                    >
+                      <span className='flex min-w-0 items-center gap-2'>
+                        {iconKey && (
+                          <span className='shrink-0' aria-hidden>
+                            {getLobeIcon(iconKey, 14)}
+                          </span>
+                        )}
+                        <span
+                          className='truncate font-mono'
+                          title={observed.model}
+                        >
+                          {observed.model}
+                        </span>
+                      </span>
+                      {model ? (
+                        <ModelPriceCell
+                          model={model}
+                          compact
+                          showExpression={false}
+                          options={{
+                            selectedGroup: group.group,
+                            tokenUnit: 'M',
+                            priceRate: pricing.priceRate,
+                            usdExchangeRate: pricing.usdExchangeRate,
+                          }}
+                        />
+                      ) : (
+                        <span className='text-muted-foreground text-[10px]'>
+                          {t('Price unavailable')}
                         </span>
                       )}
-                      <span
-                        className='truncate font-mono'
-                        title={observed.model}
-                      >
-                        {observed.model}
-                      </span>
-                    </span>
-                    {model ? (
-                      <ModelPriceCell
-                        model={model}
-                        compact
-                        showExpression={false}
-                        options={{
-                          selectedGroup: group.group,
-                          tokenUnit: 'M',
-                          priceRate: pricing.priceRate,
-                          usdExchangeRate: pricing.usdExchangeRate,
-                        }}
-                      />
-                    ) : (
-                      <span className='text-muted-foreground text-[10px]'>
-                        {t('Price unavailable')}
-                      </span>
-                    )}
-                  </Button>
-                  <CopyButton
-                    value={observed.model}
-                    className='size-6 rounded-[calc(var(--radius)*0.25)] opacity-60 group-hover/model:opacity-100 focus-visible:opacity-100'
-                    iconClassName='size-3'
-                    aria-label={t('Copy model ID {{model}}', {
-                      model: observed.model,
-                    })}
-                  />
+                    </Button>
+                    <CopyButton
+                      value={observed.model}
+                      className='size-6 rounded-[calc(var(--radius)*0.25)] opacity-60 group-hover/model:opacity-100 focus-visible:opacity-100'
+                      iconClassName='size-3'
+                      aria-label={t('Copy model ID {{model}}', {
+                        model: observed.model,
+                      })}
+                    />
+                  </div>
+                  {observed.probe && (
+                    <p className='text-muted-foreground border-t px-2 py-1 text-[10px]'>
+                      {t('Active probe')} ·{' '}
+                      {observed.probe.status === 'passed'
+                        ? t('Passed')
+                        : t('Failed')}{' '}
+                      · {formatTimestamp(observed.probe.created_at)}
+                      {observed.probe.status === 'passed' &&
+                        observed.probe.ttft_ms != null &&
+                        ` · ${t('Time to first token')}: ${formatNumber(observed.probe.ttft_ms / 1000, locale)}s`}
+                    </p>
+                  )}
                 </li>
               )
             })}
@@ -271,9 +285,18 @@ export function GroupDetails(props: {
           </p>
           <p className='text-muted-foreground mt-2 text-[10px] leading-5'>
             {t(
-              'Measured successful streams only. Speed is estimated from whole-second logs; no active probes are sent.'
+              'Period metrics use real requests only. Active probes measure availability and first-token latency separately; short responses do not provide speed or cache statistics.'
             )}
           </p>
+          {group.probe_summary && (
+            <p className='text-muted-foreground mt-2 text-[11px]'>
+              {t('Probe sample: {{sampled}}/{{total}} models', {
+                sampled: formatNumber(group.probe_summary.samples, locale),
+                total: formatNumber(group.probe_summary.enabled_models, locale),
+              })}{' '}
+              · {formatNumber(group.probe_summary.success_rate, locale)}%
+            </p>
+          )}
         </section>
       </div>
       <section
@@ -298,6 +321,10 @@ export function GroupDetails(props: {
             { label: '60–80%', color: 'bg-warning' },
             { label: '<60%', color: 'bg-destructive' },
             { label: t('Unobserved'), color: 'bg-muted-foreground/25' },
+            {
+              label: t('Active probe'),
+              color: 'bg-primary/40 ring-1 ring-primary',
+            },
           ].map((item) => (
             <span key={item.label} className='flex items-center gap-1.5'>
               <span aria-hidden className={`size-1.5 ${item.color}`} />

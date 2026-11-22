@@ -145,12 +145,26 @@ export function ChannelMonitorPage() {
       ].some((value) => value.toLowerCase().includes(needle))
   )
   if (sort === 'success') {
-    groups.sort((a, b) => (b.success_rate ?? -1) - (a.success_rate ?? -1))
+    groups.sort(
+      (a, b) =>
+        ((b.status_source === 'probe'
+          ? b.probe_summary?.success_rate
+          : b.success_rate) ?? -1) -
+        ((a.status_source === 'probe'
+          ? a.probe_summary?.success_rate
+          : a.success_rate) ?? -1)
+    )
   }
   if (sort === 'ratio') groups.sort((a, b) => a.ratio - b.ratio)
   if (sort === 'latency') {
     groups.sort(
-      (a, b) => (a.ttft_seconds ?? Infinity) - (b.ttft_seconds ?? Infinity)
+      (a, b) =>
+        ((a.status_source === 'probe'
+          ? a.probe_summary?.ttft_seconds
+          : a.ttft_seconds) ?? Infinity) -
+        ((b.status_source === 'probe'
+          ? b.probe_summary?.ttft_seconds
+          : b.ttft_seconds) ?? Infinity)
     )
   }
   if (sort === 'speed') {

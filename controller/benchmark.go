@@ -12,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/extensions/benchmark"
+	"github.com/QuantumNous/new-api/extensions/channelmonitor"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 )
@@ -31,7 +32,7 @@ func RunBenchmarkProbe(ctx context.Context, group, modelName, prompt string, max
 	c.Request = httptest.NewRequestWithContext(ctx, http.MethodPost, path, nil)
 	common.SetContextKey(c, constant.ContextKeyUsingGroup, group)
 	channel, _, selectionErr := service.SelectChannelForRequest(c, modelName, &service.RetryParam{Ctx: c, TokenGroup: group, ModelName: modelName, RequestPath: path})
-	if selectionErr != nil {
+	if selectionErr != nil || channel == nil {
 		return result, errors.New("benchmark route unavailable")
 	}
 	result.ChannelID = channel.Id
@@ -57,6 +58,48 @@ func RunBenchmarkProbe(ctx context.Context, group, modelName, prompt string, max
 	output, truncated, err := benchmarkStreamOutput(response.body, endpoint == string(constant.EndpointTypeOpenAIResponse))
 	result.Output, result.Truncated = output, truncated
 	return result, err
+}
+
+// RunChannelMonitorProbe uses normal group selection without retries or wallet
+// settlement. Only text generation endpoints are allowed for this tiny probe.
+func RunChannelMonitorProbe(ctx context.Context, group, modelName string) (channelmonitor.ProbeResult, error) {
+	result := channelmonitor.ProbeResult{}
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	path := "/v1/chat/completions"
+	if strings.Contains(strings.ToLower(modelName), "codex") {
+		path = "/v1/responses"
+	}
+	c.Request = httptest.NewRequestWithContext(ctx, http.MethodPost, path, nil)
+	common.SetContextKey(c, constant.ContextKeyUsingGroup, group)
+	channel, _, selectionErr := service.SelectChannelForRequest(c, modelName, &service.RetryParam{Ctx: c, TokenGroup: group, ModelName: modelName, RequestPath: path})
+	if selectionErr != nil || channel == nil {
+		return result, errors.New("monitor route unavailable")
+	}
+	result.ChannelID = channel.Id
+	userID, err := resolveChannelTestUserID(nil)
+	if err != nil {
+		return result, errors.New("monitor test account unavailable")
+	}
+	endpoint := string(constant.EndpointTypeOpenAI)
+	if path == "/v1/responses" || channel.Type == constant.ChannelTypeCodex {
+		endpoint = string(constant.EndpointTypeOpenAIResponse)
+	}
+	response := executeChannelTest(ctx, channel, userID, modelName, endpoint, true, &channelProbeOptions{
+		group: group, prompt: channelmonitor.ProbePrompt, maxTokens: channelmonitor.ProbeMaxTokens, monitor: true,
+	})
+	if response.localErr != nil || response.newAPIError != nil {
+		return result, errors.New("monitor upstream request failed")
+	}
+	output, _, err := benchmarkStreamOutput(response.body, endpoint == string(constant.EndpointTypeOpenAIResponse))
+	if err != nil || strings.TrimSpace(output) == "" {
+		return result, errors.New("monitor empty or interrupted response")
+	}
+	if response.usage != nil {
+		result.InputTokens = response.usage.PromptTokens
+		result.OutputTokens = response.usage.CompletionTokens
+	}
+	result.TTFTMS = response.ttftMS
+	return result, nil
 }
 
 // benchmarkStreamOutput grades only user-visible output, never reasoning or

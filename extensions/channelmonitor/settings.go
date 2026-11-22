@@ -29,12 +29,25 @@ type GroupSettings struct {
 	Badge       string              `json:"badge"`
 	Icon        string              `json:"icon,omitempty"`
 	Promotion   *groupdiscount.Rule `json:"promotion"`
+	ProbeModels []string            `json:"probe_models,omitempty"`
+}
+
+type ProbeSettings struct {
+	Enabled         bool `json:"enabled"`
+	IntervalMinutes int  `json:"interval_minutes"`
+	OnlyWhenIdle    bool `json:"only_when_idle"`
+	DailyLimit      int  `json:"daily_limit"`
 }
 
 type Settings struct {
 	Revision int64           `json:"revision"`
 	Enabled  bool            `json:"enabled"`
 	Groups   []GroupSettings `json:"groups"`
+	Probe    *ProbeSettings  `json:"probe"`
+}
+
+func defaultProbeSettings() *ProbeSettings {
+	return &ProbeSettings{IntervalMinutes: 30, OnlyWhenIdle: true, DailyLimit: 500}
 }
 
 func orderGroups(groups []GroupSettings) []GroupSettings {
@@ -58,7 +71,7 @@ func Enabled(db *gorm.DB) (bool, error) {
 }
 
 func getSettings(db *gorm.DB) (Settings, string, error) {
-	settings := Settings{Groups: []GroupSettings{}}
+	settings := Settings{Groups: []GroupSettings{}, Probe: defaultProbeSettings()}
 	var option model.Option
 	err := db.Where(clause.Eq{Column: "key", Value: settingsKey}).Take(&option).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -76,15 +89,25 @@ func getSettings(db *gorm.DB) (Settings, string, error) {
 	if settings.Groups == nil {
 		settings.Groups = []GroupSettings{}
 	}
+	if settings.Probe == nil {
+		settings.Probe = defaultProbeSettings()
+	}
 	settings.Groups = orderGroups(settings.Groups)
 	return settings, option.Value, nil
 }
 
 func saveSettings(db *gorm.DB, settings Settings) (Settings, error) {
+	if settings.Probe == nil {
+		settings.Probe = defaultProbeSettings()
+	}
+	if settings.Probe.IntervalMinutes < 5 || settings.Probe.IntervalMinutes > 1440 || settings.Probe.DailyLimit < 1 || settings.Probe.DailyLimit > 5000 {
+		return settings, errInvalid
+	}
 	if settings.Revision < 0 || settings.Revision == math.MaxInt64 || len(settings.Groups) > 24 {
 		return settings, errInvalid
 	}
 	seen := make(map[string]bool, len(settings.Groups))
+	targets := 0
 	for i := range settings.Groups {
 		group := &settings.Groups[i]
 		group.DisplayName = strings.TrimSpace(group.DisplayName)
@@ -98,8 +121,22 @@ func saveSettings(db *gorm.DB, settings Settings) (Settings, error) {
 		if group.Promotion != nil {
 			return settings, errInvalid
 		}
+		if len(group.ProbeModels) > 8 || len(group.ProbeModels) > 0 && utf8.RuneCountInString(group.Group) > 191 {
+			return settings, errInvalid
+		}
+		models := make(map[string]bool)
+		for _, name := range group.ProbeModels {
+			if name == "" || name != strings.TrimSpace(name) || utf8.RuneCountInString(name) > 200 || models[name] {
+				return settings, errInvalid
+			}
+			models[name] = true
+		}
+		targets += len(group.ProbeModels)
 
 		seen[group.Group] = true
+	}
+	if targets > 48 || settings.Probe.Enabled && (!settings.Enabled || targets == 0) {
+		return settings, errInvalid
 	}
 	if settings.Groups == nil {
 		settings.Groups = []GroupSettings{}

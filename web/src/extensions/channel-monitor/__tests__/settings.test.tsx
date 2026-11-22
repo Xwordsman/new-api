@@ -24,6 +24,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 import { createAppQueryClient } from '@/lib/query-client'
 
+import { defaultProbeSettings } from '../lib/schema'
 import { ChannelMonitorSettingsPage } from '../settings-page'
 import type { MonitorSettingsResponse } from '../types'
 
@@ -170,7 +171,7 @@ it('retains unsaved group fields when collapsed and saves them while collapsed',
   await waitFor(() =>
     expect(put).toHaveBeenCalledWith(
       '/api/extensions/channel-monitor/admin/settings',
-      { ...saved, revision: 1 }
+      { ...saved, revision: 1, probe: defaultProbeSettings }
     )
   )
   client.clear()
@@ -302,23 +303,171 @@ it('saves a selected group icon and allows clearing it to restore automatic dete
   const input = screen.getByRole('combobox', { name: 'Group icon' })
   await user.type(input, 'Claude.Color')
   await user.click(await screen.findByRole('option', { name: 'Claude.Color' }))
+  vi.mocked(api.get).mockResolvedValue({
+    data: { success: true, data: { ...data, settings: saved } },
+  })
   await user.click(screen.getByRole('button', { name: 'Save' }))
   await waitFor(() =>
     expect(put).toHaveBeenLastCalledWith(
       '/api/extensions/channel-monitor/admin/settings',
-      { ...saved, revision: 1 }
+      { ...saved, revision: 1, probe: defaultProbeSettings }
     )
   )
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
   )
+  await user.click(screen.getByRole('button', { name: 'public' }))
   await user.click(screen.getByRole('button', { name: 'Clear' }))
-  expect(input).toHaveValue('')
+  expect(screen.getByRole('combobox', { name: 'Group icon' })).toHaveValue('')
   await user.click(screen.getByRole('button', { name: 'Save' }))
   await waitFor(() =>
     expect(put).toHaveBeenLastCalledWith(
       '/api/extensions/channel-monitor/admin/settings',
-      { ...saved, groups: [{ ...saved.groups[0], icon: '' }] }
+      {
+        ...saved,
+        groups: [{ ...saved.groups[0], icon: '' }],
+        probe: defaultProbeSettings,
+      }
+    )
+  )
+  client.clear()
+})
+
+it('defaults probes off and saves selected models before allowing a manual probe', async () => {
+  const user = userEvent.setup()
+  const data: MonitorSettingsResponse = {
+    settings: {
+      revision: 1,
+      enabled: true,
+      groups: [
+        {
+          group: 'public',
+          display_name: '',
+          description: '',
+          badge: '',
+          promotion: null,
+        },
+      ],
+    },
+    available_groups: [
+      { group: 'public', ratio: 0.3, models: ['text-small', 'text-large'] },
+    ],
+    probe_usage_24h: 3,
+  }
+  const client = renderSettings(data)
+  const manual = await screen.findByRole('button', { name: 'Probe now' })
+  expect(manual).toBeDisabled()
+  expect(
+    screen.getByRole('switch', { name: 'Enable automatic probes' })
+  ).not.toBeChecked()
+  expect(
+    screen.getByRole('switch', { name: 'Only probe idle models' })
+  ).toBeChecked()
+  expect(
+    screen.getByRole('spinbutton', { name: 'Probe interval (minutes)' })
+  ).toHaveValue(30)
+  expect(
+    screen.getByRole('spinbutton', { name: 'Probe limit per rolling 24 hours' })
+  ).toHaveValue(500)
+  await user.click(screen.getByRole('button', { name: 'public' }))
+  await user.click(
+    screen.getByRole('combobox', { name: 'Probe models for public' })
+  )
+  await user.click(await screen.findByRole('option', { name: 'text-small' }))
+  await user.keyboard('{Escape}')
+  await user.click(
+    screen.getByRole('switch', { name: 'Enable automatic probes' })
+  )
+  expect(manual).toBeDisabled()
+  const saved = {
+    ...data.settings,
+    revision: 2,
+    probe: { ...defaultProbeSettings, enabled: true },
+    groups: [{ ...data.settings.groups[0], probe_models: ['text-small'] }],
+  }
+  const put = vi
+    .spyOn(api, 'put')
+    .mockResolvedValue({ data: { success: true, data: saved } })
+  const post = vi.spyOn(api, 'post').mockResolvedValue({
+    data: { success: true, data: { task_id: 'probe-1', created: true } },
+  })
+  vi.mocked(api.get).mockResolvedValue({
+    data: { success: true, data: { ...data, settings: saved } },
+  })
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() =>
+    expect(put).toHaveBeenCalledWith(
+      '/api/extensions/channel-monitor/admin/settings',
+      { ...saved, revision: 1 }
+    )
+  )
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Probe now' })).toBeEnabled()
+  )
+  expect(
+    screen.getByText(
+      '1 targets · up to 48 scheduled requests per day · 3 attempts in the last 24 hours'
+    )
+  ).toBeVisible()
+  await user.click(screen.getByRole('button', { name: 'Probe now' }))
+  await waitFor(() =>
+    expect(post).toHaveBeenCalledWith(
+      '/api/extensions/channel-monitor/admin/probe'
+    )
+  )
+  client.clear()
+})
+
+it('rejects empty probe limits and clears automatic probing when monitoring is disabled', async () => {
+  const user = userEvent.setup()
+  const client = renderSettings({
+    settings: {
+      revision: 1,
+      enabled: true,
+      probe: { ...defaultProbeSettings, enabled: true },
+      groups: [
+        {
+          group: 'public',
+          display_name: '',
+          description: '',
+          badge: '',
+          promotion: null,
+          probe_models: ['text-small'],
+        },
+      ],
+    },
+    available_groups: [{ group: 'public', ratio: 0.3, models: ['text-small'] }],
+  })
+  const put = vi
+    .spyOn(api, 'put')
+    .mockResolvedValue({ data: { success: false, message: 'Rejected' } })
+  const interval = await screen.findByRole('spinbutton', {
+    name: 'Probe interval (minutes)',
+  })
+  await user.clear(interval)
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+  expect(
+    await screen.findByText('Invalid channel monitor settings')
+  ).toBeVisible()
+  expect(put).not.toHaveBeenCalled()
+  await user.type(interval, '30')
+  await user.click(
+    screen.getByRole('switch', { name: 'Enable channel monitor' })
+  )
+  const automatic = screen.getByRole('switch', {
+    name: 'Enable automatic probes',
+  })
+  expect(automatic).not.toBeChecked()
+  expect(automatic).toHaveAttribute('aria-disabled', 'true')
+  expect(screen.getByRole('button', { name: 'Probe now' })).toBeDisabled()
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() =>
+    expect(put).toHaveBeenCalledWith(
+      '/api/extensions/channel-monitor/admin/settings',
+      expect.objectContaining({
+        enabled: false,
+        probe: { ...defaultProbeSettings, enabled: false },
+      })
     )
   )
   client.clear()

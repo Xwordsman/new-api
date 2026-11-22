@@ -632,6 +632,29 @@ func TestBenchmarkProbeUsesGroupRoutingAndPreservesPromptLimitsAndWallet(t *test
 			assert.Equal(t, "benchmark", log.Group)
 			assert.Equal(t, modelName, log.ModelName)
 			assert.True(t, log.IsStream)
+			var before int64
+			require.NoError(t, db.Model(&model.Log{}).Count(&before).Error)
+			monitor, err := RunChannelMonitorProbe(context.Background(), "benchmark", modelName)
+			require.NoError(t, err)
+			assert.Equal(t, channel.Id, monitor.ChannelID)
+			assert.Equal(t, 8, monitor.OutputTokens)
+			require.NotNil(t, monitor.TTFTMS)
+			request = <-requests
+			assert.Contains(t, request.body, "Reply OK only.")
+			assert.NotContains(t, request.body, "replace prompt")
+			require.NoError(t, common.UnmarshalJsonStr(request.body, &body))
+			if protocol == "chat" {
+				assert.Equal(t, float64(32), body["max_completion_tokens"])
+			} else {
+				assert.Equal(t, float64(32), body["max_output_tokens"])
+			}
+			assert.NotContains(t, body, "n")
+			var after int64
+			require.NoError(t, db.Model(&model.Log{}).Count(&after).Error)
+			assert.Equal(t, before, after, "monitor probes have separate history")
+			require.NoError(t, db.First(&user, root.Id).Error)
+			assert.Equal(t, root.Quota, user.Quota)
+			assert.Zero(t, user.UsedQuota)
 
 			incomplete.Store(true)
 			result, err = RunBenchmarkProbe(context.Background(), "benchmark", modelName, "Configured candy prompt", 4096)

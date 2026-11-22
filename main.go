@@ -20,6 +20,7 @@ import (
 	"github.com/QuantumNous/new-api/controller"
 	"github.com/QuantumNous/new-api/extensions"
 	"github.com/QuantumNous/new-api/extensions/benchmark"
+	"github.com/QuantumNous/new-api/extensions/channelmonitor"
 	"github.com/QuantumNous/new-api/extensions/leaderboard"
 	"github.com/QuantumNous/new-api/extensions/referral"
 	"github.com/QuantumNous/new-api/extensions/registrationrisk"
@@ -196,6 +197,7 @@ func main() {
 	// switch are enforced inside the runner and each handler's Enabled().
 	controller.RegisterScheduledSystemTasks()
 	benchmark.RegisterTasks(controller.RunBenchmarkProbe)
+	channelmonitor.RegisterTasks(controller.RunChannelMonitorProbe)
 	leaderboard.RegisterTasks()
 	registrationrisk.RegisterTasks()
 	referral.RegisterTasks()

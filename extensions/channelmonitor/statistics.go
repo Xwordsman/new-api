@@ -38,26 +38,31 @@ type Metrics struct {
 }
 
 type Bucket struct {
-	Start       int64    `json:"start"`
-	End         int64    `json:"end"`
-	Outcomes    int      `json:"outcomes"`
-	Successes   int      `json:"successes"`
-	SuccessRate *float64 `json:"success_rate"`
-	Status      string   `json:"status"`
+	Start          int64    `json:"start"`
+	End            int64    `json:"end"`
+	Outcomes       int      `json:"outcomes"`
+	Successes      int      `json:"successes"`
+	SuccessRate    *float64 `json:"success_rate"`
+	Status         string   `json:"status"`
+	Source         string   `json:"source,omitempty"`
+	Probes         int      `json:"probes"`
+	ProbeSuccesses int      `json:"probe_successes"`
 }
 
 type ModelStats struct {
-	Model   string `json:"model"`
-	Enabled bool   `json:"enabled"`
+	Model   string    `json:"model"`
+	Enabled bool      `json:"enabled"`
+	Probe   *ProbeRun `json:"probe,omitempty"`
 	Metrics
 }
 
 type GroupStats struct {
 	Metrics
-	Timeline      []Bucket     `json:"timeline"`
-	Models        []ModelStats `json:"models"`
-	SampleLimited bool         `json:"sample_limited"`
-	ObservedFrom  int64        `json:"observed_from"`
+	ProbeSummary  *ProbeSummary `json:"probe_summary,omitempty"`
+	Timeline      []Bucket      `json:"timeline"`
+	Models        []ModelStats  `json:"models"`
+	SampleLimited bool          `json:"sample_limited"`
+	ObservedFrom  int64         `json:"observed_from"`
 }
 
 // Only these fields are decoded. Neither raw metadata nor routing diagnostics

@@ -57,3 +57,16 @@ export async function saveMonitorSettings(
     ).data
   ).data
 }
+
+export async function startMonitorProbe(): Promise<{
+  task_id: string
+  created: boolean
+}> {
+  return requireServerSuccess(
+    (
+      await api.post<Envelope<{ task_id: string; created: boolean }>>(
+        `${base}/admin/probe`
+      )
+    ).data
+  ).data
+}

@@ -40,10 +40,11 @@ var statisticsCache = struct {
 
 type publicGroup struct {
 	GroupSettings
-	Ratio     float64             `json:"ratio"`
-	BaseRatio float64             `json:"base_ratio"`
-	Offer     groupdiscount.Offer `json:"offer"`
-	Status    string              `json:"status"`
+	Ratio        float64             `json:"ratio"`
+	BaseRatio    float64             `json:"base_ratio"`
+	Offer        groupdiscount.Offer `json:"offer"`
+	Status       string              `json:"status"`
+	StatusSource string              `json:"status_source"`
 	GroupStats
 }
 
@@ -65,6 +66,7 @@ func RegisterRoutes(apiRouter *gin.RouterGroup) {
 	admin := apiRouter.Group("/extensions/channel-monitor/admin", middleware.RootAuth(), middleware.DisableCache())
 	admin.GET("/settings", adminSettings)
 	admin.PUT("/settings", middleware.SessionCookieOriginGuard(), middleware.UserCriticalRateLimit("channel-monitor-admin"), updateSettings)
+	admin.POST("/probe", middleware.SessionCookieOriginGuard(), middleware.UserCriticalRateLimit("channel-monitor-probe"), startProbe)
 }
 
 func respond(c *gin.Context, data any, err error) {
@@ -87,8 +89,9 @@ func adminSettings(c *gin.Context) {
 		return
 	}
 	type availableGroup struct {
-		Group string  `json:"group"`
-		Ratio float64 `json:"ratio"`
+		Group  string   `json:"group"`
+		Ratio  float64  `json:"ratio"`
+		Models []string `json:"models"`
 	}
 	groups := make([]availableGroup, 0)
 	ratios := ratio_setting.GetGroupRatioCopy()
@@ -99,10 +102,20 @@ func adminSettings(c *gin.Context) {
 	for _, group := range setting.OrderGroupNames(names) {
 		ratio := ratios[group]
 		if group != "auto" && group != "" {
-			groups = append(groups, availableGroup{Group: group, Ratio: ratio})
+			models := []string{}
+			if err := model.DB.WithContext(c.Request.Context()).Model(&model.Ability{}).Where(clause.Eq{Column: "group", Value: group}).Where("enabled = ?", true).Distinct("model").Order("model").Pluck("model", &models).Error; err != nil {
+				respond(c, nil, err)
+				return
+			}
+			groups = append(groups, availableGroup{Group: group, Ratio: ratio, Models: models})
 		}
 	}
-	respond(c, gin.H{"settings": settings, "available_groups": groups}, nil)
+	var used int64
+	if err := model.DB.WithContext(c.Request.Context()).Model(&ProbeRun{}).Where("created_at > ?", time.Now().Unix()-86400).Count(&used).Error; err != nil {
+		respond(c, nil, err)
+		return
+	}
+	respond(c, gin.H{"settings": settings, "available_groups": groups, "probe_usage_24h": used}, nil)
 }
 
 func updateSettings(c *gin.Context) {
@@ -179,6 +192,7 @@ func buildSnapshot(db, logDB *gorm.DB, userGroup, windowName string, window time
 		// statistics. User-specific prices never enter this shared cache.
 		stats := cached.Stats
 		stats.Models = slices.Clone(stats.Models)
+		stats.Timeline = slices.Clone(stats.Timeline)
 		seen := make(map[string]bool)
 		for i := range stats.Models {
 			stats.Models[i].Enabled = slices.Contains(enabledModels, stats.Models[i].Model)
@@ -191,6 +205,16 @@ func buildSnapshot(db, logDB *gorm.DB, userGroup, windowName string, window time
 		}
 		slices.SortFunc(stats.Models, func(a, b ModelStats) int { return strings.Compare(a.Model, b.Model) })
 		status := healthStatus(stats.Outcomes, stats.SuccessRate)
+		source := "real"
+		if err := overlayProbes(db, &stats, config.Group, window, now, max(3600, int64(settings.Probe.IntervalMinutes)*120)); err != nil {
+			return data, err
+		}
+		if stats.Outcomes == 0 {
+			status = probeHealth(stats)
+			if status != "idle" {
+				source = "probe"
+			}
+		}
 		if len(enabledModels) == 0 {
 			status = "disabled"
 		}
@@ -200,7 +224,7 @@ func buildSnapshot(db, logDB *gorm.DB, userGroup, windowName string, window time
 			offer.Factor = 1
 		}
 		data.Groups = append(data.Groups, publicGroup{GroupSettings: config, Ratio: base * offer.Factor,
-			BaseRatio: base, Offer: offer, Status: status, GroupStats: stats})
+			BaseRatio: base, Offer: offer, Status: status, StatusSource: source, GroupStats: stats})
 		data.UpdatedAt = min(data.UpdatedAt, cached.At)
 		m := &data.Summary
 		m.Outcomes += stats.Outcomes

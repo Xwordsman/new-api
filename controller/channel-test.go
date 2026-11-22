@@ -43,12 +43,14 @@ type testResult struct {
 	newAPIError *types.NewAPIError
 	body        []byte
 	usage       *dto.Usage
+	ttftMS      *int64
 }
 
 type channelProbeOptions struct {
 	group     string
 	prompt    string
 	maxTokens uint
+	monitor   bool
 }
 
 func normalizeChannelTestEndpoint(channel *model.Channel, endpointType string) string {
@@ -618,6 +620,16 @@ func executeChannelTest(ctx context.Context, channel *model.Channel, testUserID 
 		}
 	}
 	info.SetEstimatePromptTokens(usage.PromptTokens)
+	if probe != nil && probe.monitor {
+		var ttft *int64
+		if !info.FirstResponseTime.Before(info.StartTime) {
+			ms := info.FirstResponseTime.Sub(info.StartTime).Milliseconds()
+			ttft = &ms
+		}
+		// Monitor probes have their own history. Never count platform tests as
+		// member consumption, request success rate, throughput or cache samples.
+		return testResult{context: c, body: respBody, usage: usage, ttftMS: ttft}
+	}
 
 	quota, tieredResult := settleTestQuota(info, priceData, usage)
 	tok := time.Now()

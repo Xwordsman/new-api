@@ -49,8 +49,9 @@ import { toIntlLocale } from '@/i18n/languages'
 import { STATUS_QUERY_KEY } from '@/lib/status-query'
 
 import { saveMonitorSettings } from '../api'
-import { monitorSettingsSchema } from '../lib/schema'
+import { defaultProbeSettings, monitorSettingsSchema } from '../lib/schema'
 import type { MonitorSettings, MonitorSettingsResponse } from '../types'
+import { ProbeSettingsFields } from './probe-settings'
 
 export function MonitorSettingsForm(props: { data: MonitorSettingsResponse }) {
   const { t, i18n } = useTranslation()
@@ -58,7 +59,10 @@ export function MonitorSettingsForm(props: { data: MonitorSettingsResponse }) {
   const [expandedGroups, setExpandedGroups] = useState<string[]>([])
   const form = useForm<MonitorSettings>({
     resolver: zodResolver(monitorSettingsSchema),
-    defaultValues: props.data.settings,
+    defaultValues: {
+      ...props.data.settings,
+      probe: props.data.settings.probe ?? defaultProbeSettings,
+    },
   })
   const groups = form.watch('groups')
   const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
@@ -85,7 +89,7 @@ export function MonitorSettingsForm(props: { data: MonitorSettingsResponse }) {
   const save = useMutation({
     mutationFn: saveMonitorSettings,
     onSuccess: async (settings) => {
-      form.reset(settings)
+      form.reset({ ...settings, probe: settings.probe ?? defaultProbeSettings })
       queryClient.setQueryData<MonitorSettingsResponse>(
         ['channel-monitor', 'settings'],
         (current) => current && { ...current, settings }
@@ -141,7 +145,14 @@ export function MonitorSettingsForm(props: { data: MonitorSettingsResponse }) {
                 <FormControl>
                   <Switch
                     checked={field.value}
-                    onCheckedChange={field.onChange}
+                    onCheckedChange={(checked) => {
+                      field.onChange(checked)
+                      if (!checked) {
+                        form.setValue('probe.enabled', false, {
+                          shouldDirty: true,
+                        })
+                      }
+                    }}
                     disabled={save.isPending}
                   />
                 </FormControl>
@@ -196,6 +207,10 @@ export function MonitorSettingsForm(props: { data: MonitorSettingsResponse }) {
             </AlertDescription>
           </Alert>
         </div>
+        <ProbeSettingsFields
+          busy={save.isPending}
+          usage={props.data.probe_usage_24h ?? 0}
+        />
         <Accordion
           multiple
           keepMounted
@@ -229,6 +244,41 @@ export function MonitorSettingsForm(props: { data: MonitorSettingsResponse }) {
                   </span>
                 </AccordionTrigger>
                 <AccordionContent className='space-y-5 border-t p-5 sm:p-6'>
+                  <FormField
+                    control={form.control}
+                    name={`groups.${index}.probe_models`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Probe models')}</FormLabel>
+                        <FormControl>
+                          <MultiSelect
+                            aria-label={t('Probe models for {{group}}', {
+                              group: group.group,
+                            })}
+                            options={[
+                              ...new Set([
+                                ...(props.data.available_groups.find(
+                                  (item) => item.group === group.group
+                                )?.models ?? []),
+                                ...(field.value ?? []),
+                              ]),
+                            ].map((name) => ({ label: name, value: name }))}
+                            selected={field.value ?? []}
+                            onChange={field.onChange}
+                            allowCreate={false}
+                            disabled={save.isPending}
+                            placeholder={t('Select text models to probe')}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'Select up to 8 text models per group. Empty groups are not probed. Disabled routes are skipped.'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                   <div className='grid gap-5 sm:grid-cols-2'>
                     {(
                       [

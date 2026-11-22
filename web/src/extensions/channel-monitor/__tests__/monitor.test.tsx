@@ -94,6 +94,66 @@ function renderMonitor() {
   return { ...result, client }
 }
 
+it('uses labelled probe availability and coverage when real traffic is absent without inventing speed or cache metrics', async () => {
+  const user = userEvent.setup()
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: {
+      success: true,
+      data: {
+        ...snapshot,
+        groups: [
+          {
+            ...group,
+            status_source: 'probe',
+            probe_summary: {
+              samples: 1,
+              enabled_models: 2,
+              success_rate: 100,
+              ttft_seconds: 0.25,
+            },
+            models: [
+              {
+                ...metrics,
+                model: 'gpt-monitor',
+                enabled: true,
+                probe: {
+                  model: 'gpt-monitor',
+                  status: 'passed',
+                  created_at: 1700000000,
+                  latency_ms: 400,
+                  ttft_ms: 250,
+                  input_tokens: 8,
+                  output_tokens: 1,
+                  manual: false,
+                },
+              },
+              { ...metrics, model: 'gpt-unobserved', enabled: true },
+            ],
+          },
+        ],
+      },
+    },
+  })
+  const view = renderMonitor()
+  const row = await screen.findByRole('row', { name: /Public group/ })
+  expect(within(row).getByText(/Active probe/)).toBeVisible()
+  expect(within(row).getByText('Probe sample: 1/2 models')).toBeVisible()
+  const cells = within(row).getAllByRole('cell')
+  expect(cells[3]).toHaveTextContent('100%')
+  expect(cells[4]).toHaveTextContent('0.25s')
+  expect(cells[5]).toHaveTextContent('—')
+  expect(cells[6]).toHaveTextContent('—')
+  await user.click(
+    within(row).getByRole('button', { name: 'Details for Public group' })
+  )
+  const details = screen.getByRole('region', { name: 'Public group' })
+  expect(within(details).getByText(/Active probe · Passed/)).toBeVisible()
+  expect(
+    within(details).getByText(/Period metrics use real requests only/)
+  ).toBeVisible()
+  view.client.clear()
+})
+
 it.each([
   {
     icon: 'Claude.Color',

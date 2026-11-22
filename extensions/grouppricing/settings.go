@@ -3,6 +3,7 @@
 package grouppricing
 
 import (
+	"encoding/json"
 	"errors"
 	"math"
 	"net/http"
@@ -274,14 +275,16 @@ func Save(db *gorm.DB, update Update) (Snapshot, error) {
 		}
 		if err == nil && len(update.Renames) > 0 {
 			var document struct {
-				Revision int64 `json:"revision"`
-				Enabled  bool  `json:"enabled"`
+				Revision int64           `json:"revision"`
+				Enabled  bool            `json:"enabled"`
+				Probe    json.RawMessage `json:"probe,omitempty"`
 				Groups   []struct {
-					Group       string `json:"group"`
-					DisplayName string `json:"display_name"`
-					Description string `json:"description"`
-					Badge       string `json:"badge"`
-					Icon        string `json:"icon,omitempty"`
+					Group       string   `json:"group"`
+					DisplayName string   `json:"display_name"`
+					Description string   `json:"description"`
+					Badge       string   `json:"badge"`
+					Icon        string   `json:"icon,omitempty"`
+					ProbeModels []string `json:"probe_models,omitempty"`
 				} `json:"groups"`
 			}
 			if common.UnmarshalJsonStr(monitor.Value, &document) != nil {

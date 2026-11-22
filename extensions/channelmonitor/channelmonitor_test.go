@@ -72,12 +72,17 @@ func monitorTestDB(t *testing.T, dialect, suffix string) *gorm.DB {
 	if suffix == "_LOG" {
 		tables = []any{&model.Log{}}
 	} else {
-		tables = []any{&model.Option{}, &model.Ability{}}
+		tables = []any{&model.Option{}, &model.Ability{}, &ProbeRun{}}
 	}
 	for _, table := range tables {
 		require.NoError(t, db.Migrator().DropTable(table))
 	}
 	require.NoError(t, db.AutoMigrate(tables...))
+	if suffix == "" {
+		for range 2 {
+			require.NoError(t, Migrate(db))
+		}
+	}
 	return db
 }
 
@@ -168,6 +173,8 @@ func TestChannelMonitorDatabaseMatrix(t *testing.T) {
 							t.Log("SQLite", version)
 						}
 						legacyRaw := `{"revision":7,"enabled":true,"groups":[{"group":"public","display_name":"GPT","description":"Preserve me","badge":"Offer","icon":"OpenAI","promotion":{"enabled":true,"factor":0.8,"daily_start":"18:00","daily_end":"22:00","timezone":"Asia/Shanghai"}},{"group":"idle","display_name":"Idle"}]}`
+						legacyRaw = strings.Replace(legacyRaw, `"icon":"OpenAI"`, `"icon":"OpenAI","probe_models":["text-test"]`, 1)
+						legacyRaw = strings.Replace(legacyRaw, `"revision":7`, `"revision":7,"probe":{"enabled":true,"interval_minutes":60,"only_when_idle":false,"daily_limit":100}`, 1)
 						if legacy {
 							require.NoError(t, db.Create(&model.Option{Key: settingsKey, Value: legacyRaw}).Error)
 						}
@@ -218,6 +225,10 @@ func TestChannelMonitorDatabaseMatrix(t *testing.T) {
 						assert.Equal(t, "gpt", monitor.Groups[1].Group)
 						assert.Equal(t, "Preserve me", monitor.Groups[1].Description)
 						assert.Equal(t, "OpenAI", monitor.Groups[1].Icon)
+						if legacy {
+							assert.Equal(t, []string{"text-test"}, monitor.Groups[1].ProbeModels)
+							assert.Equal(t, &ProbeSettings{Enabled: true, IntervalMinutes: 60, DailyLimit: 100}, monitor.Probe)
+						}
 						assert.True(t, monitor.Enabled)
 						at := time.Date(2026, 11, 14, 12, 0, 0, 0, time.UTC)
 						assert.InDelta(t, 0.4, groupdiscount.Default.Capture(at)["gpt"], 1e-12)
@@ -254,6 +265,114 @@ func TestChannelMonitorDatabaseMatrix(t *testing.T) {
 					})
 				}
 			})
+			t.Run("probes preserve legacy data and enforce idle scheduling, caps and traffic separation", func(t *testing.T) {
+				monitorTestSettings(t)
+				db := monitorTestDB(t, dialect, "")
+				logs := monitorTestDB(t, dialect, "_LOG")
+				// Upgrade a representative pre-probe installation, then restart twice.
+				require.NoError(t, db.Migrator().DropTable(&ProbeRun{}))
+				legacy := `{"revision":4,"enabled":true,"groups":[{"group":"public","display_name":"Preserved"}]}`
+				require.NoError(t, db.Create(&model.Option{Key: settingsKey, Value: legacy}).Error)
+				for range 2 {
+					require.NoError(t, Migrate(db))
+				}
+				saved, raw, err := getSettings(db)
+				require.NoError(t, err)
+				assert.Equal(t, legacy, raw)
+				assert.Equal(t, defaultProbeSettings(), saved.Probe)
+				assert.True(t, db.Migrator().HasIndex(&ProbeRun{}, "idx_monitor_probe_target"))
+				saved.Probe.Enabled = true
+				saved.Groups[0].ProbeModels = []string{"text-test", "other-test", "removed"}
+				saved, err = saveSettings(db, saved)
+				require.NoError(t, err)
+				for _, name := range []string{"text-test", "other-test"} {
+					require.NoError(t, db.Create(&model.Ability{Group: "public", Model: name, ChannelId: 7, Enabled: true}).Error)
+				}
+				now := time.Unix(monitorEpoch, 0)
+				clock := func() time.Time { return now }
+				calls := []string{}
+				handler := probeHandler{execute: func(ctx context.Context, group, name string) (ProbeResult, error) {
+					calls = append(calls, group+"/"+name)
+					return ProbeResult{ChannelID: 7, InputTokens: 8, OutputTokens: 1, TTFTMS: new(int64(200))}, nil
+				}}
+				task := &model.SystemTask{TaskID: "test-probe", Payload: `{}`}
+				require.NoError(t, logs.Create(&model.Log{Group: "public", ModelName: "text-test", ChannelId: 7, Type: model.LogTypeError, CreatedAt: monitorEpoch - 10}).Error)
+				for _, enabled := range []struct{ consume, errors bool }{{false, true}, {true, false}} {
+					common.LogConsumeEnabled, constant.ErrorLogEnabled = enabled.consume, enabled.errors
+					require.NoError(t, handler.run(context.Background(), db, logs, task, clock))
+					assert.Empty(t, calls, "incomplete logging cannot establish idleness")
+				}
+				common.LogConsumeEnabled, constant.ErrorLogEnabled = true, true
+				require.NoError(t, handler.run(context.Background(), db, logs, task, clock))
+				assert.Equal(t, []string{"public/other-test"}, calls, "busy and removed routes must be skipped")
+				require.NoError(t, handler.run(context.Background(), db, logs, task, clock))
+				assert.Len(t, calls, 1, "already reserved targets must not run again")
+				data, err := buildSnapshot(db, logs, "member", "24h", 24*time.Hour, now.Unix())
+				require.NoError(t, err)
+				require.Len(t, data.Groups, 1)
+				assert.Equal(t, "real", data.Groups[0].StatusSource)
+				assert.Equal(t, "unhealthy", data.Groups[0].Status)
+				assert.Equal(t, 1, data.Summary.Outcomes)
+				require.NotNil(t, data.Groups[0].SuccessRate)
+				assert.Zero(t, *data.Groups[0].SuccessRate, "successful probes never dilute real failures")
+				require.NotNil(t, data.Groups[0].ProbeSummary)
+				assert.Equal(t, 1, data.Groups[0].ProbeSummary.Samples)
+				assert.Nil(t, data.Groups[0].TokensPerSecond)
+				assert.Nil(t, data.Groups[0].CacheHitRate)
+				// Without real traffic, a partial successful sample is explicitly unknown.
+				require.NoError(t, logs.Where("1 = 1").Delete(&model.Log{}).Error)
+				clear(statisticsCache.entries)
+				data, err = buildSnapshot(db, logs, "member", "24h", 24*time.Hour, now.Unix())
+				require.NoError(t, err)
+				assert.Equal(t, "probe", data.Groups[0].StatusSource)
+				assert.Equal(t, "unknown", data.Groups[0].Status)
+				assert.Zero(t, data.Summary.Outcomes)
+				assert.Nil(t, data.Groups[0].SuccessRate)
+				assert.Equal(t, new(0.2), data.Groups[0].ProbeSummary.TTFTSeconds)
+				assert.Equal(t, "probe", data.Groups[0].Timeline[len(data.Groups[0].Timeline)-1].Source)
+				// A manual request ignores idleness and the automatic switch, but not cooldown/cap.
+				saved.Probe.Enabled = false
+				saved, err = saveSettings(db, saved)
+				require.NoError(t, err)
+				require.NoError(t, handler.run(context.Background(), db, logs, task, clock))
+				assert.Len(t, calls, 1, "disabling automatic probes stops scheduled work")
+				task.Payload = `{"manual":true}`
+				require.NoError(t, handler.run(context.Background(), db, logs, task, clock))
+				assert.Equal(t, []string{"public/other-test", "public/text-test"}, calls)
+				require.NoError(t, handler.run(context.Background(), db, logs, task, clock))
+				assert.Len(t, calls, 2)
+				now = now.Add(time.Minute)
+				saved.Probe.DailyLimit = 2
+				saved, err = saveSettings(db, saved)
+				require.NoError(t, err)
+				require.NoError(t, handler.run(context.Background(), db, logs, task, clock))
+				assert.Len(t, calls, 2, "manual requests share the rolling cap")
+				// Reservations survive restarts and count even when upstream completion is uncertain.
+				require.NoError(t, db.Create(&ProbeRun{GroupName: "public", Model: "text-test", CreatedAt: now.Unix(), Status: "running", TaskID: "crashed"}).Error)
+				require.NoError(t, handler.run(context.Background(), db, logs, task, clock))
+				var interrupted ProbeRun
+				require.NoError(t, db.Where("task_id = ?", "crashed").Take(&interrupted).Error)
+				assert.Equal(t, "interrupted", interrupted.Status)
+				for range 2 {
+					require.NoError(t, Migrate(db))
+				}
+				var count int64
+				require.NoError(t, db.Model(&ProbeRun{}).Count(&count).Error)
+				assert.EqualValues(t, 3, count)
+				// Cap expires after 24h; cancellation is recorded and stops subsequent targets.
+				now = now.Add(24 * time.Hour)
+				ctx, cancel := context.WithCancel(context.Background())
+				handler.execute = func(ctx context.Context, _, _ string) (ProbeResult, error) {
+					cancel()
+					return ProbeResult{}, context.Canceled
+				}
+				assert.ErrorIs(t, handler.run(ctx, db, logs, task, clock), context.Canceled)
+				require.NoError(t, db.Model(&ProbeRun{}).Where("status = ?", "interrupted").Count(&count).Error)
+				assert.EqualValues(t, 2, count)
+				data, err = buildSnapshot(db, logs, "member", "24h", 24*time.Hour, now.Unix())
+				require.NoError(t, err)
+				assert.Equal(t, "idle", data.Groups[0].Status, "stale probes must not imply current availability")
+			})
 			t.Run("settings persist atomically and stale or invalid edits leave saved values intact", func(t *testing.T) {
 				monitorTestSettings(t)
 				db := monitorTestDB(t, dialect, "")
@@ -284,6 +403,10 @@ func TestChannelMonitorDatabaseMatrix(t *testing.T) {
 					{Groups: []GroupSettings{{Group: "public", Icon: strings.Repeat("x", 129)}}},
 					{Groups: []GroupSettings{{Group: "public", Promotion: &groupdiscount.Rule{Factor: 0}}}},
 					{Groups: make([]GroupSettings, 25)},
+					{Probe: &ProbeSettings{IntervalMinutes: 1, DailyLimit: 1}},
+					{Probe: &ProbeSettings{IntervalMinutes: 30, DailyLimit: 5001}},
+					{Enabled: true, Probe: &ProbeSettings{Enabled: true, IntervalMinutes: 30, DailyLimit: 10}},
+					{Groups: []GroupSettings{{Group: "public", ProbeModels: []string{"a", "a"}}}},
 				} {
 					_, err = saveSettings(db, invalid)
 					assert.ErrorIs(t, err, errInvalid)
@@ -756,6 +879,9 @@ func TestChannelMonitorAPIAuthorization(t *testing.T) {
 	}
 	assert.Equal(t, http.StatusUnauthorized, request("GET", "/snapshot", "", "", "").Code)
 	assert.Equal(t, http.StatusForbidden, request("GET", "/admin/settings", "", member.AccessToken, "").Code)
+	assert.Equal(t, http.StatusUnauthorized, request("POST", "/admin/probe", "", "", "").Code)
+	assert.Equal(t, http.StatusForbidden, request("POST", "/admin/probe", "", member.AccessToken, "").Code)
+	assert.Equal(t, http.StatusForbidden, request("POST", "/admin/probe", "", root.AccessToken, "https://evil.example.com").Code)
 	body := `{"revision":0,"enabled":true,"groups":[{"group":"public","display_name":"Public"}]}`
 	assert.Equal(t, http.StatusForbidden, request("PUT", "/admin/settings", body, root.AccessToken, "https://evil.example.com").Code)
 	assert.Contains(t, request("PUT", "/admin/settings", body, root.AccessToken, "https://panel.example.com").Body.String(), `"success":true`)
@@ -781,7 +907,7 @@ func TestChannelMonitorAPIAuthorization(t *testing.T) {
 	require.NoError(t, scoped.SetScopes([]string{"profile:read", "option:read", "option:write"}))
 	require.NoError(t, model.CreateUserAccessToken(2, scoped, service.AccessTokenMaxPerUser))
 	for _, token := range []string{legacy, raw} {
-		for _, endpoint := range []struct{ method, path string }{{"GET", "/snapshot"}, {"GET", "/admin/settings"}, {"PUT", "/admin/settings"}} {
+		for _, endpoint := range []struct{ method, path string }{{"GET", "/snapshot"}, {"GET", "/admin/settings"}, {"PUT", "/admin/settings"}, {"POST", "/admin/probe"}} {
 			response := request(endpoint.method, endpoint.path, body, token, "https://panel.example.com")
 			assert.Equal(t, http.StatusForbidden, response.Code, response.Body.String())
 			assert.Contains(t, response.Body.String(), "AUTH_SESSION_REQUIRED")

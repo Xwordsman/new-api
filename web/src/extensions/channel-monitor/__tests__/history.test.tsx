@@ -132,3 +132,43 @@ it('shows an unknown success rate for an unobserved period instead of implying s
     )
   ).toBeVisible()
 })
+
+it('labels probe results separately without changing real request failure rates', () => {
+  render(
+    <HistoryStrip
+      buckets={[
+        {
+          start: 1700000000,
+          end: 1700001800,
+          status: 'healthy',
+          outcomes: 0,
+          successes: 0,
+          success_rate: null,
+          source: 'probe',
+          probes: 1,
+          probe_successes: 1,
+        },
+        {
+          start: 1700001800,
+          end: 1700003600,
+          status: 'unhealthy',
+          outcomes: 1,
+          successes: 0,
+          success_rate: 0,
+          probes: 1,
+          probe_successes: 1,
+        },
+      ]}
+    />
+  )
+  expect(
+    screen.getByRole('button', {
+      name: /Requests: 0 · Success rate: — · Active probe: 1 · Probe success rate: 100%/,
+    })
+  ).toBeVisible()
+  expect(
+    screen.getByRole('button', {
+      name: /Requests: 1 · Success rate: 0% · Active probe: 1 · Probe success rate: 100%/,
+    })
+  ).toHaveAccessibleName(/Abnormal/)
+})

@@ -57,6 +57,10 @@ export function GroupRow(props: {
       ? provider.icon
       : undefined
   const icon = group.icon || inferredIcon
+  const probe =
+    group.status_source === 'probe' ? group.probe_summary : undefined
+  const successRate = probe ? probe.success_rate : group.success_rate
+  const ttft = probe ? probe.ttft_seconds : group.ttft_seconds
   return (
     <>
       <TableRow
@@ -127,7 +131,7 @@ export function GroupRow(props: {
               >
                 {group.group} ·{' '}
                 {t('{{count}} enabled models', { count: enabledModels.length })}{' '}
-                · {t('Real requests')}
+                · {probe ? t('Active probe') : t('Real requests')}
               </p>
             </div>
           </div>
@@ -145,20 +149,26 @@ export function GroupRow(props: {
               className='h-5 w-full min-w-0 flex-1'
             />
             <span className='w-15 shrink-0 text-right font-mono text-[12.5px] tabular-nums'>
-              {group.success_rate == null
+              {successRate == null
                 ? '—'
-                : `${formatNumber(group.success_rate, locale)}%`}
+                : `${formatNumber(successRate, locale)}%`}
             </span>
           </div>
           {group.sample_limited && (
             <span className='text-warning text-xs'>{t('Recent sample')}</span>
           )}
+          {probe && (
+            <span className='text-muted-foreground text-[10px]'>
+              {t('Probe sample: {{sampled}}/{{total}} models', {
+                sampled: formatNumber(probe.samples, locale),
+                total: formatNumber(probe.enabled_models, locale),
+              })}
+            </span>
+          )}
         </TableCell>
         <TableCell className='text-right font-mono text-[13px] tabular-nums'>
-          {group.ttft_seconds == null
-            ? '—'
-            : formatNumber(group.ttft_seconds, locale)}
-          {group.ttft_seconds != null && (
+          {ttft == null ? '—' : formatNumber(ttft, locale)}
+          {ttft != null && (
             <span className='text-muted-foreground text-[10.5px]'>s</span>
           )}
         </TableCell>

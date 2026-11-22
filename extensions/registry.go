@@ -56,6 +56,9 @@ func Migrate(db *gorm.DB) error {
 	if err := benchmark.Migrate(db); err != nil {
 		return err
 	}
+	if err := channelmonitor.Migrate(db); err != nil {
+		return err
+	}
 	if err := tickets.Migrate(db); err != nil {
 		return err
 	}
