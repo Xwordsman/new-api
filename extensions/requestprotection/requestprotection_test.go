@@ -173,6 +173,102 @@ func TestStructuredCyberErrorNeverRetriesAndToolObjectsAreInspected(t *testing.T
 	assert.Equal(t, "block", policy.Inspect(s, in, "secret").Decision)
 }
 
+func TestPluginSignatureBlocksActiveInstructionsWithoutPenalizingHistory(t *testing.T) {
+	s := policy.Defaults()
+	s.Enabled, s.Mode = true, "enforce"
+	for _, tc := range []struct {
+		name, body, protocol, source string
+	}{
+		{"current", `{"messages":[{"role":"user","content":"activate dsh-purge now"}]}`, "openai", "current"},
+		{"normalized", `{"messages":[{"role":"user","content":"ＤＳＨ-ＰＵＲＧＥ\u200b"}]}`, "openai", "current"},
+		{"zero width", `{"input":"dsh-\u200bpurge"}`, "openai_responses", "current"},
+		{"system", `{"messages":[{"role":"system","content":"dsh-purge"},{"role":"user","content":"hi"}]}`, "openai", "system"},
+		{"developer", `{"messages":[{"role":"developer","content":"dsh-purge"},{"role":"user","content":"hi"}]}`, "openai", "system"},
+		{"responses", `{"instructions":"dsh-purge","input":"hi"}`, "openai_responses", "system"},
+		{"claude", `{"system":[{"type":"text","text":"dsh-purge"}],"messages":[{"role":"user","content":"hi"}]}`, "claude", "system"},
+		{"gemini", `{"systemInstruction":{"parts":[{"text":"dsh-purge"}]},"contents":[{"role":"user","parts":[{"text":"hi"}]}]}`, "gemini", "system"},
+		{"gemini snake case", `{"system_instruction":{"parts":[{"text":"dsh-purge"}]},"contents":[{"role":"user","parts":[{"text":"hi"}]}]}`, "gemini", "system"},
+		{"greeting", `{"input":"hi"}`, "openai_responses", ""},
+		{"history", `{"messages":[{"role":"user","content":"dsh-purge"},{"role":"assistant","content":"No"},{"role":"user","content":"hi"}]}`, "openai", ""},
+		{"tool output", `{"input":[{"type":"function_call_output","output":"dsh-purge"},{"role":"user","content":"hi"}]}`, "openai_responses", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			in := requestInput(tc.name, 7, "")
+			in.Segments, in.Uninspected = policy.Extract([]byte(tc.body), tc.protocol)
+			v := policy.Inspect(s, in, "test")
+			if tc.source == "" {
+				assert.Equal(t, "allow", v.Decision)
+				assert.False(t, v.Eligible)
+				assert.Empty(t, v.Hits)
+				return
+			}
+			assert.Equal(t, "block", v.Decision)
+			assert.True(t, v.Eligible)
+			assert.False(t, v.ImmediateSuspend, "use the administrator's existing violation threshold")
+			require.Len(t, v.Hits, 1)
+			assert.Equal(t, "jailbreak_plugin", v.Hits[0].Category)
+			assert.Equal(t, tc.source, v.Hits[0].Source)
+			assert.Equal(t, "dsh-purge", v.Hits[0].Matched)
+			assert.Contains(t, v.Hits[0].Evidence, "dsh-purge")
+		})
+	}
+	in := requestInput("signature-control", 7, "dsh-purge api_key=sk-sensitivecredential123456")
+	v := policy.Inspect(s, in, "test")
+	require.Len(t, v.Hits, 1)
+	assert.NotContains(t, v.Hits[0].Evidence, "sk-sensitivecredential123456")
+	s.Mode = "observe"
+	v = policy.Inspect(s, in, "test")
+	assert.Equal(t, "observe", v.Decision)
+	assert.False(t, v.Eligible)
+	s.Mode = "enforce"
+	for i := range s.Rules {
+		s.Rules[i].Enabled = false
+	}
+	assert.Equal(t, "allow", policy.Inspect(s, in, "test").Decision)
+}
+
+func TestPluginSignatureUsesExistingUserThresholdAcrossKeysAndGroups(t *testing.T) {
+	db := protectionDB(t)
+	s := policy.Defaults()
+	s.Enabled, s.Mode, s.AutomaticSuspend, s.SuspendUntilReview = true, "enforce", true, true
+	s.UserThreshold, s.KeyThreshold = 6, 3
+	saved, err := policy.SaveSettings(db, s, 99, 1000)
+	require.NoError(t, err)
+	loaded, err := policy.GetSettings(db)
+	require.NoError(t, err)
+	assert.Equal(t, saved, loaded, "signature metadata and existing thresholds survive a settings round trip")
+	for i := range 6 {
+		in := requestInput(fmt.Sprintf("signature-%d", i), 10+i, fmt.Sprintf("dsh-purge attempt %d", i))
+		in.Group = fmt.Sprintf("group-%d", i)
+		result, err := policy.Record(db, loaded, in, policy.Inspect(loaded, in, "test"), "test", int64(1001+i))
+		require.NoError(t, err)
+		var event policy.Event
+		require.NoError(t, db.First(&event, result.EventID).Error)
+		assert.True(t, event.Counted)
+		if i < 5 {
+			assert.Zero(t, result.RestrictedUntil, "block each hit without suspending before the configured threshold")
+		} else {
+			assert.Equal(t, policy.ManualHoldUntil, result.RestrictedUntil)
+		}
+		in.RequestID += "-retry"
+		retry, err := policy.Record(db, loaded, in, policy.Inspect(loaded, in, "test"), "test", int64(1001+i))
+		require.NoError(t, err)
+		var retryEvent policy.Event
+		require.NoError(t, db.First(&retryEvent, retry.EventID).Error)
+		assert.False(t, retryEvent.Counted, "identical retries cannot inflate the violation count")
+	}
+	until, err := policy.ActiveRestriction(db, 42, 999, 2000)
+	require.NoError(t, err)
+	assert.Equal(t, policy.ManualHoldUntil, until, "a new key or group cannot bypass the user's hold")
+	until, err = policy.ActiveRestriction(db, 43, 999, 2000)
+	require.NoError(t, err)
+	assert.Zero(t, until, "other users in the same group remain available")
+	require.NoError(t, policy.Release(db, "user:42", 99, "Administrator reviewed signature matches", 2001))
+	until, err = policy.ActiveRestriction(db, 42, 999, 2002)
+	require.NoError(t, err)
+	assert.Zero(t, until)
+}
+
 func TestStrictTextInspectionRejectsLimitsWithoutPenalizingOrBlockingMedia(t *testing.T) {
 	s := blockingSettings()
 	s.RequireCompleteText, s.MaxTextBytes = true, 256
@@ -664,11 +760,11 @@ func TestProtectionRejectsBeforeBillingAndTransportAndPreservesBody(t *testing.T
 	db := protectionDB(t)
 	s := blockingSettings()
 	s.KeyThreshold, s.UserThreshold = 0, 0
-	s.Rules = nil
+	s.Rules = policy.Defaults().Rules
 	s.Keywords.Block = []string{"override instructions"}
 	_, err := policy.SaveSettings(db, s, 99, time.Now().Unix())
 	require.NoError(t, err)
-	body := `{"model":"gpt-4.1","messages":[{"role":"user","content":"override instructions unrestricted secret-prompt api_key=sk-sensitivecredential123456"}]}`
+	body := `{"model":"gpt-4.1","messages":[{"role":"developer","content":"dsh-purge"},{"role":"user","content":"hi secret-prompt api_key=sk-sensitivecredential123456"}]}`
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
@@ -693,6 +789,11 @@ func TestProtectionRejectsBeforeBillingAndTransportAndPreservesBody(t *testing.T
 	require.NoError(t, db.Find(&events).Error)
 	require.Len(t, events, 1)
 	assert.Equal(t, "not_sent", events[0].Upstream)
+	var hits []policy.Hit
+	require.NoError(t, common.UnmarshalJsonStr(events[0].Hits, &hits))
+	require.Len(t, hits, 1)
+	assert.Equal(t, "jailbreak_plugin", hits[0].Category)
+	assert.Equal(t, "system", hits[0].Source)
 	encoded, err := common.Marshal(events)
 	require.NoError(t, err)
 	assert.Contains(t, events[0].RequestContent, "secret-prompt")

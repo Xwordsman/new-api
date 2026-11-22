@@ -23,6 +23,7 @@ import type { ProtectionEvent } from '../types'
 export function ProtectionLabel(props: { value: string }) {
   const { t } = useTranslation()
   const labels: Record<string, string> = {
+    jailbreak_plugin: t('Jailbreak plugin signature'),
     jailbreak: t('Jailbreak and safety bypass'),
     theft: t('Credential theft and malicious cracking'),
     attack: t('Malicious cyberattacks'),
@@ -88,6 +89,7 @@ export function ProtectionLabel(props: { value: string }) {
 export function SuspectedIntent(props: { event: ProtectionEvent }) {
   const { t } = useTranslation()
   const labels: Record<string, string> = {
+    jailbreak_plugin: t('Jailbreak plugin signature'),
     jailbreak: t('Safety bypass'),
     prompt_extraction: t('System prompt extraction'),
     cyber_attack: t('Malicious cyberattacks'),

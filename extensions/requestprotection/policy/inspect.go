@@ -195,7 +195,15 @@ func Inspect(s Settings, in Input, secret string) Verdict {
 			if !matched {
 				continue
 			}
-			h := Hit{RuleID: r.ID, Name: r.Name, Source: source, Action: r.Action, HighConfidence: r.HighConfidence, CountPenalty: r.CountPenalty, Matched: bounded(Redact(strings.Join(matchedText, " · ")), 1200)}
+			// Context is normalized and redacted before it is bounded or stored.
+			evidence := "[REDACTED]"
+			safeText := Redact(text)
+			if len(matchedText) > 0 {
+				if position := strings.Index(safeText, matchedText[0]); position >= 0 {
+					evidence = bounded(safeText[position:], 320)
+				}
+			}
+			h := Hit{RuleID: r.ID, Name: r.Name, Category: r.Category, Evidence: evidence, Source: source, Action: r.Action, HighConfidence: r.HighConfidence, CountPenalty: r.CountPenalty, Matched: bounded(Redact(strings.Join(matchedText, " · ")), 1200)}
 			v.Hits = append(v.Hits, h)
 			v.Finding, v.Reason = "rule_match", "custom_rule"
 			if v.Decision == "allow" {

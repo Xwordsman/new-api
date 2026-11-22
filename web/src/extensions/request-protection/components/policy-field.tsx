@@ -106,7 +106,7 @@ export function PolicyField(props: {
               name={field.name}
               ref={field.ref}
               onBlur={field.onBlur}
-              value={String(field.value)}
+              value={String(field.value ?? '')}
               onChange={(event) =>
                 field.onChange(
                   props.kind === 'number'

@@ -80,6 +80,11 @@ export function RulesEditor(props: { disabled: boolean }) {
           'Example rules only observe. Test rules before enabling blocking. Text is normalized for case, whitespace, full-width and zero-width characters. Regex uses Go RE2 against normalized text.'
         )}
       </p>
+      <p className='text-muted-foreground text-sm'>
+        {t(
+          'Plugin signatures check current input and system instructions. History and tool output do not count as new violations.'
+        )}
+      </p>
       {(form.formState.errors.rules?.root?.message ||
         form.formState.errors.rules?.message) && (
         <p role='alert' className='text-destructive text-sm'>
@@ -112,6 +117,18 @@ export function RulesEditor(props: { disabled: boolean }) {
                 name={`rules.${index}.enabled`}
                 label={t('Enable rule')}
                 kind='switch'
+                disabled={props.disabled}
+              />
+              <PolicyField
+                name={`rules.${index}.category`}
+                label={t('Category')}
+                options={[
+                  { value: '', label: t('Custom local rule matched') },
+                  {
+                    value: 'jailbreak_plugin',
+                    label: t('Jailbreak plugin signature'),
+                  },
+                ]}
                 disabled={props.disabled}
               />
               <PolicyField

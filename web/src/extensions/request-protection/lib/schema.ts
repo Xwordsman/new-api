@@ -90,6 +90,7 @@ export const protectionSchema = z
               .min(1)
               .refine((value) => encoder.encode(value).length <= 120),
             enabled: z.boolean(),
+            category: z.enum(['', 'jailbreak_plugin']).optional(),
             kind: z.enum(['any', 'all', 'regex']),
             patterns: list(20, 1000).refine((value) => lines(value).length > 0),
             sources: z

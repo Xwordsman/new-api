@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 export type ProtectionRule = {
   id: string
   name: string
+  category?: '' | 'jailbreak_plugin'
   enabled: boolean
   kind: 'any' | 'all' | 'regex'
   patterns: string[]

@@ -27,6 +27,7 @@ var (
 type Rule struct {
 	ID             string   `json:"id"`
 	Name           string   `json:"name"`
+	Category       string   `json:"category,omitempty"`
 	Enabled        bool     `json:"enabled"`
 	Kind           string   `json:"kind"`
 	Patterns       []string `json:"patterns"`
@@ -102,6 +103,7 @@ func Defaults() Settings {
 		DuplicateSeconds: 60, RetentionDays: 30, AlertMinutes: 15, AlertThreshold: 10, AlertEmails: []string{},
 		UpstreamCodes: []string{"content_policy_violation", "content_filter", "safety_violation", "session_blocked_by_cyber_policy"},
 		Rules: []Rule{
+			{ID: "dsh-purge", Name: "dsh-purge", Category: "jailbreak_plugin", Enabled: true, Kind: "any", Patterns: []string{"dsh-purge"}, Sources: []string{"current", "system"}, Action: "block", HighConfidence: true, CountPenalty: true},
 			{ID: "instruction-override", Name: "Instruction override", Enabled: true, Kind: "all", Patterns: []string{"ignore all previous instructions", "without restrictions"}, Sources: []string{"current", "system"}, Action: "observe"},
 			{ID: "cn-instruction-override", Name: "Chinese instruction override", Enabled: true, Kind: "all", Patterns: []string{"忽略之前的所有指令", "不受任何限制"}, Sources: []string{"current", "system"}, Action: "observe"},
 			{ID: "template-marker", Name: "Known jailbreak template markers", Enabled: true, Kind: "any", Patterns: []string{"[developer mode enabled]", "[jailbreak successful]"}, Sources: []string{"current", "system"}, Action: "observe"},
@@ -165,6 +167,7 @@ func Validate(s Settings) error {
 	idPattern := regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 	for _, r := range s.Rules {
 		if !idPattern.MatchString(r.ID) || ids[r.ID] || strings.TrimSpace(r.Name) == "" || len(r.Name) > 120 ||
+			!slices.Contains([]string{"", "jailbreak_plugin"}, r.Category) ||
 			!slices.Contains([]string{"any", "all", "regex"}, r.Kind) || len(r.Patterns) == 0 || len(r.Patterns) > 20 || len(r.Sources) == 0 || len(r.Sources) > 4 ||
 			!slices.Contains([]string{"observe", "block"}, r.Action) || (r.CountPenalty && (!r.HighConfidence || r.Action != "block")) {
 			return ErrInvalid

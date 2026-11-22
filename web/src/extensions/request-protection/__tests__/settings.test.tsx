@@ -294,6 +294,63 @@ it('keeps advanced rules hidden by default and opens them with the keyboard', as
   ).toBeVisible()
 })
 
+it('preserves plugin classification when editing and saving a signature rule', async () => {
+  const user = userEvent.setup()
+  const signatureSettings: ProtectionSettings = {
+    ...settings,
+    rules: [
+      {
+        ...settings.rules[0],
+        id: 'dsh-purge',
+        name: 'dsh-purge',
+        category: 'jailbreak_plugin',
+        patterns: ['dsh-purge'],
+        sources: ['current', 'system'],
+        action: 'block',
+        high_confidence: true,
+        count_penalty: true,
+      },
+    ],
+  }
+  vi.mocked(api.get).mockImplementation(async (url) => ({
+    data: {
+      success: true,
+      data: url.endsWith('/channels') ? [] : signatureSettings,
+    },
+  }))
+  const saved = {
+    ...signatureSettings,
+    rules: [
+      {
+        ...signatureSettings.rules[0],
+        patterns: ['dsh-purge', 'custom-plugin-marker'],
+      },
+    ],
+  }
+  const put = vi.spyOn(api, 'put').mockResolvedValue({
+    data: { success: true, data: saved },
+  })
+  renderSettings()
+  await user.click(
+    await screen.findByRole('button', { name: 'Advanced protection settings' })
+  )
+  await user.click(screen.getByRole('button', { name: 'dsh-purge' }))
+  expect(screen.getByRole('combobox', { name: 'Category' })).toHaveValue(
+    'jailbreak_plugin'
+  )
+  await user.type(
+    screen.getByRole('textbox', { name: 'Patterns, one per line' }),
+    '\ncustom-plugin-marker'
+  )
+  await user.click(screen.getAllByRole('button', { name: 'Save' })[0])
+  await waitFor(() =>
+    expect(put).toHaveBeenCalledExactlyOnceWith(
+      '/api/extensions/request-protection/admin/settings',
+      saved
+    )
+  )
+})
+
 it('restores keywords as an unsaved change and saves manual-release suspension with them', async () => {
   const user = userEvent.setup()
   const defaults = {
