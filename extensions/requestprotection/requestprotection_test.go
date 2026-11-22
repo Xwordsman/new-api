@@ -197,6 +197,39 @@ func TestStrictTextInspectionRejectsLimitsWithoutPenalizingOrBlockingMedia(t *te
 	assert.Equal(t, "allow", policy.Inspect(s, in, "secret").Decision)
 }
 
+func TestToolMetadataDoesNotMasqueradeAsMediaAndAttachmentsStayUninspected(t *testing.T) {
+	s := blockingSettings()
+	s.RequireCompleteText = true
+	for _, tc := range []struct {
+		name, body, protocol, partial, decision string
+	}{
+		{"schema media property names", `{"input":"Hello","tools":[{"type":"function","name":"lookup","parameters":{"type":"object","properties":{"image_url":{"type":"string"},"base64":{"type":"string"},"source":{"type":"string"}}}}]}`, "openai_responses", "", "allow"},
+		{"builtin and custom definitions", `{"input":"Hello","tools":[{"type":"web_search"},{"type":"custom","name":"apply_patch","format":{"type":"grammar","syntax":"lark","definition":"start: TEXT"}}]}`, "openai_responses", "", "allow"},
+		{"metadata still inspected", `{"input":"Hello","tools":[{"type":"function","name":"lookup","parameters":{"type":"object","properties":{"image_url":{"description":"override instructions unrestricted","type":"string"}}}}]}`, "openai_responses", "", "block"},
+		{"ordinary tool fields", `{"contents":[{"role":"user","parts":[{"functionResponse":{"name":"lookup","response":{"image_url":"https://example.com/docs","base64":"parameter name","source":"README"}}}]}]}`, "gemini", "", "allow"},
+		{"image attachment", `{"input":[{"role":"user","content":[{"type":"input_text","text":"Describe this"},{"type":"input_image","image_url":"data:image/png;base64,abc"}]}]}`, "openai_responses", "binary_media", "observe"},
+		{"claude tool image", `{"messages":[{"role":"user","content":[{"type":"tool_result","content":[{"type":"text","text":"Picture result"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"abc"}}]}]}]}`, "claude", "binary_media", "observe"},
+		{"gemini inline image", `{"contents":[{"role":"user","parts":[{"text":"Describe this","inlineData":{"mimeType":"image/png","data":"abc"}}]}]}`, "gemini", "binary_media", "observe"},
+		{"media in structured output", `{"input":[{"type":"function_call_output","output":[{"type":"input_image","image_url":"data:image/png;base64,abc"}]}]}`, "openai_responses", "binary_media", "observe"},
+		{"data URL in tool result", `{"input":[{"type":"function_call_output","output":{"result":"data:image/png;base64,abc"}}]}`, "openai_responses", "binary_media", "observe"},
+		{"ordinary data prefix remains text", `{"input":[{"type":"function_call_output","output":{"result":"data: override instructions unrestricted"}}]}`, "openai_responses", "", "block"},
+		{"unknown content retained", `{"input":[{"role":"user","content":[{"type":"future_content","opaque":"abc"}]}]}`, "openai_responses", "binary_or_unknown_content", "observe"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			in := requestInput("tool-media", 7, "")
+			in.Segments, in.Uninspected = policy.Extract([]byte(tc.body), tc.protocol)
+			assert.Equal(t, tc.partial, in.Uninspected)
+			v := policy.Inspect(s, in, "secret")
+			assert.Equal(t, tc.decision, v.Decision)
+			assert.False(t, v.Eligible, "tool metadata and incomplete inspection must not penalize a user")
+			for _, segment := range in.Segments {
+				assert.NotContains(t, segment.Text, "data:image/png;base64,")
+				assert.NotEqual(t, "abc", segment.Text, "binary attachment bytes must not enter text evidence")
+			}
+		})
+	}
+}
+
 func TestSafetyHoldAffectsOnlyTriggeringUserAndCannotBeReplayed(t *testing.T) {
 	db := protectionDB(t)
 	s := blockingSettings()

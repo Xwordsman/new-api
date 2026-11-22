@@ -303,7 +303,7 @@ func Extract(body []byte, protocol string) ([]Segment, string) {
 			segments, partial = appendContent(segments, source, parts, partial, 0)
 		}
 		if output, ok := message["output"]; ok {
-			segments, partial = appendToolData(segments, "tool", output, partial, 0)
+			segments, partial = appendToolData(segments, "tool", output, partial, false, 0)
 		}
 		if text, ok := message["text"]; ok {
 			segments, partial = appendContent(segments, source, text, partial, 0)
@@ -315,12 +315,14 @@ func Extract(body []byte, protocol string) ([]Segment, string) {
 			segments, partial = appendContent(segments, "tool", call, partial, 0)
 		}
 		if kind == "function_call" {
-			segments, partial = appendToolData(segments, "tool", message["arguments"], partial, 0)
+			segments, partial = appendToolData(segments, "tool", message["arguments"], partial, false, 0)
 		}
 	}
 	for _, key := range []string{"tools", "functions"} {
 		if value, ok := root[key]; ok {
-			segments, partial = appendContent(segments, "tool", value, partial, 0)
+			// Definitions describe tools, including built-in and custom tools. Their
+			// schema property names are text, not actual attachment fields.
+			segments, partial = appendToolData(segments, "tool", value, partial, true, 0)
 		}
 	}
 	for _, key := range []string{"prompt", "negative_prompt", "query", "text", "content"} {
@@ -366,18 +368,22 @@ func appendContent(out []Segment, source string, content any, partial string, de
 		}
 	case map[string]any:
 		kind, _ := v["type"].(string)
+		media := isMediaContent(v)
+		if media && partial == "" {
+			partial = "binary_media"
+		}
 		if kind == "tool_result" || kind == "function_call_output" {
 			source = "tool"
 		}
 		textFound := false
 		if kind == "tool_use" {
-			out, partial = appendToolData(out, "tool", v["input"], partial, depth+1)
+			out, partial = appendToolData(out, "tool", v["input"], partial, false, depth+1)
 			textFound = true
 		}
 		for _, key := range []string{"text", "content", "output", "description", "arguments"} {
 			if value, ok := v[key]; ok {
 				if key == "arguments" || key == "output" {
-					out, partial = appendToolData(out, source, value, partial, depth+1)
+					out, partial = appendToolData(out, source, value, partial, false, depth+1)
 				} else {
 					out, partial = appendContent(out, source, value, partial, depth+1)
 				}
@@ -392,18 +398,11 @@ func appendContent(out []Segment, source string, content any, partial string, de
 		}
 		for _, key := range []string{"parameters", "input_schema", "args", "response"} {
 			if value, ok := v[key]; ok {
-				out, partial = appendToolData(out, "tool", value, partial, depth+1)
+				out, partial = appendToolData(out, "tool", value, partial, key == "parameters" || key == "input_schema", depth+1)
 				textFound = true
 			}
 		}
-		for _, key := range []string{"image_url", "input_audio", "inline_data", "inlineData", "file_data", "fileData", "source", "file_id", "file_url"} {
-			if _, ok := v[key]; ok {
-				if partial == "" {
-					partial = "binary_or_unknown_content"
-				}
-			}
-		}
-		if !textFound && partial == "" {
+		if !textFound && !media && partial == "" {
 			partial = "binary_or_unknown_content"
 		}
 	case nil:
@@ -413,34 +412,52 @@ func appendContent(out []Segment, source string, content any, partial string, de
 	return out, partial
 }
 
+func isMediaContent(content map[string]any) bool {
+	kind, _ := content["type"].(string)
+	if slices.Contains([]string{"image", "image_url", "input_image", "audio", "input_audio", "video", "input_video", "file", "input_file", "document"}, kind) {
+		return true
+	}
+	for _, key := range []string{"inline_data", "inlineData", "file_data", "fileData"} {
+		if _, ok := content[key].(map[string]any); ok {
+			return true
+		}
+	}
+	return false
+}
+
 // Tool arguments, output and JSON schemas contain arbitrary keys. Inspect
 // their string leaves deterministically without decoding binary attachments.
-func appendToolData(out []Segment, source string, value any, partial string, depth int) ([]Segment, string) {
+// Schema definitions (including examples) are metadata, not media instances.
+func appendToolData(out []Segment, source string, value any, partial string, schema bool, depth int) ([]Segment, string) {
 	if depth > 32 {
 		return out, "nested_content_limit"
 	}
 	switch v := value.(type) {
 	case map[string]any:
+		if !schema && isMediaContent(v) {
+			return appendContent(out, source, v, partial, depth+1)
+		}
 		keys := make([]string, 0, len(v))
 		for key := range v {
 			keys = append(keys, key)
 		}
 		slices.Sort(keys)
 		for _, key := range keys {
-			if slices.Contains([]string{"image_url", "input_audio", "inline_data", "inlineData", "file_data", "fileData", "base64"}, key) {
-				if partial == "" {
-					partial = "binary_media"
-				}
-				continue
-			}
 			out = append(out, Segment{Source: source, Text: key})
-			out, partial = appendToolData(out, source, v[key], partial, depth+1)
+			out, partial = appendToolData(out, source, v[key], partial, schema, depth+1)
 		}
 	case []any:
 		for _, item := range v {
-			out, partial = appendToolData(out, source, item, partial, depth+1)
+			out, partial = appendToolData(out, source, item, partial, schema, depth+1)
 		}
 	case string:
+		metadata, _, dataURL := strings.Cut(strings.TrimSpace(v), ",")
+		if !schema && dataURL && strings.HasPrefix(metadata, "data:") && (strings.Contains(metadata, ";base64") || strings.HasPrefix(metadata, "data:image/") || strings.HasPrefix(metadata, "data:audio/") || strings.HasPrefix(metadata, "data:video/")) {
+			if partial == "" {
+				partial = "binary_media"
+			}
+			return out, partial
+		}
 		out = append(out, Segment{Source: source, Text: v})
 	}
 	return out, partial

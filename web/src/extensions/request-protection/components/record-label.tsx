@@ -112,6 +112,14 @@ export function SuspectedIntent(props: { event: ProtectionEvent }) {
     .map((category) => labels[category] || category)
     .join(' · ')
   if (!description) {
+    if (
+      props.event.matches.length === 0 &&
+      (props.event.uninspected ||
+        props.event.finding === 'check_failed' ||
+        props.event.reason === 'incomplete_input')
+    ) {
+      return <span>{t('No violation intent conclusion')}</span>
+    }
     return <ProtectionLabel value={props.event.reason || props.event.finding} />
   }
   return (

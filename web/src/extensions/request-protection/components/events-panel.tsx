@@ -153,6 +153,13 @@ export function EventsPanel() {
           <div className='text-muted-foreground text-xs'>
             <ProtectionLabel value={event.upstream} />
           </div>
+          {(event.uninspected || event.finding === 'check_failed') && (
+            <div className='text-muted-foreground w-48 text-xs whitespace-normal'>
+              <ProtectionLabel
+                value={event.uninspected || event.reason || event.finding}
+              />
+            </div>
+          )}
         </div>
       ),
     },

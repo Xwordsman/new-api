@@ -130,6 +130,14 @@ export function EventDetailsDialog(props: {
         <ProtectionLabel value={event.upstream} />
         <ProtectionLabel value={event.review} />
       </div>
+      {(event.uninspected || event.finding === 'check_failed') && (
+        <section className='space-y-2'>
+          <h3 className='font-semibold'>{t('Inspection coverage')}</h3>
+          <ProtectionLabel
+            value={event.uninspected || event.reason || event.finding}
+          />
+        </section>
+      )}
       <section className='space-y-2'>
         <h3 className='font-semibold'>{t('Suspected intent')}</h3>
         <SuspectedIntent event={event} />
