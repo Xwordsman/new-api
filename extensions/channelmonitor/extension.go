@@ -13,7 +13,6 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/groupdiscount"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -136,17 +135,15 @@ func getSnapshot(c *gin.Context) {
 		common.ApiErrorT(c, "Invalid channel monitor time range")
 		return
 	}
-	// Dashboard authentication supplies the server-verified current user group.
-	userGroup := c.GetString("user_group")
 	// A query timeout also bounds work on external log databases. Errors never
 	// replace a failed query with an apparently healthy/empty result.
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
 	defer cancel()
-	data, err := buildSnapshot(model.DB.WithContext(ctx), model.LOG_DB.WithContext(ctx), userGroup, windowName, window, time.Now().Unix())
+	data, err := buildSnapshot(model.DB.WithContext(ctx), model.LOG_DB.WithContext(ctx), windowName, window, time.Now().Unix())
 	respond(c, data, err)
 }
 
-func buildSnapshot(db, logDB *gorm.DB, userGroup, windowName string, window time.Duration, now int64) (snapshot, error) {
+func buildSnapshot(db, logDB *gorm.DB, windowName string, window time.Duration, now int64) (snapshot, error) {
 	settings, _, err := getSettings(db)
 	data := snapshot{Enabled: settings.Enabled, Window: windowName, UpdatedAt: now, RefreshSeconds: 30,
 		ConsumeLogsEnabled: common.LogConsumeEnabled, ErrorLogsEnabled: constant.ErrorLogEnabled, SampleLimitPerGroup: sampleLimit, Groups: []publicGroup{}}
@@ -158,10 +155,8 @@ func buildSnapshot(db, logDB *gorm.DB, userGroup, windowName string, window time
 		if !ratio_setting.ContainsGroupRatio(config.Group) {
 			continue
 		}
-		// Publishing a group does not expand the caller's routing permissions.
-		if !service.IsUserSelectableGroup(userGroup, config.Group) {
-			continue
-		}
+		// Administrators choose which aggregate statistics to publish, including
+		// private groups. Publication does not grant token or relay access.
 		var enabledModels []string
 		err = db.Model(&model.Ability{}).Where(clause.Eq{Column: "group", Value: config.Group}).
 			Where("enabled = ?", true).Distinct("model").Pluck("model", &enabledModels).Error

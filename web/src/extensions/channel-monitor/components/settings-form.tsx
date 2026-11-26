@@ -124,7 +124,7 @@ export function MonitorSettingsForm(props: { data: MonitorSettingsResponse }) {
               <h3 className='font-semibold'>{t('Published groups')}</h3>
               <p className='text-muted-foreground mt-2 text-sm leading-6'>
                 {t(
-                  'Publish up to 24 groups. Users only see groups their account can use. Display order follows Group pricing.'
+                  'Publish up to 24 groups, including private groups. All signed-in users can view them. Display order follows Group pricing.'
                 )}
               </p>
             </div>
@@ -192,7 +192,7 @@ export function MonitorSettingsForm(props: { data: MonitorSettingsResponse }) {
                 </FormControl>
                 <FormDescription>
                   {t(
-                    'Only these groups and their aggregate model statistics are published. Channel identities and request details remain private.'
+                    'Displaying a group here does not grant permission to use it. Only aggregate model statistics are shown; channel identities and request details remain private.'
                   )}
                 </FormDescription>
                 <FormMessage />

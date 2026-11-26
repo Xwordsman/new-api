@@ -53,6 +53,46 @@ function renderSettings(data = settings) {
   return client
 }
 
+it('adds a private group to monitor publication without changing group access settings', async () => {
+  const user = userEvent.setup()
+  const client = renderSettings()
+  const saved = {
+    ...settings.settings,
+    revision: 2,
+    groups: [
+      {
+        group: 'private',
+        display_name: '',
+        description: '',
+        badge: '',
+        icon: '',
+        promotion: null,
+      },
+    ],
+    probe: defaultProbeSettings,
+  }
+  const put = vi.spyOn(api, 'put').mockResolvedValue({
+    data: { success: true, data: saved },
+  })
+  await user.click(
+    await screen.findByRole('combobox', { name: 'Groups to display' })
+  )
+  await user.click(await screen.findByRole('option', { name: 'private' }))
+  await user.keyboard('{Escape}')
+  expect(screen.getByRole('button', { name: 'private' })).toHaveAttribute(
+    'aria-expanded',
+    'false'
+  )
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() =>
+    expect(put).toHaveBeenCalledWith(
+      '/api/extensions/channel-monitor/admin/settings',
+      { ...saved, revision: 1 }
+    )
+  )
+  client.clear()
+})
+
 it('starts every selected group collapsed with its base multiplier visible', async () => {
   const client = renderSettings({
     ...settings,
